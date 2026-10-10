@@ -1,2 +1,81 @@
-/.vscode
+# ==============================================================================
+# LA PLANTA PRIME • MONOREPO ROOT GITIGNORE
+# ==============================================================================
+
+# Dependencies
+node_modules/
+*/node_modules/
+*/*/node_modules/
+.pnp
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Build Outputs & Bundles
+dist/
+*/dist/
+build/
+*/build/
+out/
+*/out/
+.next/
+*/.next/
+*/*/.next/
+
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.env
+*.env.local
+*.env.*.local
+*.pem
+*.key
+*.cert
+service-account.json
+credentials.json
+
+# Cache and Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.turbo/
+.cache/
+*.tsbuildinfo
+next-env.d.ts
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# IDE & Editor Files
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+*.sublime-project
+
+# Database Dumps / Temporary SQL
 /supabase-schema.sql
+*.sql.bak
+*.dump
+
+# Temporary / Scratch Files
+tmp/
+temp/

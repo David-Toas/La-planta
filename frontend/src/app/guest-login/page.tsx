@@ -427,4 +427,13 @@ export default function GuestLoginPage() {
             )}
 
             <div className="text-center pt-2">
-           
+              <Link href="/" className="text-xs text-stone-500 hover:text-primary transition-colors">
+                ← Return to Homepage
+              </Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

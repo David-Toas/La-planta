@@ -33,54 +33,16 @@ export default function HomePage() {
           <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-secondary/20 blur-3xl pointer-events-none" />
 
           <div className="relative max-w-7xl mx-auto px-6 lg:px-12 flex flex-col items-start gap-8 z-10">
-            {/* Eyebrow Badge */}
-            <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-secondary-container/15 backdrop-blur-md">
-              <span className="w-2 h-2 rounded-full bg-secondary-fixed animate-pulse" />
-              <span className="text-xs text-secondary-fixed uppercase tracking-widest font-semibold">
-                EST. LAGOS &amp; ABUJA • EXECUTIVE CLASS
-              </span>
-            </div>
-
             {/* Main Headline & Subtitle */}
             <div className="max-w-4xl flex flex-col gap-5">
               <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl text-white tracking-tight leading-[1.1]">
-                Nigeria’s Premier Luxury Chauffeur &amp; Executive Car Hire.
+                Premier &amp; Executive Car Hire.
               </h1>
-              <p className="text-base sm:text-lg text-[#c8c6c5] max-w-2xl font-light leading-relaxed">
+              {/* <p className="text-base sm:text-lg text-[#c8c6c5] max-w-2xl font-light leading-relaxed">
                 First-class executive sedans, luxury SUVs, and armored vehicles
                 with vetted professional drivers for corporate leaders, private
                 VIP transit, and diaspora arrivals across Lagos and Abuja.
-              </p>
-            </div>
-
-            {/* Key Assurance Metrics */}
-            <div className="flex flex-wrap items-center gap-6 pt-2">
-              <div className="flex items-center gap-2 text-white">
-                <span className="material-symbols-outlined text-secondary-fixed text-lg">
-                  verified
-                </span>
-                <span className="text-xs uppercase tracking-wider font-medium">
-                  Vetted Professional Drivers
-                </span>
-              </div>
-              <div className="w-1 h-1 rounded-full bg-white/40" />
-              <div className="flex items-center gap-2 text-white">
-                <span className="material-symbols-outlined text-secondary-fixed text-lg">
-                  flight_takeoff
-                </span>
-                <span className="text-xs uppercase tracking-wider font-medium">
-                  VIP Airport &amp; Terminal Meet
-                </span>
-              </div>
-              <div className="w-1 h-1 rounded-full bg-white/40" />
-              <div className="flex items-center gap-2 text-white">
-                <span className="material-symbols-outlined text-secondary-fixed text-lg">
-                  schedule
-                </span>
-                <span className="text-xs uppercase tracking-wider font-medium">
-                  Guaranteed Punctual Staging
-                </span>
-              </div>
+              </p> */}
             </div>
 
             {/* Floating Booking Console Card */}
@@ -204,6 +166,36 @@ export default function HomePage() {
                     </span>
                   </div> */}
                 </div>
+              </div>
+            </div>
+
+            {/* Key Assurance Metrics */}
+            <div className="flex flex-wrap items-center gap-6 pt-2">
+              <div className="flex items-center gap-2 text-white">
+                <span className="material-symbols-outlined text-secondary-fixed text-lg">
+                  verified
+                </span>
+                <span className="text-xs uppercase tracking-wider font-medium">
+                  Vetted Professional Drivers
+                </span>
+              </div>
+              <div className="w-1 h-1 rounded-full bg-white/40" />
+              <div className="flex items-center gap-2 text-white">
+                <span className="material-symbols-outlined text-secondary-fixed text-lg">
+                  flight_takeoff
+                </span>
+                <span className="text-xs uppercase tracking-wider font-medium">
+                  VIP Airport &amp; Terminal Meet
+                </span>
+              </div>
+              <div className="w-1 h-1 rounded-full bg-white/40" />
+              <div className="flex items-center gap-2 text-white">
+                <span className="material-symbols-outlined text-secondary-fixed text-lg">
+                  schedule
+                </span>
+                <span className="text-xs uppercase tracking-wider font-medium">
+                  Guaranteed Punctual Staging
+                </span>
               </div>
             </div>
           </div>

@@ -233,3 +233,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { success: true };
     } catch (err: any) {
+      return { success: false, error: err.message || "Failed to initiate Google sign-in" };
+    }
+  };
+
+  // Update Profile (e.g. adding phone number, updating name)
+  const updateProfile = async (updates: {
+    full_name?: string;
+    phone?: string;
+    avatar_url?: string;
+  }): Promise<AuthResponse> => {
+    try {
+      if (!user?.id) {
+        return { success: false, error: "No active user session." };
+      }
+
+      // 1. Update in Supabase profiles table
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          ...(updates.full_name ? { full_name: updates.full_name } : {}),
+          ...(updates.phone !== undefined ? { phone: updates.phone } : {}),
+          ...(updates.avatar_url ? { avatar_url: updates.avatar_url } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+
+      if (error) {
+        console.warn("[Auth] Profile update error in Supabase:", error.message);
+      }
+
+      // 2. Update local state
+      const updatedUser: GuestUser = {
+        ...user,
+        name: updates.full_name || user.name,
+        phone: updates.phone !== undefined ? updates.phone : user.phone,
+        avatarUrl: updates.avatar_url || user.avatarUrl,
+      };
+
+      setUser(updatedUser);
+      localStorage.setItem("laPlanta_guest", JSON.stringify(updatedUser));
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Failed to update profile." };
+    }
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        loading,
+        isAuthModalOpen,
+        openAuthModal,
+        closeAuthModal,
+        login,
+        logout,
+        signInWithEmail,
+        signUpWithEmail,
+        signInWithGoogle,
+        updateProfile,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+}

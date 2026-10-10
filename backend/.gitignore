@@ -1,0 +1,41 @@
+# ==============================================================================
+# LA PLANTA PRIME • BACKEND GITIGNORE
+# ==============================================================================
+
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Build Output
+/dist
+/build
+
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+service-account.json
+
+# Logs
+/logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Coverage / Testing
+/coverage
+
+# TypeScript
+*.tsbuildinfo
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+

@@ -495,4 +495,13 @@ export function AuthModal() {
 
           {/* Footer Assistance */}
           <div className="pt-2 text-center text-xs text-stone-400 flex items-center justify-center gap-1.5 border-t border-stone-100">
-            <span className
+            <span className="material-symbols-outlined text-secondary text-sm">
+              security
+            </span>
+            <span>256-Bit Encrypted Secure Mobility Portal</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

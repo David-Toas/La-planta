@@ -143,7 +143,7 @@ export default function CheckoutPage() {
           <label className="font-label-sm text-xs text-on-surface-variant uppercase tracking-wider font-semibold" htmlFor="inline-guest-name">Full Name</label>
           <div className="relative flex items-center">
             <span className="absolute left-3.5 material-symbols-outlined text-secondary text-lg pointer-events-none">person</span>
-            <input id="inline-guest-name" className="w-full h-12 pl-11 pr-4 bg-surface-container-low text-on-surface font-body-md text-sm rounded-xl border border-surface-container focus:outline-none focus:border-secondary" placeholder="e.g. Dr. Adekunle Balogun" type="text" defaultValue="Dr. Adekunle Balogun" />
+            <input id="inline-guest-name" className="w-full h-12 pl-11 pr-4 bg-surface-container-low text-on-surface font-body-md text-sm rounded-xl border border-surface-container focus:outline-none focus:border-secondary" placeholder="e.g. Adekunle Balogun" type="text" defaultValue={user?.name || ""} />
           </div>
         </div>
 
@@ -151,7 +151,7 @@ export default function CheckoutPage() {
           <label className="font-label-sm text-xs text-on-surface-variant uppercase tracking-wider font-semibold" htmlFor="inline-guest-phone">WhatsApp Phone</label>
           <div className="relative flex items-center">
             <span className="absolute left-3.5 material-symbols-outlined text-secondary text-lg pointer-events-none">call</span>
-            <input id="inline-guest-phone" className="w-full h-12 pl-11 pr-4 bg-surface-container-low text-on-surface font-body-md text-sm rounded-xl border border-surface-container focus:outline-none focus:border-secondary" placeholder="+234 803 555 0192" type="tel" defaultValue="+234 803 555 0192" />
+            <input id="inline-guest-phone" className="w-full h-12 pl-11 pr-4 bg-surface-container-low text-on-surface font-body-md text-sm rounded-xl border border-surface-container focus:outline-none focus:border-secondary" placeholder="+234 800 000 0000" type="tel" defaultValue={user?.phone || ""} />
           </div>
         </div>
 
@@ -159,7 +159,7 @@ export default function CheckoutPage() {
           <label className="font-label-sm text-xs text-on-surface-variant uppercase tracking-wider font-semibold" htmlFor="inline-guest-email">Corporate or Personal Email</label>
           <div className="relative flex items-center">
             <span className="absolute left-3.5 material-symbols-outlined text-secondary text-lg pointer-events-none">mail</span>
-            <input id="inline-guest-email" className="w-full h-12 pl-11 pr-4 bg-surface-container-low text-on-surface font-body-md text-sm rounded-xl border border-surface-container focus:outline-none focus:border-secondary" placeholder="a.balogun@executivecorp.ng" type="email" defaultValue="a.balogun@executivecorp.ng" />
+            <input id="inline-guest-email" className="w-full h-12 pl-11 pr-4 bg-surface-container-low text-on-surface font-body-md text-sm rounded-xl border border-surface-container focus:outline-none focus:border-secondary" placeholder="client@example.com" type="email" defaultValue={user?.email || ""} />
           </div>
           <span className="font-label-sm text-[10px] text-secondary">Your booking voucher, invoice, and QR pass will be emailed here.</span>
         </div>

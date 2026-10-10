@@ -142,7 +142,9 @@ export function Navbar() {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <span>{user.name?.charAt(0).toUpperCase() || "V"}</span>
+                          <span>
+                            {user.name?.charAt(0).toUpperCase() || "V"}
+                          </span>
                         )}
                       </div>
                       <div className="flex flex-col min-w-0">
@@ -174,9 +176,6 @@ export function Navbar() {
                       </span>
                       <div className="flex flex-col">
                         <span>Guest Account</span>
-                        <span className="text-[10px] text-on-surface-variant font-normal">
-                          Reservations, live tracking &amp; invoices
-                        </span>
                       </div>
                     </Link>
 
@@ -193,9 +192,6 @@ export function Navbar() {
                       </span>
                       <div className="flex flex-col">
                         <span>Log Out</span>
-                        <span className="text-[10px] text-red-400 font-normal">
-                          End your VIP session
-                        </span>
                       </div>
                     </button>
                   </div>

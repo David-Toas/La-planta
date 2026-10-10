@@ -1557,17 +1557,17 @@ export default function LiveTrackingPage() {
 
             <div className="flex flex-col gap-2.5 pt-2">
               <a
-                href="tel:+2348035550192"
+                href="tel:+23418885275"
                 className="flex items-center justify-between px-4 py-3 rounded-xl bg-primary hover:bg-secondary text-white text-xs font-semibold transition-all shadow-md"
               >
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-base">
                     call
                   </span>
-                  <span>Driver Emmanuel (Direct)</span>
+                  <span>Driver Emmanuel (Direct Dispatch)</span>
                 </div>
                 <span className="font-mono text-[11px] text-amber-200">
-                  +234 803 555 0192
+                  +234 1 888 5275 (Ext. 02)
                 </span>
               </a>
 
