@@ -1,0 +1,501 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><meta content="web_standard" name="shell-type"><title>La Planta - Secure Checkout &amp; Booking</title><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"><link href="https://fonts.googleapis.com" rel="preconnect"><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..700&amp;family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "secondary-container": "#fedeb2", "on-primary-fixed-variant": "#474746", "secondary": "#725b38", "on-background": "#111c2c", "on-primary-fixed": "#1b1b1c", "tertiary-container": "#1d1e1d", "surface": "#f9f9ff", "on-error": "#ffffff", "tertiary-fixed": "#e3e2e0", "on-secondary-container": "#78603e", "surface-bright": "#f9f9ff", "outline": "#747878", "primary-fixed-dim": "#c8c6c5", "inverse-surface": "#263142", "on-tertiary": "#ffffff", "secondary-fixed-dim": "#e0c298", "on-error-container": "#93000a", "on-surface": "#111c2c", "surface-variant": "#d8e3fa", "primary": "#040505", "error-container": "#ffdad6", "tertiary-fixed-dim": "#c7c6c4", "on-primary-container": "#878585", "error": "#ba1a1a", "outline-variant": "#c4c7c7", "surface-container-highest": "#d8e3fa", "inverse-primary": "#c8c6c5", "background": "#f9f9ff", "surface-dim": "#cfdaf1", "surface-container-high": "#dee8ff", "primary-fixed": "#e5e2e1", "tertiary": "#030404", "on-surface-variant": "#444748", "surface-container-low": "#f0f3ff", "surface-container": "#e7eeff", "inverse-on-surface": "#ebf1ff", "surface-container-lowest": "#ffffff", "secondary-fixed": "#fedeb2", "primary-container": "#1e1e1e", "on-secondary": "#ffffff", "on-primary": "#ffffff", "on-tertiary-fixed": "#1a1c1a", "surface-tint": "#5f5e5e", "on-tertiary-fixed-variant": "#464745", "on-secondary-fixed-variant": "#584323", "on-secondary-fixed": "#281800", "on-tertiary-container": "#858683" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "margin-mobile": "1.25rem", "space-sm": "0.5rem", "margin": "3rem", "gutter-mobile": "1rem", "space-lg": "1.5rem", "gutter": "1.5rem", "space-md": "1rem", "space-xs": "0.25rem", "space-xl": "2.5rem" }, "fontFamily": { "body-sm": ["Plus Jakarta Sans"], "display": ["Playfair Display"], "body-md": ["Plus Jakarta Sans"], "headline-sm": ["Playfair Display"], "title-lg": ["Plus Jakarta Sans"], "label-md": ["Plus Jakarta Sans"], "headline-lg-mobile": ["Playfair Display"], "headline-lg": ["Playfair Display"], "headline-md": ["Playfair Display"], "label-sm": ["Plus Jakarta Sans"], "display-mobile": ["Playfair Display"], "title-md": ["Plus Jakarta Sans"], "body-lg": ["Plus Jakarta Sans"] }, "fontSize": { "body-sm": ["13px", { "lineHeight": "20px", "fontWeight": "400" }], "display": ["56px", { "lineHeight": "64px", "letterSpacing": "-0.02em", "fontWeight": "400" }], "body-md": ["15px", { "lineHeight": "24px", "fontWeight": "400" }], "headline-sm": ["22px", { "lineHeight": "30px", "fontWeight": "600" }], "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "600" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.06em", "fontWeight": "600" }], "headline-lg-mobile": ["28px", { "lineHeight": "36px", "letterSpacing": "0em", "fontWeight": "500" }], "headline-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.01em", "fontWeight": "500" }], "headline-md": ["28px", { "lineHeight": "36px", "fontWeight": "600" }], "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.08em", "fontWeight": "600" }], "display-mobile": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.01em", "fontWeight": "400" }], "title-md": ["16px", { "lineHeight": "24px", "fontWeight": "600" }], "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }] } } } };</script></head><body class="bg-surface font-body-md text-body-md text-on-surface antialiased selection:bg-secondary-fixed selection:text-on-secondary-fixed"><header class="fixed top-0 w-full z-50 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-20 max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-between gap-6"><div class="flex items-center gap-8 shrink-0"><a class="flex items-center gap-3 group" href="index.html"><div class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-secondary-fixed shadow-sm"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L4 6v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V6l-8-4zm0 3.18l5 2.5v4.5c0 3.75-2.6 7.25-5 8.24-2.4-.99-5-4.49-5-8.24V7.68l5-2.5z"></path></svg></div><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-primary tracking-tight font-serif uppercase text-base">La Planta</span><span class="font-label-sm text-label-sm uppercase tracking-widest text-secondary -mt-1">Luxury Car Hire</span></div></a><nav class="hidden xl:flex items-center gap-1"><a class="px-3 py-2 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-colors" href="index.html">Home</a><a class="px-3 py-2 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-colors" href="fleet.html">Fleet Catalog</a><a class="px-3 py-2 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-colors" href="live-tracking.html">Live Tracking</a><a class="px-3 py-2 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-colors" href="account.html">Guest Account</a><a class="px-3 py-2 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-colors" href="admin-command.html">Admin Command</a></nav></div><div class="flex items-center gap-4 shrink-0"><div class="hidden lg:flex items-center bg-surface-container-low px-2 py-1 rounded-full"><button class="px-2.5 py-1 rounded-full font-label-sm text-label-sm bg-surface-container-lowest text-on-surface shadow-[0_1px_3px_rgba(0,0,0,0.06)]" type="button">NGN ₦</button><button class="px-2.5 py-1 rounded-full font-label-sm text-label-sm text-on-surface-variant hover:text-on-surface transition-colors" type="button">USD $</button></div><a class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-low hover:bg-secondary-fixed hover:text-on-secondary-fixed transition-colors" href="tel:+23418885275"><span class="material-symbols-outlined text-secondary text-base">support_agent</span><span class="font-label-sm text-label-sm tracking-wide text-on-surface">+234 1 888 5275</span></a><div id="header-auth-container" class="flex items-center gap-2"><a id="checkout-auth-nav-btn" class="px-3.5 py-1.5 rounded-full bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider font-semibold hover:bg-secondary transition-colors" href="guest-login.html?redirect=checkout.html">Sign In / Sign Up</a></div></div></div></header><main class="w-full pt-20 bg-surface min-h-[calc(100vh-80px)]"><div class="flex flex-col w-full">
+<div class="w-full max-w-7xl mx-auto px-6 lg:px-12 py-10">
+<!-- Top Stepper Header -->
+<div class="flex flex-col gap-6 mb-12">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<div class="flex items-center gap-2 mb-2">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-high text-secondary font-label-sm text-label-sm uppercase tracking-wider font-semibold">
+<span class="material-symbols-outlined text-sm text-secondary" style="font-variation-settings: 'FILL' 1;">lock</span>
+              256-Bit Encrypted Secure Session
+            </span>
+<span class="text-outline-variant">•</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Instant QR Voucher Issued Upon Completion</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-primary tracking-tight font-serif">Complete Your Vehicle Reservation</h1>
+</div>
+<div class="flex items-center gap-2 self-start md:self-auto bg-surface-container-lowest px-4 py-2 rounded-xl shadow-sm">
+<span class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant">Booking Ref:</span>
+<span class="font-title-md text-title-md text-secondary font-serif">LP-LOS-89240</span>
+</div>
+</div>
+<!-- Stepper Progress Bar -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="flex items-center gap-3 p-3.5 rounded-xl bg-surface-container-lowest shadow-sm">
+<div class="w-8 h-8 rounded-full bg-secondary text-on-secondary flex items-center justify-center font-label-md text-label-md shrink-0">
+<span class="material-symbols-outlined text-base">check</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">Step 01</span>
+<span class="font-title-md text-title-md text-on-surface truncate">Handover Details</span>
+</div>
+</div>
+<div class="flex items-center gap-3 p-3.5 rounded-xl bg-surface-container-lowest shadow-sm">
+<div class="w-8 h-8 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-label-md text-label-md font-bold shrink-0">
+            2
+          </div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">Step 02</span>
+<span class="font-title-md text-title-md text-on-surface truncate">Guest Identification</span>
+</div>
+</div>
+<div class="flex items-center gap-3 p-3.5 rounded-xl bg-surface-container-low shadow-sm">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest text-on-surface-variant flex items-center justify-center font-label-md text-label-md font-bold shrink-0">
+            3
+          </div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Step 03</span>
+<span class="font-title-md text-title-md text-on-surface-variant truncate">Upfront Online Payment</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Main Layout Grid: 65% Funnel / 35% Sticky Summary -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+<!-- LEFT COLUMN: 65% Interactive Funnel -->
+<div class="lg:col-span-8 flex flex-col gap-6">
+<!-- STEP 1 ACCORDION (COMPLETED / VERIFIED) -->
+<div class="w-full bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden transition-all duration-300"><div class="p-6 md:p-8 flex flex-col gap-6"><div class="flex flex-col md:flex-row md:items-center justify-between gap-4"><div class="flex items-center gap-3"><span class="w-7 h-7 rounded-full bg-primary text-on-primary flex items-center justify-center font-label-md text-label-md font-semibold">1</span><div><h2 class="font-headline-sm text-headline-sm text-primary font-serif">Handover Choice &amp; Location</h2><p class="font-body-sm text-body-sm text-on-surface-variant">Select vehicle handover location, schedule, and optional flight tracking</p></div></div><span class="font-label-sm text-label-sm uppercase tracking-wider text-secondary font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-sm">check_circle</span>Confirmed</span></div><div class="flex flex-col gap-4"><label class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Handover Mode</label><div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><label class="cursor-pointer p-4 rounded-xl bg-surface-container-low border-2 border-transparent flex items-center justify-between transition-colors hover:bg-surface-container-high/60"><div class="flex items-center gap-3"><input class="sr-only" name="handover_type" type="radio" value="office"><div class="w-5 h-5 rounded-full border-2 border-outline flex items-center justify-center"><div class="w-2.5 h-2.5 rounded-full bg-secondary hidden"></div></div><div class="flex flex-col"><span class="font-title-md text-title-md text-on-surface font-semibold">Office Pickup</span><span class="font-body-sm text-body-sm text-on-surface-variant">Lagos / Abuja VIP Executive Lounge</span></div></div><span class="px-2 py-0.5 rounded bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-semibold uppercase">Free</span></label><label class="cursor-pointer p-4 rounded-xl bg-surface-container-high/60 border-2 border-secondary flex items-center justify-between transition-colors"><div class="flex items-center gap-3"><input checked="" class="sr-only" name="handover_type" type="radio" value="delivery"><div class="w-5 h-5 rounded-full border-2 border-secondary flex items-center justify-center"><div class="w-2.5 h-2.5 rounded-full bg-secondary"></div></div><div class="flex flex-col"><span class="font-title-md text-title-md text-on-surface font-semibold">Direct Delivery</span><span class="font-body-sm text-body-sm text-on-surface-variant">Delivery to hotel, residence, or airport</span></div></div><span class="px-2 py-0.5 rounded bg-surface-container text-secondary font-label-sm text-label-sm font-semibold uppercase">Included</span></label></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2"><div class="flex flex-col gap-1.5 md:col-span-3"><label class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Delivery Address</label><div class="relative flex items-center"><input class="w-full h-12 px-4 pl-11 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:outline-none" placeholder="Enter destination hotel, private address, or airport terminal" type="text" value="The Wheatbaker Hotel, 4 Onitolo Rd, Ikoyi, Lagos"><span class="material-symbols-outlined absolute left-3.5 text-secondary text-lg">location_on</span></div></div><div class="flex flex-col gap-1.5 md:col-span-2"><label class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Delivery Date &amp; Time Window</label><div class="relative flex items-center"><input class="w-full h-12 px-4 pl-11 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:outline-none" type="text" value="Nov 14, 2024 • 17:30 WAT"><span class="material-symbols-outlined absolute left-3.5 text-secondary text-lg">schedule</span></div></div><div class="flex flex-col gap-1.5"><div class="flex items-center justify-between"><label class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Flight Number</label><span class="font-label-sm text-[10px] uppercase text-secondary font-semibold">Optional Flight Sync</span></div><div class="relative flex items-center"><input class="w-full h-12 px-4 pl-11 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:outline-none" placeholder="e.g. BA 075" type="text" value="BA 075"><span class="material-symbols-outlined absolute left-3.5 text-secondary text-lg">flight_land</span></div></div></div></div></div>
+<!-- STEP 2 ACCORDION: IN-LINE VIP IDENTIFICATION (EXPANDED) -->
+<div id="step2-container" class="w-full bg-surface-container-lowest rounded-xl shadow-md overflow-hidden transition-all">
+  <div class="p-6 md:p-8 flex flex-col gap-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <span class="w-7 h-7 rounded-full bg-primary text-on-primary flex items-center justify-center font-label-md text-label-md font-semibold">2</span>
+        <div>
+          <h2 class="font-headline-sm text-headline-sm text-primary font-serif">Guest Account &amp; Verification</h2>
+          <p class="font-body-sm text-body-sm text-on-surface-variant">Sign in or create account to verify your booking and receive background dispatch confirmations</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="guest-login.html?redirect=checkout.html" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-surface-container hover:bg-secondary-fixed text-primary font-label-sm text-xs font-semibold uppercase tracking-wider transition-colors">
+          <span class="material-symbols-outlined text-sm text-secondary">open_in_new</span>
+          <span>Full Login Page</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Active Authenticated Guest View -->
+    <div id="step2-authenticated-box" class="p-4 sm:p-5 rounded-xl bg-surface-container-low/90 border border-secondary/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="flex items-center gap-3.5">
+        <div id="step2-avatar" class="w-12 h-12 rounded-full bg-primary text-secondary-fixed flex items-center justify-center font-bold text-base shadow-sm shrink-0">AB</div>
+        <div class="flex flex-col">
+          <div class="flex items-center gap-2">
+            <span id="step2-name" class="font-title-md text-base text-primary font-semibold">Dr. Adekunle Balogun</span>
+            <span class="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-[10px] font-bold uppercase tracking-wider">Verified VIP</span>
+          </div>
+          <span id="step2-contact" class="font-body-sm text-xs text-on-surface-variant">a.balogun@executivecorp.ng • +234 803 555 0192</span>
+          <span class="font-label-sm text-[11px] text-emerald-800 font-medium flex items-center gap-1 mt-0.5">
+            <span class="material-symbols-outlined text-sm">check_circle</span> Automated background confirmation ready (Email, SMS &amp; WhatsApp)
+          </span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 self-start sm:self-auto">
+        <button type="button" onclick="checkoutSwitchAccount()" class="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold uppercase tracking-wider text-on-surface transition-colors">
+          Switch User
+        </button>
+      </div>
+    </div>
+
+    <!-- Unauthenticated Quick Form View -->
+    <div id="step2-guest-form" class="hidden flex flex-col gap-4">
+      <div class="p-3 rounded-lg bg-secondary-fixed/30 border border-secondary/20 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 text-xs text-primary">
+          <span class="material-symbols-outlined text-secondary text-base">info</span>
+          <span>Sign in or register below to secure your vehicle.</span>
+        </div>
+        <button type="button" onclick="checkoutQuickFillDemo()" class="px-2.5 py-1 rounded-md bg-primary hover:bg-secondary text-on-primary font-label-sm text-[11px] font-semibold uppercase tracking-wider transition-colors">
+          1-Click Demo Guest
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1.5">
+          <label class="font-label-sm text-xs text-on-surface-variant uppercase tracking-wider font-semibold" for="inline-guest-name">Full Name</label>
+          <div class="relative flex items-center">
+            <span class="absolute left-3.5 material-symbols-outlined text-secondary text-lg pointer-events-none">person</span>
+            <input id="inline-guest-name" class="w-full h-12 pl-11 pr-4 bg-surface-container-low text-on-surface font-body-md text-sm rounded-xl border border-surface-container focus:outline-none focus:border-secondary" placeholder="e.g. Dr. Adekunle Balogun" type="text" value="Dr. Adekunle Balogun">
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="font-label-sm text-xs text-on-surface-variant uppercase tracking-wider font-semibold" for="inline-guest-phone">WhatsApp Phone</label>
+          <div class="relative flex items-center">
+            <span class="absolute left-3.5 material-symbols-outlined text-secondary text-lg pointer-events-none">call</span>
+            <input id="inline-guest-phone" class="w-full h-12 pl-11 pr-4 bg-surface-container-low text-on-surface font-body-md text-sm rounded-xl border border-surface-container focus:outline-none focus:border-secondary" placeholder="+234 803 555 0192" type="tel" value="+234 803 555 0192">
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5 md:col-span-2">
+          <label class="font-label-sm text-xs text-on-surface-variant uppercase tracking-wider font-semibold" for="inline-guest-email">Corporate or Personal Email</label>
+          <div class="relative flex items-center">
+            <span class="absolute left-3.5 material-symbols-outlined text-secondary text-lg pointer-events-none">mail</span>
+            <input id="inline-guest-email" class="w-full h-12 pl-11 pr-4 bg-surface-container-low text-on-surface font-body-md text-sm rounded-xl border border-surface-container focus:outline-none focus:border-secondary" placeholder="a.balogun@executivecorp.ng" type="email" value="a.balogun@executivecorp.ng">
+          </div>
+          <span class="font-label-sm text-[10px] text-secondary">Your booking voucher, invoice, and QR pass will be emailed here.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- STEP 3 ACCORDION: 100% UPFRONT PAYMENT GATEWAY -->
+<div class="w-full bg-surface-container-lowest rounded-xl shadow-md overflow-hidden">
+<div class="p-6 md:p-8 flex flex-col gap-6">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+<div class="flex items-center gap-3">
+<span class="w-7 h-7 rounded-full bg-primary text-on-primary flex items-center justify-center font-label-md text-label-md font-semibold">3</span>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-primary font-serif">100% Upfront Online Payment</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Secure online payment with instant confirmation via SMS, WhatsApp &amp; Email</p>
+</div>
+</div>
+<span class="inline-flex items-center gap-1 text-secondary font-label-sm text-label-sm uppercase tracking-widest font-semibold">
+<span class="material-symbols-outlined text-sm">shield</span> Bank-Grade Encryption
+              </span>
+</div>
+<!-- Payment Gateway Selector Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+<!-- Gateway 1: Card (Active) -->
+<label class="cursor-pointer relative p-4 rounded-xl bg-surface-container-high/60 shadow-sm flex flex-col justify-between gap-3 transition-transform hover:-translate-y-0.5">
+<input checked="" class="sr-only" name="payment_method" type="radio" value="card">
+<div class="flex items-center justify-between">
+<span class="font-title-md text-title-md text-on-surface font-serif">International Card</span>
+<span class="material-symbols-outlined text-secondary text-lg" style="font-variation-settings: 'FILL' 1;">radio_button_checked</span>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Paystack / Flutterwave</span>
+<div class="flex items-center gap-1.5 pt-1">
+<span class="px-1.5 py-0.5 rounded bg-surface-container-lowest text-on-surface font-label-sm text-[10px] font-bold">VISA</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container-lowest text-on-surface font-label-sm text-[10px] font-bold">MC</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container-lowest text-on-surface font-label-sm text-[10px] font-bold">AMEX</span>
+</div>
+</div>
+</label>
+<!-- Gateway 2: NIBSS Virtual Transfer -->
+<label class="cursor-pointer relative p-4 rounded-xl bg-surface-container-low shadow-sm flex flex-col justify-between gap-3 transition-transform hover:-translate-y-0.5">
+<input class="sr-only" name="payment_method" type="radio" value="transfer">
+<div class="flex items-center justify-between">
+<span class="font-title-md text-title-md text-on-surface font-serif">Instant Bank Transfer</span>
+<span class="material-symbols-outlined text-outline text-lg">radio_button_unchecked</span>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Virtual Account Transfer</span>
+<span class="font-label-sm text-label-sm text-secondary font-medium">Auto-confirmed in 45s</span>
+</div>
+</label>
+<!-- Gateway 3: Digital Wallet -->
+<label class="cursor-pointer relative p-4 rounded-xl bg-surface-container-low shadow-sm flex flex-col justify-between gap-3 transition-transform hover:-translate-y-0.5">
+<input class="sr-only" name="payment_method" type="radio" value="wallet">
+<div class="flex items-center justify-between">
+<span class="font-title-md text-title-md text-on-surface font-serif">Apple / Google Pay</span>
+<span class="material-symbols-outlined text-outline text-lg">radio_button_unchecked</span>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">One-Tap Checkout</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">USD / GBP / EUR Native</span>
+</div>
+</label>
+</div>
+<!-- Card Input Fields Form Container -->
+<div class="p-5 rounded-xl bg-surface-container-low/50 flex flex-col gap-4">
+<div class="flex flex-col gap-1.5">
+<label class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Cardholder Full Name</label>
+<input class="h-12 px-4 rounded-lg bg-surface-container-lowest text-on-surface font-body-md text-body-md shadow-sm focus:outline-none" type="text" value="ADEKUNLE BALOGUN">
+</div>
+<div class="flex flex-col gap-1.5">
+<label class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Card Number</label>
+<div class="relative flex items-center">
+<input class="w-full h-12 px-4 pl-11 rounded-lg bg-surface-container-lowest text-on-surface font-body-md text-body-md shadow-sm focus:outline-none font-mono tracking-wider" type="text" value="•••• •••• •••• 4092">
+<span class="material-symbols-outlined absolute left-3.5 text-secondary text-lg">credit_card</span>
+<div class="absolute right-3.5 flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Amex Platinum</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="flex flex-col gap-1.5">
+<label class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Expiry Date</label>
+<input class="h-12 px-4 rounded-lg bg-surface-container-lowest text-on-surface font-body-md text-body-md shadow-sm focus:outline-none font-mono" type="text" value="09 / 28">
+</div>
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between">
+<label class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Security Code</label>
+<span class="font-label-sm text-label-sm text-secondary cursor-pointer">4-digit CID</span>
+</div>
+<input class="h-12 px-4 rounded-lg bg-surface-container-lowest text-on-surface font-body-md text-body-md shadow-sm focus:outline-none font-mono" type="password" value="8421">
+</div>
+</div>
+</div>
+<!-- Settlement CTA Button -->
+<div class="flex flex-col gap-3 pt-2">
+<button id="pay-checkout-btn" onclick="executeOnlinePayment()" class="w-full h-14 rounded-xl bg-primary hover:bg-secondary text-on-primary font-title-md text-title-md transition-all duration-200 flex items-center justify-center gap-3 shadow-lg active:scale-[0.99] font-semibold cursor-pointer" type="button">
+  <span>Pay ₦1,895,000 &amp; Issue Instant QR Pass</span>
+  <span class="material-symbols-outlined text-base">lock</span>
+</button>
+<!-- Guarantees Pill Array -->
+<div class="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1 text-center font-label-sm text-label-sm text-on-surface-variant">
+<span class="inline-flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-sm">verified</span>
+                  100% Refundable up to 24h prior to handover
+                </span>
+<span class="hidden sm:inline text-outline-variant">•</span>
+<span class="inline-flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-sm">security</span>
+                  Professional driver assigned &amp; vehicle prepared prior to handover
+                </span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- RIGHT COLUMN: 35% Sticky Transparent Order Summary & Vehicle Card -->
+<div class="lg:col-span-4 sticky top-28 flex flex-col gap-5">
+<!-- Vehicle Summary Card -->
+<div class="w-full bg-surface-container-lowest rounded-xl shadow-md overflow-hidden flex flex-col">
+<div class="relative h-48 w-full bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="High-end studio side view of an executive Range Rover Autobiography LWB in Santorini Black finish with discreet privacy glass and subtle ambient luxury lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDcPPvtpBMMHhGYDZgYeiN9MSSoJDn5EL2iwwQIFvLdLq2wXTdv-7bX6rVU81xIkwPEeoZQXXUTS3f3wAC6AuZb4WJOYpoXMxE5a6GlSX0CZTBxoTRGHZdVion5bSXvox3rFPiR1wEz7K0MNeeEvklFhjwHWBhso8a8fOKuv2jMP5ccgpyKyuHOWkbRh_VUengNDFOt8KrevURwkaKfllO5acC7dO-q_6WM4_jiJ7e1RTx6B82QO-Yr">
+<div class="absolute inset-0 bg-gradient-to-t from-primary/80 via-transparent to-transparent"></div>
+<div class="absolute top-3 left-3 flex gap-2">
+<span class="px-2.5 py-1 rounded-full bg-surface-container-lowest/90 backdrop-blur-md text-primary font-label-sm text-label-sm font-semibold tracking-wide">Autobiography Spec</span>
+<span class="px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-semibold">Executive Class</span>
+</div>
+<div class="absolute bottom-3 left-4 right-4 flex items-end justify-between">
+<div>
+<span class="font-label-sm text-label-sm text-primary-fixed uppercase tracking-widest">Executive Fleet</span>
+<a href="vehicle-details.html" class="block hover:underline"><h3 class="font-headline-sm text-headline-sm text-on-primary font-serif">Range Rover Autobiography LWB</h3></a>
+</div>
+<span class="font-label-sm text-label-sm text-primary-fixed">Santorini Black</span>
+</div>
+</div>
+<div class="p-6 flex flex-col gap-5"><div class="flex items-center justify-between py-2 px-3 bg-surface-container-low rounded-lg text-on-surface-variant font-label-sm text-label-sm"><span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-sm text-secondary">person</span> 3 VIP Passengers</span><span class="">•</span><span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-sm text-secondary">luggage</span> 4 Executive Cases</span><span class="">•</span><span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-sm text-secondary">wifi</span> Onboard Starlink Wi-Fi</span></div><div class="flex flex-col gap-3"><span class="font-label-md text-label-md uppercase tracking-wider text-secondary">Itinerary Schedule</span><div class="flex items-start gap-3"><div class="flex flex-col items-center gap-1 pt-1"><span class="w-2 h-2 rounded-full bg-secondary"></span><div class="w-0.5 h-7 bg-surface-variant"></div><span class="w-2 h-2 rounded-full bg-primary"></span></div><div class="flex flex-col gap-2 w-full"><div class="flex items-center justify-between"><span class="font-title-md text-title-md text-on-surface">Start: Nov 14, 2024</span><span class="font-label-sm text-label-sm text-on-surface-variant">17:30 WAT</span></div><div class="flex items-center justify-between"><span class="font-title-md text-title-md text-on-surface">Conclude: Nov 17, 2024</span><span class="font-label-sm text-label-sm text-on-surface-variant">17:30 WAT</span></div></div></div><span class="font-body-sm text-body-sm text-secondary font-medium">Total Term: 3 Full Days (72 Consec. Hours)</span></div><div class="flex flex-col gap-2.5 pt-2"><div class="flex items-center justify-between font-body-sm text-body-sm"><span class="text-on-surface-variant">Range Rover Rental (3 Days × ₦550,000)</span><span class="text-on-surface font-medium">₦1,650,000</span></div><div class="flex items-center justify-between font-body-sm text-body-sm"><span class="text-on-surface-variant">Professional Chauffeur Service</span><span class="text-on-surface font-medium">₦180,000</span></div><div class="flex items-center justify-between font-body-sm text-body-sm"><span class="text-on-surface-variant">Direct Delivery &amp; Airport Meet-and-Greet</span><span class="text-secondary font-medium uppercase font-label-sm text-label-sm">Complimentary</span></div><div class="flex items-center justify-between font-body-sm text-body-sm"><span class="text-on-surface-variant">Standard Fuel &amp; Highway Toll Reserve</span><span class="text-on-surface font-medium">₦65,000</span></div></div><div class="pt-4 flex flex-col gap-1 bg-surface-container-low p-4 rounded-xl"><div class="flex items-baseline justify-between"><span class="font-title-md text-title-md text-on-surface font-semibold">Total Order Due</span><span class="font-headline-md text-headline-md text-primary font-serif">₦1,895,000</span></div><div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant"><span class="">100% Upfront Online Settlement:</span><span class="font-semibold text-secondary">$1,345.00 USD</span></div></div><div class="p-3 rounded-lg bg-surface-container-high/60 flex items-center gap-2 font-label-sm text-label-sm text-secondary font-semibold"><span class="material-symbols-outlined text-base">qr_code_2</span><span class="">Instant QR Voucher issued immediately upon payment</span></div></div>
+</div>
+<!-- WhatsApp Concierge Fast Help Widget -->
+<div class="p-5 rounded-xl bg-surface-container-lowest shadow-sm flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed shrink-0">
+<span class="material-symbols-outlined text-xl">support_agent</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-title-md text-title-md text-on-surface font-medium truncate">Executive Support Desk</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Have questions or need assistance with your booking?</span>
+<a class="font-label-sm text-label-sm text-secondary hover:text-primary transition-colors font-semibold uppercase tracking-wider mt-1 flex items-center gap-1" href="https://wa.me/23418885275">
+              Chat on WhatsApp <span class="material-symbols-outlined text-xs">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Trust Badges -->
+<div class="px-2 flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm text-secondary">verified_user</span>Airport VIP Pickup Available</span>
+<span class="">•</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm text-secondary">encrypted</span>PCI-DSS Level 1</span>
+</div>
+</div>
+</div>
+</div>
+</div></main><footer class="w-full bg-surface-container-lowest border-t-0 shadow-[0_-1px_12px_rgba(0,0,0,0.03)]"><div class="max-w-7xl mx-auto px-6 lg:px-12 pt-16 pb-12"><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 mb-12"><div class="flex flex-col gap-4"><div class="flex items-center gap-2"><span class="font-headline-sm text-headline-sm text-primary font-serif">La Planta</span><span class="font-label-sm text-label-sm uppercase tracking-widest text-secondary">Nigeria</span></div><p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">The premier benchmark for luxury car rentals, executive airport transfers, and chauffeur services across Lagos and Abuja.</p><div class="flex items-center gap-3 pt-2"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container text-secondary font-label-sm text-label-sm"><span class="material-symbols-outlined text-sm">verified_user</span>Vetted &amp; Certified Drivers</span></div></div><div class="flex flex-col gap-3"><span class="font-title-md text-title-md text-on-surface tracking-wide">Locations &amp; Hubs</span><div class="flex flex-col gap-1"><span class="font-label-md text-label-md uppercase tracking-wider text-secondary">Lagos Office</span><span class="font-body-sm text-body-sm text-on-surface-variant">The Wings Office Complex, East Tower, Victoria Island, Lagos</span></div><div class="flex flex-col gap-1 pt-2"><span class="font-label-md text-label-md uppercase tracking-wider text-secondary">Abuja Office</span><span class="font-body-sm text-body-sm text-on-surface-variant">Transcorp Hilton Suites &amp; Nnamdi Azikiwe Airport VIP Lounge, FCT Abuja</span></div></div><div class="flex flex-col gap-3"><span class="font-title-md text-title-md text-on-surface tracking-wide">Client Services</span><div class="flex flex-col gap-2 font-body-sm text-body-sm text-on-surface-variant"><span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-secondary">call</span>24/7 Support: +234 1 888 5275</span><span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-secondary">mail</span>reservations@laplanta-luxury.ng</span><span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-secondary">flight_takeoff</span>LOS / ABV VIP Airport Pickup</span></div></div><div class="flex flex-col gap-4"><span class="font-title-md text-title-md text-on-surface tracking-wide">Direct WhatsApp Support</span><p class="font-body-sm text-body-sm text-on-surface-variant">Instant luxury vehicle reservations, customized daily bookings, and real-time support.</p><a class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-primary-container text-on-primary font-label-md text-label-md uppercase tracking-wider hover:bg-secondary hover:text-on-secondary transition-colors shadow-sm" href="https://wa.me/23418885275"><span class="material-symbols-outlined text-sm">chat</span>Chat on WhatsApp</a></div></div><div class="pt-8 flex flex-col md:flex-row items-center justify-between gap-4 font-body-sm text-body-sm text-on-surface-variant"><div class="flex flex-wrap items-center gap-6"><span class="font-label-sm text-label-sm uppercase tracking-wider">© 2025 La Planta Luxury Car Hire Ltd.</span><a class="hover:text-on-surface transition-colors font-label-sm text-label-sm uppercase tracking-wider" href="#">Rental Terms &amp; Conditions</a><a class="hover:text-on-surface transition-colors font-label-sm text-label-sm uppercase tracking-wider" href="#">Privacy Policy</a><a class="hover:text-primary transition-colors font-label-sm text-label-sm uppercase tracking-wider text-secondary font-semibold" href="admin-login.html">Fleet Admin Console</a></div><span class="font-label-sm text-label-sm text-secondary uppercase tracking-widest">Victoria Island • Maitama • Ikoyi</span></div></div></footer>
+
+<!-- Background Dispatch & Payment Confirmation Modal -->
+<div id="payment-modal" class="fixed inset-0 z-50 bg-primary/70 backdrop-blur-md hidden flex items-center justify-center p-4">
+  <div class="bg-surface-container-lowest max-w-md w-full rounded-2xl p-6 sm:p-8 shadow-2xl flex flex-col gap-5 border border-surface-container text-center">
+    
+    <!-- Spinner / Success Icon Container -->
+    <div class="mx-auto w-16 h-16 rounded-full bg-secondary-fixed/50 flex items-center justify-center text-primary" id="modal-icon-container">
+      <span class="material-symbols-outlined text-3xl animate-spin text-secondary" id="modal-icon">sync</span>
+    </div>
+
+    <!-- Title and Subtitle -->
+    <div class="flex flex-col gap-1">
+      <h3 class="font-headline-sm text-xl font-serif text-primary" id="modal-title">Authorizing Online Settlement</h3>
+      <p class="font-body-sm text-xs text-on-surface-variant" id="modal-subtitle">Connecting to Paystack 256-bit bank gateway for ₦1,895,000...</p>
+    </div>
+
+    <!-- Background Notification Dispatch Steps -->
+    <div class="flex flex-col gap-2 p-3.5 bg-surface-container-low rounded-xl text-left font-body-sm text-xs" id="dispatch-notifications">
+      <div class="flex items-center gap-2 text-on-surface-variant" id="step-bank">
+        <span class="material-symbols-outlined text-secondary text-sm">hourglass_top</span>
+        <span>Validating card escrow funds...</span>
+      </div>
+      <div class="flex items-center gap-2 text-on-surface-variant opacity-50" id="step-sms">
+        <span class="material-symbols-outlined text-outline text-sm">sms</span>
+        <span>SMS Booking Confirmation to Phone</span>
+      </div>
+      <div class="flex items-center gap-2 text-on-surface-variant opacity-50" id="step-wa">
+        <span class="material-symbols-outlined text-outline text-sm">chat</span>
+        <span>WhatsApp Dossier &amp; Driver Contact</span>
+      </div>
+      <div class="flex items-center gap-2 text-on-surface-variant opacity-50" id="step-pass">
+        <span class="material-symbols-outlined text-outline text-sm">qr_code_2</span>
+        <span>Digital Boarding Pass Generation</span>
+      </div>
+    </div>
+
+    <!-- Redirect Countdown / Action -->
+    <div class="pt-1 flex flex-col gap-2">
+      <span class="font-label-sm text-[11px] text-secondary font-medium" id="modal-timer">Please do not close this window...</span>
+      <button id="modal-direct-btn" type="button" onclick="goToAccount()" class="w-full py-3 rounded-xl bg-primary hover:bg-secondary text-on-primary font-title-md text-xs font-semibold uppercase tracking-wider transition-all hidden">
+        Open Account &amp; Boarding Pass
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Session Initialization
+  function syncCheckoutUserState() {
+    const raw = localStorage.getItem('laPlanta_guest');
+    const authBox = document.getElementById('step2-authenticated-box');
+    const formBox = document.getElementById('step2-guest-form');
+    const authContainer = document.getElementById('header-auth-container');
+
+    if (raw) {
+      try {
+        const user = JSON.parse(raw);
+        if (authBox && formBox) {
+          authBox.classList.remove('hidden');
+          formBox.classList.add('hidden');
+          
+          document.getElementById('step2-name').textContent = user.name || "Dr. Adekunle Balogun";
+          document.getElementById('step2-contact').textContent = `${user.email || 'a.balogun@executivecorp.ng'} • ${user.phone || '+234 803 555 0192'}`;
+          
+          const initials = (user.name || "AB").split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+          document.getElementById('step2-avatar').textContent = initials || "AB";
+        }
+        if (authContainer) {
+          const firstName = (user.name || 'Adekunle').split(' ')[0];
+          const initials = (user.name || "AB").split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+          authContainer.innerHTML = `
+            <button onclick="window.location.href='account.html'" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-low hover:bg-surface-container-high transition-colors text-on-surface font-label-sm text-label-sm font-semibold">
+              <div class="w-6 h-6 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-xs">${initials}</div>
+              <span>Hi, ${firstName}</span>
+            </button>
+            <a class="px-3.5 py-1.5 rounded-full bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider font-semibold hover:bg-secondary transition-colors" href="account.html">My Account</a>
+          `;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      if (authBox && formBox) {
+        authBox.classList.add('hidden');
+        formBox.classList.remove('hidden');
+      }
+      if (authContainer) {
+        authContainer.innerHTML = `
+          <a id="checkout-auth-nav-btn" class="px-3.5 py-1.5 rounded-full bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider font-semibold hover:bg-secondary transition-colors" href="guest-login.html?redirect=checkout.html">Sign In / Sign Up</a>
+        `;
+      }
+    }
+  }
+
+  function checkoutSwitchAccount() {
+    window.location.href = 'guest-login.html?redirect=checkout.html';
+  }
+
+  function checkoutQuickFillDemo() {
+    const demo = {
+      name: "Dr. Adekunle Balogun",
+      email: "a.balogun@executivecorp.ng",
+      phone: "+234 803 555 0192",
+      tier: "VIP Executive Tier",
+      activeBookingId: "LP-8842",
+      role: "Guest"
+    };
+    localStorage.setItem('laPlanta_guest', JSON.stringify(demo));
+    syncCheckoutUserState();
+  }
+
+  function executeOnlinePayment() {
+    let raw = localStorage.getItem('laPlanta_guest');
+    let user;
+    if (!raw) {
+      const nameInput = document.getElementById('inline-guest-name')?.value.trim();
+      const emailInput = document.getElementById('inline-guest-email')?.value.trim();
+      const phoneInput = document.getElementById('inline-guest-phone')?.value.trim();
+      
+      if (!emailInput) {
+        alert("Please enter your email or sign in to complete your reservation.");
+        document.getElementById('inline-guest-email')?.focus();
+        return;
+      }
+
+      user = {
+        name: nameInput || "Dr. Adekunle Balogun",
+        email: emailInput,
+        phone: phoneInput || "+234 803 555 0192",
+        tier: "Executive Tier",
+        activeBookingId: "LP-8842",
+        role: "Guest"
+      };
+      localStorage.setItem('laPlanta_guest', JSON.stringify(user));
+    } else {
+      user = JSON.parse(raw);
+    }
+
+    // Save booking data
+    const reservation = {
+      id: "LP-8842",
+      vehicle: "Range Rover Autobiography LWB",
+      plate: "LAG-892-XZ",
+      dates: "Nov 14 — Nov 17, 2024",
+      handoverLocation: "The Wheatbaker Hotel, 4 Onitolo Rd, Ikoyi, Lagos",
+      driver: "Mr. Emmanuel Okafor",
+      totalPaid: "₦1,895,000",
+      status: "Confirmed & Scheduled",
+      paidAt: new Date().toISOString()
+    };
+    localStorage.setItem('laPlanta_currentReservation', JSON.stringify(reservation));
+
+    // Show luxury processing modal
+    const modal = document.getElementById('payment-modal');
+    modal.classList.remove('hidden');
+
+    const stepBank = document.getElementById('step-bank');
+    const stepSms = document.getElementById('step-sms');
+    const stepWa = document.getElementById('step-wa');
+    const stepPass = document.getElementById('step-pass');
+    const modalTitle = document.getElementById('modal-title');
+    const modalSub = document.getElementById('modal-subtitle');
+    const modalIcon = document.getElementById('modal-icon');
+    const directBtn = document.getElementById('modal-direct-btn');
+    const timer = document.getElementById('modal-timer');
+
+    setTimeout(() => {
+      stepBank.innerHTML = '<span class="material-symbols-outlined text-emerald-700 text-sm">check_circle</span> <span class="text-on-surface font-semibold">Payment of ₦1,895,000 Settled &amp; Escrow Locked</span>';
+      stepSms.classList.remove('opacity-50');
+      stepSms.innerHTML = '<span class="material-symbols-outlined text-secondary text-sm">sync</span> <span>Dispatching SMS PIN to ' + (user.phone || '+234 803 555 0192') + '...</span>';
+    }, 700);
+
+    setTimeout(() => {
+      stepSms.innerHTML = '<span class="material-symbols-outlined text-emerald-700 text-sm">check_circle</span> <span class="text-on-surface font-semibold">SMS Delivered with PIN #8842-09</span>';
+      stepWa.classList.remove('opacity-50');
+      stepWa.innerHTML = '<span class="material-symbols-outlined text-secondary text-sm">sync</span> <span>Sending WhatsApp Itinerary &amp; Driver Dossier...</span>';
+    }, 1400);
+
+    setTimeout(() => {
+      stepWa.innerHTML = '<span class="material-symbols-outlined text-emerald-700 text-sm">check_circle</span> <span class="text-on-surface font-semibold">WhatsApp Chauffeur Packet Delivered</span>';
+      stepPass.classList.remove('opacity-50');
+      stepPass.innerHTML = '<span class="material-symbols-outlined text-emerald-700 text-sm">check_circle</span> <span class="text-on-surface font-semibold">Digital Boarding Pass Active</span>';
+
+      modalTitle.textContent = "Reservation Confirmed!";
+      modalSub.textContent = "Vehicle booked & driver assigned. Redirecting to your VIP Account...";
+      modalIcon.textContent = "verified";
+      modalIcon.className = "material-symbols-outlined text-3xl text-emerald-700";
+      directBtn.classList.remove('hidden');
+      timer.textContent = "Redirecting in 2 seconds...";
+      
+      setTimeout(() => {
+        goToAccount();
+      }, 2000);
+    }, 2200);
+  }
+
+  function goToAccount() {
+    window.location.href = 'account.html?booking_success=LP-8842';
+  }
+
+  window.addEventListener('DOMContentLoaded', syncCheckoutUserState);
+</script>
+
+</body></html>

@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 100% 99%; /* #f9f9ff Warm Alabaster */
+    --foreground: 216 44% 12%; /* #111c2c */
+
+    --card: 0 0% 100%;
+    --card-foreground: 216 44% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 216 44% 12%;
+
+    --primary: 180 14% 2%; /* #040505 Velvet Obsidian */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 35 34% 33%; /* #725b38 Warm Gold */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 228 100% 97%; /* #f0f3ff */
+    --muted-foreground: 200 4% 28%;
+
+    --accent: 35 95% 85%; /* #fedeb2 Champagne Gold */
+    --accent-foreground: 36 100% 8%;
+
+    --destructive: 0 75% 42%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 218 38% 92%;
+    --input: 218 38% 92%;
+    --ring: 35 34% 33%;
+
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-surface text-on-surface antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Material Symbols font display fallback */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+

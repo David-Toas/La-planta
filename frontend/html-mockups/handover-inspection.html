@@ -1,0 +1,355 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><meta content="web_standard" name="shell-type"><title>La Planta - Vehicle Handover &amp; Inspection Console</title><link href="https://fonts.googleapis.com" rel="preconnect"><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&amp;family=Plus+Jakarta+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"on-error-container":"#93000a","on-secondary-fixed":"#281800","on-secondary-fixed-variant":"#584323","on-primary-container":"#878585","inverse-on-surface":"#ebf1ff","surface-container-high":"#dee8ff","on-primary-fixed-variant":"#474746","on-background":"#111c2c","on-primary":"#ffffff","error":"#ba1a1a","on-surface-variant":"#444748","surface-container-lowest":"#ffffff","surface-container":"#e7eeff","on-primary-fixed":"#1b1b1c","on-tertiary-container":"#858683","on-secondary":"#ffffff","outline-variant":"#c4c7c7","surface":"#f9f9ff","tertiary-fixed":"#e3e2e0","surface-dim":"#cfdaf1","primary-fixed":"#e5e2e1","outline":"#747878","surface-bright":"#f9f9ff","on-secondary-container":"#78603e","surface-container-highest":"#d8e3fa","on-tertiary":"#ffffff","background":"#f9f9ff","secondary":"#725b38","inverse-primary":"#c8c6c5","inverse-surface":"#263142","tertiary-fixed-dim":"#c7c6c4","secondary-fixed":"#fedeb2","error-container":"#ffdad6","surface-variant":"#d8e3fa","primary":"#040505","surface-container-low":"#f0f3ff","tertiary":"#030404","primary-container":"#1e1e1e","primary-fixed-dim":"#c8c6c5","secondary-fixed-dim":"#e0c298","surface-tint":"#5f5e5e","tertiary-container":"#1d1e1d","on-error":"#ffffff","on-tertiary-fixed":"#1a1c1a","secondary-container":"#fedeb2","on-surface":"#111c2c","on-tertiary-fixed-variant":"#464745"},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem",full:"9999px"},spacing:{"space-lg":"1.5rem","gutter-mobile":"1rem","margin-mobile":"1.25rem","space-xs":"0.25rem",gutter:"1.5rem","space-md":"1rem","space-xl":"2.5rem",margin:"3rem","space-sm":"0.5rem"},fontFamily:{display:["Playfair Display"],"title-md":["Plus Jakarta Sans"],"headline-sm":["Playfair Display"],"body-sm":["Plus Jakarta Sans"],"label-sm":["Plus Jakarta Sans"],"label-md":["Plus Jakarta Sans"],"headline-lg-mobile":["Playfair Display"],"headline-lg":["Playfair Display"],"title-lg":["Plus Jakarta Sans"],"body-lg":["Plus Jakarta Sans"],"headline-md":["Playfair Display"],"body-md":["Plus Jakarta Sans"],"display-mobile":["Playfair Display"]},fontSize:{display:["56px",{lineHeight:"64px",letterSpacing:"-0.02em",fontWeight:"400"}],"title-md":["16px",{lineHeight:"24px",fontWeight:"600"}],"headline-sm":["22px",{lineHeight:"30px",fontWeight:"600"}],"body-sm":["13px",{lineHeight:"20px",fontWeight:"400"}],"label-sm":["11px",{lineHeight:"14px",letterSpacing:"0.08em",fontWeight:"600"}],"label-md":["12px",{lineHeight:"16px",letterSpacing:"0.06em",fontWeight:"600"}],"headline-lg-mobile":["28px",{lineHeight:"36px",letterSpacing:"0em",fontWeight:"500"}],"headline-lg":["40px",{lineHeight:"48px",letterSpacing:"-0.01em",fontWeight:"500"}],"title-lg":["20px",{lineHeight:"28px",fontWeight:"600"}],"body-lg":["18px",{lineHeight:"28px",fontWeight:"400"}],"headline-md":["28px",{lineHeight:"36px",fontWeight:"600"}],"body-md":["15px",{lineHeight:"24px",fontWeight:"400"}],"display-mobile":["36px",{lineHeight:"44px",letterSpacing:"-0.01em",fontWeight:"400"}]}}}};</script></head><body class="bg-surface font-body-md text-on-surface antialiased"><header class="fixed top-0 left-0 w-full z-50 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-20 max-w-[1280px] mx-auto px-margin flex items-center justify-between gap-space-md"><a href="index.html" class="flex items-center gap-space-sm group"><div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-secondary border border-secondary/40 shadow-sm flex-shrink-0"><svg class="w-6 h-6 fill-current text-secondary" viewBox="0 0 24 24"><path d="M12 2L4 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-8-5zm0 3.3L18 8.6v4.4c0 3.9-2.55 7.6-6 8.7-3.45-1.1-6-4.8-6-8.7V8.6l6-3.3zM11 7h2v6h-2zm0 8h2v2h-2z"></path></svg></div><div class="flex flex-col"><span class="font-display text-headline-sm font-semibold tracking-tight text-primary leading-none group-hover:text-secondary transition-colors">LA PLANTA</span><span class="font-label-sm text-label-sm tracking-widest uppercase text-secondary font-medium mt-0.5">LUXURY CAR HIRE</span></div></a><nav class="hidden lg:flex items-center gap-space-lg" data-active-classes="text-primary font-title-md relative after:content-[''] after:absolute after:bottom-[-6px] after:left-0 after:w-full after:h-[2px] after:bg-secondary"><a href="index.html" class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors py-1">Home</a><a href="fleet.html" class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors py-1">Fleet Catalog</a><a href="live-tracking.html" class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors py-1">Live Tracking</a><a href="account.html" class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors py-1">Guest Account</a><a href="admin-command.html" aria-current="page" class="transition-colors py-1 text-primary font-title-md relative after:content-[''] after:absolute after:bottom-[-6px] after:left-0 after:w-full after:h-[2px] after:bg-secondary">Admin Command</a></nav><div class="flex items-center gap-space-md"><div class="hidden sm:flex items-center bg-surface-container-low rounded-full p-0.5 border border-surface-container"><button type="button" class="px-2.5 py-1 rounded-full bg-primary text-on-primary font-label-sm text-label-sm shadow-sm">NGN ₦</button><button type="button" class="px-2.5 py-1 rounded-full text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm transition-colors">USD $</button></div><div class="hidden xl:flex flex-col text-right"><span class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">24/7 Priority Support</span><a href="tel:+23418885275" class="font-title-md text-body-sm text-primary font-semibold hover:text-secondary transition-colors">+234 1 888 5275</a></div><div class="flex items-center gap-2"><div class="flex items-center gap-space-xs pl-space-xs pr-space-sm py-1 bg-surface-container-low rounded-full border border-surface-container"><img alt="Adekunle Balogun profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1WYXdvzJzo6cdN3Gyr3nvgR3mArcOVJbzV2a2r96N7t0H1XUriC_a07oOlFU4iuU3lN8kO7a-_iNYYjNxJRBrpgUbGSqplOpFpKevda5JMNXPX6gpWgeDRQC34asiCnsma5ULpvQJ_0Q3yhAzGh8meMqkte3w60aA1D8VrHzxxo5EK9meIadYg6K_BxH7EajFwuHZYZVupzK3_O29mQpMnNSEWjFWp5oC7jkoW4If_OoAowSPaE0simNCc"><button onclick="window.location.href='account.html'" type="button" class="flex items-center gap-1 font-title-md text-body-sm text-primary font-medium hover:text-secondary"><span class="hidden md:inline">Hi, Adekunle</span><span class="material-symbols-outlined text-base">expand_more</span></button></div><button onclick="handleAdminSignOut()" class="hidden sm:inline-flex items-center gap-1 text-on-surface-variant hover:text-error font-label-sm text-label-sm uppercase tracking-wider transition-colors px-2 py-1"><span class="material-symbols-outlined text-base">logout</span>Sign Out</button></div></div></div></header><main class="w-full pt-20 bg-surface min-h-[calc(100vh-20rem)]"><div class="flex flex-col w-full">
+<!-- Status & Context Master Banner -->
+<div class="w-full bg-surface-container-low py-space-sm px-margin">
+<div class="max-w-[1280px] mx-auto flex flex-col md:flex-row md:items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-sm flex-wrap">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary text-on-primary font-label-sm text-label-sm tracking-wider uppercase"><span class="w-2 h-2 rounded-full bg-secondary-fixed animate-ping"></span> Vehicle Handover &amp; Inspection Console</span>
+<a href="reservation-pass.html" class="font-label-md text-label-md text-secondary font-semibold hover:underline">BOOKING #LP-8842</a>
+<span class="text-on-surface-variant font-body-sm hidden sm:inline">•</span>
+<span class="font-body-sm text-body-sm text-on-surface">The Wheatbaker Hotel (Valet Forecourt, Ikoyi)</span>
+</div>
+<div class="flex items-center gap-space-md">
+<span class="font-label-sm text-label-sm uppercase tracking-widest text-on-surface-variant">Live Dispatch Status</span>
+<span class="inline-flex items-center gap-1 text-secondary font-label-sm text-label-sm font-semibold"><span class="material-symbols-outlined text-sm">wifi_tethering</span> REAL-TIME GPS SYNCED</span>
+</div>
+</div>
+</div>
+<!-- Operational Core Workspace -->
+<div class="w-full max-w-[1280px] mx-auto px-margin py-space-md">
+<!-- Booking Header & Vehicle Manifest Strip -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm mb-space-md flex flex-col lg:flex-row lg:items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md">
+<div class="w-14 h-14 rounded-lg bg-surface-container flex items-center justify-center text-primary flex-shrink-0">
+<span class="material-symbols-outlined text-3xl">verified_user</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-space-xs flex-wrap">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-secondary font-semibold">Executive Booking Verification</span>
+<span class="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-semibold">VIP Client</span>
+</div>
+<h1 class="font-headline-sm text-headline-sm text-primary">Dr. Adekunle Balogun</h1>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Delivery Destination: The Wheatbaker Hotel, 4 Onitolo Rd, Ikoyi, Lagos</span>
+</div>
+</div>
+<div class="flex items-center gap-space-lg flex-wrap lg:justify-end">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm uppercase text-on-surface-variant">Assigned Motorcar</span>
+<a href="vehicle-details.html" class="hover:underline font-title-md text-title-md text-primary font-semibold">Range Rover Autobiography LWB</a>
+<span class="font-label-sm text-label-sm text-secondary font-mono">PLATE: LAG-892-XZ</span>
+</div>
+<div class="h-10 w-[1px] bg-surface-container-high hidden md:block"></div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm uppercase text-on-surface-variant">Assigned Professional Driver</span>
+<span class="font-title-md text-title-md text-primary font-semibold">Mr. Emmanuel Okafor</span>
+<span class="font-label-sm text-label-sm text-secondary font-medium">12 Years Professional Experience • Vetted</span>
+</div>
+</div>
+</div>
+<!-- 3-Column Structured Handover Architecture (30% / 45% / 25%) -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-md items-start">
+<!-- COLUMN 1 (30% -> col-span-1 lg:col-span-4): Guest Pass & Booking Summary -->
+<div class="lg:col-span-4 flex flex-col gap-space-md">
+<!-- Handover Verification Summary Card -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm">
+<div class="flex items-center justify-between pb-space-sm mb-space-sm bg-surface-container-low -mx-space-md -mt-space-md p-space-md rounded-t-xl">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-xl">qr_code_scanner</span>
+<span class="font-label-md text-label-md uppercase tracking-wider text-primary font-semibold">Pass Verification</span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-label-sm text-label-sm font-semibold">QR VERIFIED</span>
+</div>
+<!-- Booking Pass Detail Box -->
+<div class="relative bg-primary rounded-lg p-space-md text-on-primary overflow-hidden mb-space-sm">
+<div class="flex items-center justify-between mb-space-xs">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary-fixed"></span>
+<span class="font-label-sm text-label-sm uppercase tracking-widest text-secondary-fixed">Confirmed Reservation</span>
+</div>
+<span class="font-mono text-body-sm text-tertiary-fixed">PIN: 8842-09</span>
+</div>
+<div class="flex items-center gap-space-sm my-space-xs">
+<div class="p-2 rounded bg-surface-container-lowest text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-3xl text-secondary">verified</span>
+</div>
+<div>
+<div class="font-title-md text-title-md text-on-primary"><a href="reservation-pass.html" class="hover:underline text-secondary-fixed">Digital Pass #LP-8842</a> <span class="ml-1 text-xs px-2 py-0.5 rounded-full bg-emerald-700/80 text-white font-semibold uppercase">100% PAID</span></div>
+<div class="font-label-sm text-label-sm text-outline-variant">Guest &amp; Chauffeur Pairing Confirmed</div>
+</div>
+</div>
+<div class="mt-space-xs pt-space-xs font-mono text-body-sm text-tertiary-fixed flex justify-between">
+<span class="">Handover Time: 17:30 WAT</span>
+<span class="">Term: 3 Full Days</span>
+</div>
+</div>
+<!-- Practical Car Hire Inspection Checklist -->
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between p-space-xs px-space-sm rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-base">local_gas_station</span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">Fuel Level</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary font-semibold">100% Full Tank</span>
+</div>
+<div class="flex items-center justify-between p-space-xs px-space-sm rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-base">speed</span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">Odometer Start</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-mono">14,280 KM</span>
+</div>
+<div class="flex items-center justify-between p-space-xs px-space-sm rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-base">payments</span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">Online Settlement</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary font-semibold">₦1,895,000 Settled</span>
+</div>
+<div class="flex items-center justify-between p-space-xs px-space-sm rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-base">flight_takeoff</span>
+<span class="font-body-sm text-body-sm text-on-surface font-medium">Airport Tarmac Access</span>
+</div>
+<span class="font-label-sm text-label-sm text-secondary font-semibold">FAAN Pre-Cleared</span>
+</div>
+</div>
+</div>
+<!-- Tarmac Staging Context Card -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm">
+<div class="flex items-center gap-space-xs mb-space-sm">
+<span class="material-symbols-outlined text-secondary text-xl">flight_land</span>
+<span class="font-label-md text-label-md uppercase tracking-wider text-primary font-semibold">Flight Integration Log</span>
+</div>
+<div class="relative rounded-lg overflow-hidden h-36 mb-space-sm bg-surface-container-high">
+<img class="w-full h-full object-cover" data-alt="High luxury private jet Gulfstream parked on Lagos private airport apron with luxury chauffeur Range Rover parked on tarmac at golden hour sunset, cinematic editorial lighting, pristine concrete runway and executive terminal in background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDI17qCsTIb251Qssb05Bwjj7aph21oVWe9q8fu7x-op0Vb6rBbLCzMQtEY9WZSK1sMxovUa0Ih7S4me1kEFr5ITA0VUEWAMy75eW91ylcr6dRfWv1AXPeZAmzedvmdIGkSJhWGuUDJjklQHThJ8zhX5h8YLlztLFDc9uNeZtYXKC2PTxlOs4z8q4KxHynJazT5YfsfTKt7xhLpew4jFoOIPG3niqPt2EeoyBVr_5GVkxDsW6MWpNSM">
+<div class="absolute inset-0 bg-gradient-to-t from-primary/80 via-transparent to-transparent flex items-end p-space-sm">
+<div class="text-on-primary">
+<div class="font-label-sm text-label-sm uppercase tracking-wider text-secondary-fixed">Private Charter Inbound</div>
+<div class="font-title-md text-title-md text-on-primary font-semibold">Digital Pass #LP-8842 <span class="ml-1 text-xs px-2 py-0.5 rounded-full bg-emerald-700/80 text-white font-semibold uppercase">PAID &amp; VERIFIED</span></div>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-space-xs font-body-sm text-body-sm">
+<div class="p-2 rounded bg-surface-container-low">
+<span class="block font-label-sm text-label-sm text-on-surface-variant uppercase">Origin</span>
+<span class="font-medium text-on-surface">London Luton (LTN)</span>
+</div>
+<div class="p-2 rounded bg-surface-container-low">
+<span class="block font-label-sm text-label-sm text-on-surface-variant uppercase">Wheels Down</span>
+<span class="font-medium text-on-surface">17:15 WAT (On Schedule)</span>
+</div>
+</div>
+</div>
+<!-- Airside Security Clearance Token -->
+<div class="bg-secondary-container/40 rounded-xl p-space-md flex items-center justify-between"><div class="flex items-center gap-space-xs"><span class="material-symbols-outlined text-secondary text-2xl">room_service</span><div><div class="font-title-md text-body-sm text-primary font-semibold">VIP Terminal Concierge Reception</div><div class="font-body-sm text-body-sm text-on-surface-variant">Concierge Officer M. Garba Assigned • Gate Meet Active</div></div></div><span class="material-symbols-outlined text-secondary">check_circle</span></div>
+</div>
+<!-- COLUMN 2 (45% -> col-span-1 lg:col-span-5): Pre-Trip Vehicle Inspection Photos -->
+<div class="lg:col-span-5 flex flex-col gap-space-md">
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between pb-space-sm mb-space-sm gap-space-xs"><div class="flex flex-col gap-1"><div><div class="flex items-center gap-2"><span class="material-symbols-outlined text-secondary text-xl">camera_outdoor</span><span class="font-title-md text-title-md text-primary font-semibold">Pre-Trip Inspection Photos</span></div><span class="font-body-sm text-body-sm text-on-surface-variant">Mandatory 4-angle vehicle verification prior to trip departure</span></div></div><div class="flex items-center gap-2"><div class="flex items-center bg-surface-container-low p-0.5 rounded-lg"><button type="button" class="px-3 py-1 rounded-md bg-primary text-on-primary font-label-sm text-label-sm font-semibold shadow-sm">Pickup Condition</button><button type="button" class="px-3 py-1 rounded-md text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm">Return Condition</button></div><span class="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container text-primary font-label-sm text-label-sm font-semibold"><span class="material-symbols-outlined text-xs text-secondary">verified</span> 4 OF 4 LOGGED</span></div></div>
+<!-- Photo Grid 2x2 -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm mb-space-md">
+<!-- Angle 1: Front & Grille -->
+<div class="group relative rounded-xl overflow-hidden bg-surface-container flex flex-col shadow-sm transition-transform hover:-translate-y-0.5">
+<div class="relative h-44 w-full overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Close frontal inspection photo of a gleaming black Range Rover Autobiography LWB on pristine Lagos airport tarmac, chrome grille immaculate, signature headlights reflecting soft late afternoon sun." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfd_rPLrTsKMRJd_s4OLUxH0T6MV9dtN2aIf_A_Pag2q8giG4GvDp1fWHwAaDSV86yMNCeTW9zqLsSdOTB3beVJLcwF_en28eQ6gj_yxGl2rWpGgWBTJr0kH6iyBGxg3qw-sAHKyeidzuRBLHzrR_mrp9q-lVD3et2ZTlHvJagOy82o0oNHZWu2YrVGr7rraCBj6YfopTSLg90fmNmHlte4qn8VO2IMAkNxnvucf8VB-mNEzGcityR">
+<span class="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary/90 text-on-primary font-label-sm text-label-sm tracking-wider">ANGLE 01</span>
+<span class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">verified</span> VERIFIED
+                </span>
+</div>
+<div class="p-space-xs px-space-sm bg-surface-container-low flex flex-col">
+<span class="font-title-md text-body-sm text-primary font-medium">Front Fascia &amp; Panoramic Glass</span>
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant pt-0.5">
+<span class="">Logged: 17:22 WAT</span>
+<span class="text-secondary font-mono">Grade: Flawless</span>
+</div>
+</div>
+</div>
+<!-- Angle 2: Right Profile & Wheels -->
+<div class="group relative rounded-xl overflow-hidden bg-surface-container flex flex-col shadow-sm transition-transform hover:-translate-y-0.5">
+<div class="relative h-44 w-full overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Side profile photographic inspection of luxury Range Rover Autobiography long wheelbase on runway apron, polished 22 inch turbine wheels pristine, metallic paint reflecting sunset clouds." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD95CSUlqI3RO9rqQI-252vIWQI0vMq8wyI8h30W2FU2b4uAq2YJcyx3xTsRAqKey5PeoBmMJy7SDzPzS92RuZnFjZUnC494v5usJ3Fx9hxvQ1XVgdukW4U5TVkBY9Ik7OANNhyxpWCt5UtPY0echs8kmit6vH0fEVibPnZjga3SB-aw-fpnHRJ2hMwjJ99-N90Mm1lQbVh6kq_Pk7Kv15rNVaX2CwZfeX2UoIclPlWxk797EEKFAc2">
+<span class="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary/90 text-on-primary font-label-sm text-label-sm tracking-wider">ANGLE 02</span>
+<span class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">verified</span> VERIFIED
+                </span>
+</div>
+<div class="p-space-xs px-space-sm bg-surface-container-low flex flex-col">
+<span class="font-title-md text-body-sm text-primary font-medium">Right Side Profile &amp; Wheels</span>
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant pt-0.5">
+<span class="">Logged: 17:23 WAT</span>
+<span class="text-secondary font-mono">Tread: 98%</span>
+</div>
+</div>
+</div>
+<!-- Angle 3: Rear & Trunk -->
+<div class="group relative rounded-xl overflow-hidden bg-surface-container flex flex-col shadow-sm transition-transform hover:-translate-y-0.5">
+<div class="relative h-44 w-full overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Rear view inspection photograph of black luxury executive SUV tailgate open showing immaculate carpeted luggage compartment with VIP leather protection matting on airport tarmac." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBOF9EKvLGGpJSUd5iAL8LU0v2RPF8G20MsG90vFcdjPKi0uhC8FKEP8-WLKOKsyd338saiGKos2F4vIZIjR3SzZzN7TNDqRUJ07JeXXhi5Xolxn-v20_VzQg_GWIwqhhxgDTtZGq3V4yzs6fqgnXMYfLRlgY8DZ6fsiYt2KtlxmBmnl6jM_iW3McDoMhEcO2TISZvafiFHkehN0GpNBpRyR-O87TEupKBoUfbXlK46VkBWxrdRNC2">
+<span class="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary/90 text-on-primary font-label-sm text-label-sm tracking-wider">ANGLE 03</span>
+<span class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">verified</span> VERIFIED
+                </span>
+</div>
+<div class="p-space-xs px-space-sm bg-surface-container-low flex flex-col">
+<span class="font-title-md text-body-sm text-primary font-medium">Rear Profile &amp; Luggage Compartment</span>
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant pt-0.5">
+<span class="">Logged: 17:24 WAT</span>
+<span class="text-secondary font-mono">Boot: Sanitized</span>
+</div>
+</div>
+</div>
+<!-- Angle 4: Cockpit & Cluster -->
+<div class="group relative rounded-xl overflow-hidden bg-surface-container flex flex-col shadow-sm transition-transform hover:-translate-y-0.5">
+<div class="relative h-44 w-full overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Cockpit instrument cluster and digital dashboard display inside Range Rover Autobiography luxury interior, showing full fuel tank gauge and crisp odometer reading." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0Bu18zs1WG57l5juN7ShhcXJ1KPoVUWUesswQt8DdTDAKkcR6Sn3CXzl9N2RJCxITXvQ5ICxpprTVwkxVjXxO2W4KV7HoQgizLg86HiBeqCNT6JP59eNNVu-y9_a9YrmDCZKNaBv2koMSOEAj0ht0tIIJtl0j7_7ybpUcisa8edql_j5scyCONAr2J_wsLgeVKP5bzlIzXtKJ1BZO_zMoptjbYbLWdV9tlgE40WaEjph5LW4Css7-">
+<span class="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-primary/90 text-on-primary font-label-sm text-label-sm tracking-wider">ANGLE 04</span>
+<span class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">verified</span> VERIFIED
+                </span>
+</div>
+<div class="p-space-xs px-space-sm bg-surface-container-low flex flex-col">
+<span class="font-title-md text-body-sm text-primary font-medium">Digital Cluster &amp; Fuel Reserve</span>
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant pt-0.5">
+<span class="">Logged: 17:25 WAT</span>
+<span class="text-secondary font-mono">100% Fuel • 14,210 km</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Digital Verification Stamp -->
+<div class="rounded-xl bg-surface-container-low p-space-sm flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm">
+<div class="flex items-center gap-2 text-on-surface-variant font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-secondary text-base">verified</span>
+<span>Inspection Timestamp: <strong class="text-on-surface">17:25 WAT • 02 Oct 2026</strong></span>
+</div>
+<div class="flex items-center gap-2 text-on-surface font-label-sm text-label-sm">
+<span class="text-on-surface-variant">Inspected By:</span> <span class="font-semibold text-primary">Mr. Emmanuel Okafor (Driver #042)</span>
+</div>
+</div>
+</div>
+<!-- Interior Protocol Check Strip -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm">
+<span class="font-label-md text-label-md uppercase tracking-wider text-secondary font-semibold block mb-space-xs">Executive Amenities Checklist</span>
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-space-xs font-body-sm text-body-sm text-on-surface">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-base">check_circle</span> Chilled Voss Water
+            </div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-base">check_circle</span> Hot Towels Prepared
+            </div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-base">check_circle</span> Financial Times / ThisDay
+            </div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-base">check_circle</span> High-Speed Starlink WiFi
+            </div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-base">check_circle</span> Fragrance: Baobab Vetiver
+            </div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-base">check_circle</span> Dual USB-C Fast Charge
+            </div>
+</div>
+</div>
+</div>
+<!-- COLUMN 3 (25% -> col-span-1 lg:col-span-3): Sign-on-Glass Pad & Charter Initiation -->
+<div class="lg:col-span-3 flex flex-col gap-space-md">
+<!-- Sign-on-Glass Acceptance Console -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col">
+<div class="flex items-center justify-between mb-space-xs">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-lg">draw</span>
+<span class="font-title-md text-title-md text-primary">Guest Sign-off</span>
+</div>
+<span class="font-label-sm text-label-sm text-secondary font-mono">DIGITAL-PAD</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-space-sm">
+            Digital signature confirming vehicle handover and readiness.
+          </p>
+<!-- Interactive Signature Canvas Box -->
+<div class="relative bg-surface-container-low rounded-xl p-space-sm mb-space-sm">
+<div class="h-28 w-full bg-surface-container-lowest rounded-lg relative overflow-hidden flex items-center justify-center">
+<!-- Stylized Curated Vector Signature -->
+<svg class="w-full h-full max-w-[200px] text-primary" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" viewBox="0 0 240 100">
+<path d="M 20 60 Q 50 15 75 55 T 120 40 T 150 70 Q 170 30 190 45 T 225 35"></path>
+<path d="M 40 75 C 90 75 140 80 200 65" stroke-dasharray="4 4" stroke-width="1.5"></path>
+</svg>
+<div class="absolute bottom-1 right-2 font-mono text-[9px] text-on-surface-variant/70">DIGITAL-SIGN: #AB8842-VERIFIED</div>
+</div>
+<div class="flex items-center justify-between mt-2 font-label-sm text-label-sm text-on-surface-variant">
+<span class="">Biometric captured</span>
+<button class="text-secondary hover:underline cursor-pointer" type="button">Clear Pad</button>
+</div>
+</div>
+<!-- Protocol Confirmation Checklist -->
+<div class="p-space-xs rounded-lg bg-surface-container-low mb-space-md">
+<label class="flex items-start gap-2 cursor-pointer">
+<input checked="" class="mt-1 accent-primary w-4 h-4 rounded" type="checkbox">
+<span class="font-body-sm text-body-sm text-on-surface leading-tight">
+                Guest verifies vehicle condition is pristine, executive amenities are confirmed, and vehicle handover is complete.
+              </span>
+</label>
+</div>
+<!-- Primary & Secondary Action Execution -->
+<div class="flex flex-col gap-space-xs">
+<button class="w-full py-3 px-space-md rounded-lg bg-primary text-on-primary font-title-md text-body-sm flex items-center justify-center gap-2 hover:bg-secondary hover:text-on-secondary transition-all shadow-md" id="start-charter-btn" type="button"><span class="material-symbols-outlined text-lg">key</span><span class="">Confirm Handover &amp; Begin Trip</span><span class="material-symbols-outlined text-sm">arrow_forward</span></button>
+<button class="w-full py-2.5 px-space-md rounded-lg bg-surface-container text-on-surface font-title-md text-body-sm flex items-center justify-center gap-1.5 hover:bg-surface-container-high transition-colors" type="button">
+<span class="material-symbols-outlined text-base">sms</span>
+<span class="">Sync Later via SMS Pin</span>
+</button>
+</div>
+<!-- Quick Dispatch Emergency Link -->
+<div class="mt-space-md pt-space-sm border-t border-surface-container flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm"><span>VIP Support: Lagos Desk</span><a class="text-secondary font-semibold hover:underline flex items-center gap-1" href="tel:+23418885275"><span class="material-symbols-outlined text-xs">call</span> Direct Support (+234 1 888 5275)</a></div>
+</div>
+<!-- Live Route Preview Snippet -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm">
+<div class="flex items-center justify-between mb-space-xs">
+<span class="font-label-md text-label-md uppercase tracking-wider text-primary font-semibold">Planned Route</span>
+<span class="font-label-sm text-label-sm text-secondary font-semibold">EST. 32 MIN</span>
+</div>
+<div class="space-y-space-xs font-body-sm text-body-sm">
+<div class="flex items-center gap-2">
+<div class="w-2.5 h-2.5 rounded-full bg-secondary"></div>
+<span class="text-on-surface font-medium">MMA2 VIP Executive Terminal</span>
+</div>
+<div class="ml-1 pl-3.5 border-l-2 border-dashed border-secondary/40 py-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Ikoyi Link Bridge Corridor</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-2.5 h-2.5 rounded-full bg-primary"></div>
+<span class="text-on-surface font-medium">The Wheatbaker, Onitolo Rd, Ikoyi</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+  // Simple micro-interaction for charter trip start feedback
+  document.getElementById('start-charter-btn')?.addEventListener('click', function() {
+    const btn = this;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-lg">progress_activity</span> Confirming Handover...';
+    btn.classList.add('opacity-90');
+    setTimeout(() => {
+      btn.innerHTML = '<span class="material-symbols-outlined text-lg">check_circle</span> Handover Complete';
+      btn.classList.remove('bg-primary');
+      btn.classList.add('bg-secondary', 'text-on-secondary');
+      setTimeout(() => {
+        window.location.href = 'admin-command.html';
+      }, 1000);
+    }, 900);
+  });
+
+  function handleAdminSignOut() {
+    localStorage.removeItem('laPlanta_admin');
+    window.location.href = 'admin-login.html';
+  }
+</script></main><footer class="w-full bg-surface-container-lowest border-t-0 shadow-[0_-1px_12px_rgba(0,0,0,0.03)]"><div class="max-w-7xl mx-auto px-6 lg:px-12 pt-16 pb-12"><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 mb-12"><div class="flex flex-col gap-4"><div class="flex items-center gap-2"><span class="font-headline-sm text-headline-sm text-primary font-serif">La Planta</span><span class="font-label-sm text-label-sm uppercase tracking-widest text-secondary">Nigeria</span></div><p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">The premier benchmark for luxury car rentals, executive airport transfers, and chauffeur services across Lagos and Abuja.</p><div class="flex items-center gap-3 pt-2"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container text-secondary font-label-sm text-label-sm"><span class="material-symbols-outlined text-sm">verified_user</span>Vetted &amp; Certified Drivers</span></div></div><div class="flex flex-col gap-3"><span class="font-title-md text-title-md text-on-surface tracking-wide">Locations &amp; Hubs</span><div class="flex flex-col gap-1"><span class="font-label-md text-label-md uppercase tracking-wider text-secondary">Lagos Office</span><span class="font-body-sm text-body-sm text-on-surface-variant">The Wings Office Complex, East Tower, Victoria Island, Lagos</span></div><div class="flex flex-col gap-1 pt-2"><span class="font-label-md text-label-md uppercase tracking-wider text-secondary">Abuja Office</span><span class="font-body-sm text-body-sm text-on-surface-variant">Transcorp Hilton Suites &amp; Nnamdi Azikiwe Airport VIP Lounge, FCT Abuja</span></div></div><div class="flex flex-col gap-3"><span class="font-title-md text-title-md text-on-surface tracking-wide">Client Services</span><div class="flex flex-col gap-2 font-body-sm text-body-sm text-on-surface-variant"><span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-secondary">call</span>24/7 Support: +234 1 888 5275</span><span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-secondary">mail</span>reservations@laplanta-luxury.ng</span><span class="flex items-center gap-2"><span class="material-symbols-outlined text-sm text-secondary">flight_takeoff</span>LOS / ABV VIP Airport Pickup</span></div></div><div class="flex flex-col gap-4"><span class="font-title-md text-title-md text-on-surface tracking-wide">Direct WhatsApp Support</span><p class="font-body-sm text-body-sm text-on-surface-variant">Instant luxury vehicle reservations, customized daily bookings, and real-time support.</p><a class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-primary-container text-on-primary font-label-md text-label-md uppercase tracking-wider hover:bg-secondary hover:text-on-secondary transition-colors shadow-sm" href="https://wa.me/23418885275"><span class="material-symbols-outlined text-sm">chat</span>Chat on WhatsApp</a></div></div><div class="pt-8 flex flex-col md:flex-row items-center justify-between gap-4 font-body-sm text-body-sm text-on-surface-variant"><div class="flex flex-wrap items-center gap-6"><span class="font-label-sm text-label-sm uppercase tracking-wider">&copy; 2025 La Planta Luxury Car Hire Ltd.</span><a class="hover:text-on-surface transition-colors font-label-sm text-label-sm uppercase tracking-wider" href="#">Rental Terms &amp; Conditions</a><a class="hover:text-on-surface transition-colors font-label-sm text-label-sm uppercase tracking-wider" href="#">Privacy Policy</a><a class="hover:text-on-surface transition-colors font-label-sm text-label-sm uppercase tracking-wider" href="#">Insurance Policy</a><a class="hover:text-primary transition-colors font-label-sm text-label-sm uppercase tracking-wider text-secondary font-semibold" href="admin-login.html">Fleet Admin Console</a></div><span class="font-label-sm text-label-sm text-secondary uppercase tracking-widest">Victoria Island • Maitama • Ikoyi</span></div></div></footer>
+
+
+
+</body></html>
