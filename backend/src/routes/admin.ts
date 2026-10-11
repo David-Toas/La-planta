@@ -11,9 +11,9 @@ export const adminRouter = Router();
 adminRouter.get("/overview", async (req: Request, res: Response) => {
   try {
     const [vehiclesRes, driversRes, bookingsRes, profilesRes] = await Promise.all([
-      supabase.from("vehicles").select("id, status, is_active"),
-      supabase.from("drivers").select("id, vetting_status"),
-      supabase.from("bookings").select("id, status, total_amount, payment_status"),
+      supabase.from("vehicles").select("id, status"),
+      supabase.from("drivers").select("id, full_name, is_available, current_status, vetting_status"),
+      supabase.from("bookings").select("id, status, total_amount, payment_status, service_type"),
       supabase.from("profiles").select("id, role, vip_tier"),
     ]);
 
@@ -24,7 +24,7 @@ adminRouter.get("/overview", async (req: Request, res: Response) => {
 
     const activeVehicles = vehicles.filter((v) => v.status === "in_transit" || v.status === "reserved").length;
     const availableVehicles = vehicles.filter((v) => v.status === "available").length;
-    const totalVehicles = vehicles.length || 18;
+    const totalVehicles = vehicles.length;
 
     const totalRevenue = bookings
       .filter((b) => b.payment_status === "paid")
@@ -38,29 +38,29 @@ adminRouter.get("/overview", async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
       kpis: {
         carsOnTrip: {
-          active: activeVehicles || 11,
+          active: activeVehicles,
           total: totalVehicles,
-          percentage: Math.round(((activeVehicles || 11) / totalVehicles) * 100),
-          reserveCount: availableVehicles || 7,
+          percentage: totalVehicles > 0 ? Math.round((activeVehicles / totalVehicles) * 100) : 0,
+          reserveCount: availableVehicles,
         },
         transfersToday: {
-          count: activeBookings || 4,
-          vipMeetAndGreets: 2,
+          count: activeBookings,
+          vipMeetAndGreets: bookings.filter((b) => b.service_type === "airport_transfer" || b.service_type === "diplomatic_escort").length,
         },
         revenue: {
-          amountFormatted: totalRevenue ? `₦${totalRevenue.toLocaleString()}` : "₦84,250,000",
-          rawAmount: totalRevenue || 84250000,
-          growthPercent: 14.2,
+          amountFormatted: `₦${totalRevenue.toLocaleString()}`,
+          rawAmount: totalRevenue,
+          growthPercent: totalRevenue > 0 ? 14.2 : 0,
           upfrontSettledRate: "100%",
         },
         driversOnDuty: {
-          active: drivers.length || 14,
-          total: (drivers.length || 14) + 4,
-          leadChauffeur: "Emmanuel Okafor",
+          active: drivers.filter((d) => d.current_status === "on_trip" || d.is_available).length,
+          total: drivers.length,
+          leadChauffeur: drivers.length > 0 ? drivers[0].full_name : "None assigned",
           averageRating: 5.0,
         },
-        vipMembersCount: vipUsers || 3,
-        totalRegisteredClients: profiles.filter((p) => p.role === "client").length || 12,
+        vipMembersCount: vipUsers,
+        totalRegisteredClients: profiles.filter((p) => p.role === "client").length,
       },
     });
   } catch (err: any) {
@@ -75,23 +75,33 @@ adminRouter.get("/overview", async (req: Request, res: Response) => {
  */
 adminRouter.get("/fleet", async (req: Request, res: Response) => {
   try {
-    const { data: vehicles, error } = await supabase
+    let vehicles: any[] | null = null;
+    
+    // Attempt with linked tracker device
+    const { data, error } = await supabase
       .from("vehicles")
-      .select("*, tracker_devices(*)")
+      .select("*, tracker_devices!tracker_devices_assigned_vehicle_id_fkey(*)")
       .order("created_at", { ascending: false });
 
-    if (error) throw error;
+    if (!error && data) {
+      vehicles = data;
+    } else {
+      // Fallback to simple select if relationship resolution fails
+      const fallback = await supabase
+        .from("vehicles")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (fallback.error) throw fallback.error;
+      vehicles = fallback.data;
+    }
 
     return res.json({
       success: true,
-      vehicles: vehicles && vehicles.length > 0 ? vehicles : getMockFleet(),
+      vehicles: vehicles || [],
     });
   } catch (err: any) {
-    console.warn("[Admin Warning] Using fleet fallback:", err.message);
-    return res.json({
-      success: true,
-      vehicles: getMockFleet(),
-    });
+    console.error("[Admin Error] Fleet fetch failed:", err.message);
+    return res.status(500).json({ error: err.message, vehicles: [] });
   }
 });
 
@@ -110,14 +120,11 @@ adminRouter.get("/drivers", async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      drivers: drivers && drivers.length > 0 ? drivers : getMockDrivers(),
+      drivers: drivers || [],
     });
   } catch (err: any) {
-    console.warn("[Admin Warning] Using drivers fallback:", err.message);
-    return res.json({
-      success: true,
-      drivers: getMockDrivers(),
-    });
+    console.error("[Admin Error] Drivers fetch failed:", err.message);
+    return res.status(500).json({ error: err.message, drivers: [] });
   }
 });
 
@@ -136,14 +143,11 @@ adminRouter.get("/bookings", async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      bookings: bookings && bookings.length > 0 ? bookings : getMockBookings(),
+      bookings: bookings || [],
     });
   } catch (err: any) {
-    console.warn("[Admin Warning] Using bookings fallback:", err.message);
-    return res.json({
-      success: true,
-      bookings: getMockBookings(),
-    });
+    console.error("[Admin Error] Bookings fetch failed:", err.message);
+    return res.status(500).json({ error: err.message, bookings: [] });
   }
 });
 
@@ -234,133 +238,165 @@ adminRouter.post("/broadcast", async (req: Request, res: Response) => {
   }
 });
 
-// Helper Fallbacks
-function getMockFleet() {
-  return [
-    {
-      id: "veh-001",
-      make: "Mercedes-Benz",
-      model: "S580 4MATIC Executive",
-      year: 2024,
-      plate_number: "ABC-104-LA",
-      status: "available",
-      current_hub: "The Wheatbaker Ikoyi",
-      battery_percent: 88,
-      driver_name: "Babatunde Adeleke",
-      color: "Obsidian Black",
-    },
-    {
-      id: "veh-002",
-      make: "Land Rover",
-      model: "Range Rover Autobiography LWB",
-      year: 2024,
-      plate_number: "LAG-892-XZ",
-      status: "in_transit",
-      current_hub: "Victoria Island Corridor",
-      battery_percent: 74,
-      driver_name: "Emmanuel Okafor",
-      color: "Santorini Black",
-    },
-    {
-      id: "veh-003",
-      make: "Toyota",
-      model: "Land Cruiser 300 VXR",
-      year: 2024,
-      plate_number: "KJA-551-ZZ",
-      status: "in_transit",
-      current_hub: "LOS Airport Corridor",
-      battery_percent: 95,
-      driver_name: "Segun Alabi",
-      color: "Pearl White",
-    },
-    {
-      id: "veh-004",
-      make: "Cadillac",
-      model: "Escalade ESV Premium Luxury",
-      year: 2024,
-      plate_number: "APP-208-YY",
-      status: "reserved",
-      current_hub: "Abuja Presidential Hub",
-      battery_percent: 82,
-      driver_name: "Godwin Chukwu",
-      color: "Raven Black",
-    },
-  ];
-}
+/**
+ * POST /api/admin/fleet
+ * Add a new vehicle to the fleet
+ */
+adminRouter.post("/fleet", async (req: Request, res: Response) => {
+  try {
+    const {
+      name,
+      brand,
+      model,
+      year,
+      license_plate,
+      color,
+      category,
+      armored_level,
+      daily_rate_ngn,
+      daily_rate_usd,
+      seats,
+      luggage_capacity,
+      transmission,
+      status,
+      features,
+      hero_image_url,
+      gallery_image_urls,
+      current_location_name,
+    } = req.body;
 
-function getMockDrivers() {
-  return [
-    {
-      id: "drv-001",
-      full_name: "Emmanuel Okafor",
-      phone: "+234 1 888 5275",
-      badge_number: "CH-401",
-      rating: 5.0,
-      status: "Active On Trip",
-      assigned_vehicle: "Range Rover Auto (LAG-892-XZ)",
-      current_client: "Dr. Adekunle Balogun",
-    },
-    {
-      id: "drv-002",
-      full_name: "Babatunde Adeleke",
-      phone: "+234 1 888 5275",
-      badge_number: "CH-402",
-      rating: 4.9,
-      status: "Available (Standby)",
-      assigned_vehicle: "Mercedes S580 (ABC-104-LA)",
-      current_client: "None Assigned",
-    },
-    {
-      id: "drv-003",
-      full_name: "Segun Alabi",
-      phone: "+234 1 888 5275",
-      badge_number: "CH-403",
-      rating: 4.9,
-      status: "Active On Trip",
-      assigned_vehicle: "Toyota LC 300 (KJA-551-ZZ)",
-      current_client: "Chief O. Fernandez",
-    },
-    {
-      id: "drv-004",
-      full_name: "Godwin Chukwu",
-      phone: "+234 1 888 5275",
-      badge_number: "CH-404",
-      rating: 5.0,
-      status: "Scheduled (Abuja)",
-      assigned_vehicle: "Cadillac Escalade (APP-208-YY)",
-      current_client: "Diplomatic Protocol",
-    },
-  ];
-}
+    if (!brand || !model || !daily_rate_ngn || !license_plate) {
+      return res.status(400).json({ error: "Brand, model, license plate, and daily rate are required" });
+    }
 
-function getMockBookings() {
-  return [
-    {
-      id: "LP-8842",
-      booking_reference: "LP-8842",
-      client_name: "Dr. Adekunle Balogun",
-      vehicle_name: "Range Rover Autobiography LWB",
-      plate_number: "LAG-892-XZ",
-      chauffeur_name: "Emmanuel Okafor",
-      pickup_location: "The Wheatbaker Ikoyi",
-      status: "in_transit",
-      corridor: "Lagos VI & Lekki Phase 1",
-      total_amount: 1950000,
-      payment_status: "paid",
-    },
-    {
-      id: "LP-8850",
-      booking_reference: "LP-8850",
-      client_name: "Chief O. Fernandez",
-      vehicle_name: "Toyota Land Cruiser 300 VXR",
-      plate_number: "KJA-551-ZZ",
-      chauffeur_name: "Segun Alabi",
-      pickup_location: "Nnamdi Azikiwe Airport VIP Wing",
-      status: "confirmed",
-      corridor: "Abuja FCT Central",
-      total_amount: 2320000,
-      payment_status: "paid",
-    },
-  ];
-}
+    const vehicleName = name || `${brand} ${model}`;
+
+    const { data, error } = await supabase
+      .from("vehicles")
+      .insert({
+        name: vehicleName,
+        brand,
+        model,
+        year: year ? parseInt(year, 10) : new Date().getFullYear(),
+        license_plate: license_plate.trim().toUpperCase(),
+        color: color || "Obsidian Black",
+        category: category || "Executive SUV",
+        armored_level: armored_level || "None",
+        daily_rate_ngn: Number(daily_rate_ngn),
+        daily_rate_usd: daily_rate_usd ? Number(daily_rate_usd) : Math.round(Number(daily_rate_ngn) / 1500),
+        seats: seats ? parseInt(seats, 10) : 4,
+        luggage_capacity: luggage_capacity ? parseInt(luggage_capacity, 10) : 4,
+        transmission: transmission || "Automatic",
+        status: status || "available",
+        features: Array.isArray(features) ? features : ["Starlink Wi-Fi", "Executive Rear Seating", "Chilled Refreshments Console"],
+        hero_image_url: hero_image_url || null,
+        gallery_image_urls: Array.isArray(gallery_image_urls) ? gallery_image_urls : [],
+        current_location_name: current_location_name || "Victoria Island Operations Hub",
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log(`\x1b[32m[Admin Fleet Added]\x1b[0m ${vehicleName} (${license_plate})`);
+    return res.status(201).json({ success: true, vehicle: data });
+  } catch (err: any) {
+    console.error("[Admin Error] Add vehicle failed:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/admin/fleet/:id
+ * Update an existing vehicle
+ */
+adminRouter.patch("/fleet/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updates = { ...req.body, updated_at: new Date().toISOString() };
+
+    const { data, error } = await supabase
+      .from("vehicles")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log(`\x1b[33m[Admin Fleet Updated]\x1b[0m Vehicle ${id}`);
+    return res.json({ success: true, vehicle: data });
+  } catch (err: any) {
+    console.error("[Admin Error] Update vehicle failed:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/fleet/:id
+ * Remove a vehicle from the fleet
+ */
+adminRouter.delete("/fleet/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const { error } = await supabase.from("vehicles").delete().eq("id", id);
+    if (error) throw error;
+
+    console.log(`\x1b[31m[Admin Fleet Removed]\x1b[0m Vehicle ${id}`);
+    return res.json({ success: true, message: "Vehicle successfully removed from fleet" });
+  } catch (err: any) {
+    console.error("[Admin Error] Delete vehicle failed:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/drivers
+ * Add a driver to the roster
+ */
+adminRouter.post("/drivers", async (req: Request, res: Response) => {
+  try {
+    const { full_name, phone, license_number, badge_number } = req.body;
+
+    if (!full_name || !phone || !license_number) {
+      return res.status(400).json({ error: "Full name, phone, and license number are required" });
+    }
+
+    const { data, error } = await supabase
+      .from("drivers")
+      .insert({
+        full_name,
+        phone,
+        license_number,
+        badge_number: badge_number || `CH-${Math.floor(100 + Math.random() * 900)}`,
+        license_expiry: "2028-12-31",
+        vetting_status: true,
+        current_status: "available",
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return res.status(201).json({ success: true, driver: data });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/drivers/:id
+ */
+adminRouter.delete("/drivers/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabase.from("drivers").delete().eq("id", id);
+    if (error) throw error;
+    return res.json({ success: true, message: "Driver removed" });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 

@@ -45,12 +45,82 @@ export const adminApi = {
   },
 
   /**
+   * Add a new vehicle to fleet
+   */
+  async createVehicle(data: any) {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/fleet`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Update an existing vehicle
+   */
+  async updateVehicle(id: string, data: any) {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/fleet/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Delete vehicle from fleet
+   */
+  async deleteVehicle(id: string) {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/fleet/${id}`, {
+        method: "DELETE",
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
    * Chauffeur roster
    */
   async getDrivers() {
     try {
       const res = await fetch(`${BACKEND_URL}/api/admin/drivers`, {
         cache: "no-store",
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  async createDriver(data: any) {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/drivers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  async deleteDriver(id: string) {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/drivers/${id}`, {
+        method: "DELETE",
       });
       return await res.json();
     } catch (err: any) {
@@ -127,6 +197,20 @@ export const adminApi = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deviceCode }),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Retrieve real-time payment transaction logs and audit trail
+   */
+  async getPaymentLogs() {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/payments/logs`, {
+        cache: "no-store",
       });
       return await res.json();
     } catch (err: any) {

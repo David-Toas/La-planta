@@ -15,4 +15,8 @@ export const config = {
     username: process.env.AT_USERNAME || "sandbox",
     apiKey: process.env.AT_API_KEY || "",
   },
+  paystack: {
+    secretKey: process.env.PAYSTACK_SECRET_KEY || "",
+    publicKey: process.env.PAYSTACK_PUBLIC_KEY || "",
+  },
 };

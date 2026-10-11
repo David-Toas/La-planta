@@ -49,6 +49,18 @@ export const backendApi = {
   },
 
   /**
+   * Fetch active vehicle fleet
+   */
+  async getFleet() {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/fleet`, { cache: "no-store" });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
    * Verify authenticated user profile with backend
    */
   async getAuthProfile(token: string) {

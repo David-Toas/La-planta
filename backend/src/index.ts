@@ -6,6 +6,7 @@ import { telematicsRouter } from "./routes/telematics";
 import { webhooksRouter } from "./routes/webhooks";
 import { authRouter } from "./routes/auth";
 import { adminRouter } from "./routes/admin";
+import { paymentsRouter } from "./routes/payments";
 import { startTcpTelematicsListener } from "./parsers/tcpListener";
 
 const app = express();
@@ -42,6 +43,7 @@ app.use((req, res, next) => {
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/payments", paymentsRouter);
 app.use("/api/telematics", telematicsRouter);
 app.use("/api/webhooks", webhooksRouter);
 

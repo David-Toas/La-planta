@@ -8,15 +8,30 @@ type TabType = "overview" | "map" | "fleet" | "handover" | "drivers" | "vip" | "
 
 interface FleetVehicle {
   id: string;
-  make: string;
+  name?: string;
+  brand?: string;
+  make?: string;
   model: string;
   year?: number;
-  plate_number: string;
+  license_plate?: string;
+  plate_number?: string;
   status: string;
+  category?: string;
+  armored_level?: string;
+  daily_rate_ngn?: number;
+  daily_rate_usd?: number;
+  seats?: number;
+  luggage_capacity?: number;
+  transmission?: string;
+  current_location_name?: string;
   current_hub?: string;
+  fuel_battery_level?: number;
   battery_percent?: number;
   driver_name?: string;
   color?: string;
+  hero_image_url?: string;
+  gallery_image_urls?: string[];
+  features?: string[];
 }
 
 interface DriverItem {
@@ -54,6 +69,8 @@ export default function AdminDashboardPage() {
   const [driverList, setDriverList] = useState<DriverItem[]>([]);
   const [userList, setUserList] = useState<UserProfile[]>([]);
   const [fleetFilter, setFleetFilter] = useState<"all" | "active" | "reserve">("all");
+  const [paymentLogs, setPaymentLogs] = useState<any[]>([]);
+  const [paymentSummary, setPaymentSummary] = useState<any>(null);
 
   // Interaction States
   const [isPinging, setIsPinging] = useState(false);
@@ -103,7 +120,227 @@ export default function AdminDashboardPage() {
         setUserList(res.users);
       }
     });
+
+    // 6. Paystack Payment Logs
+    adminApi.getPaymentLogs().then((res) => {
+      if (res?.success && res.logs) {
+        setPaymentLogs(res.logs);
+        setPaymentSummary({
+          total: res.total_settled_formatted || "₦0",
+          count: res.count || res.logs.length,
+        });
+      }
+    });
   }, []);
+
+  // Vehicle Management Modal States
+  const [isAddVehicleModalOpen, setIsAddVehicleModalOpen] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState<FleetVehicle | null>(null);
+  const [isSubmittingVehicle, setIsSubmittingVehicle] = useState(false);
+  const [vehicleFormError, setVehicleFormError] = useState<string | null>(null);
+  const [deletingVehicleId, setDeletingVehicleId] = useState<string | null>(null);
+
+  const initialVehicleForm = {
+    brand: "",
+    model: "",
+    year: new Date().getFullYear(),
+    license_plate: "",
+    color: "Obsidian Black",
+    category: "Executive SUV",
+    armored_level: "None",
+    daily_rate_ngn: 450000,
+    daily_rate_usd: 350,
+    seats: 4,
+    luggage_capacity: 4,
+    transmission: "Automatic",
+    status: "available",
+    current_location_name: "Victoria Island Operations Hub",
+    hero_image_url: "",
+    gallery_image_urls: "",
+    features: "Starlink Wi-Fi, Executive Rear Seating, Chilled Refreshments Console, Acoustic Privacy Glass, Massage Seats",
+  };
+  const [vehicleFormData, setVehicleFormData] = useState(initialVehicleForm);
+
+  // Driver Management Modal States
+  const [isAddDriverModalOpen, setIsAddDriverModalOpen] = useState(false);
+  const [isSubmittingDriver, setIsSubmittingDriver] = useState(false);
+  const [driverFormError, setDriverFormError] = useState<string | null>(null);
+  const initialDriverForm = {
+    full_name: "",
+    phone: "",
+    email: "",
+    license_number: "",
+    badge_number: "",
+    security_clearance_level: "Airside VIP & Diplomatic Escort",
+  };
+  const [driverFormData, setDriverFormData] = useState(initialDriverForm);
+
+  // Reload helpers
+  const reloadFleetAndKpis = async () => {
+    const [fleetRes, kpiRes] = await Promise.all([
+      adminApi.getFleet(),
+      adminApi.getOverview(),
+    ]);
+    if (fleetRes?.success && fleetRes.vehicles) {
+      setFleetList(fleetRes.vehicles);
+    }
+    if (kpiRes?.success && kpiRes.kpis) {
+      setOverviewKpis(kpiRes.kpis);
+    }
+  };
+
+  const reloadDrivers = async () => {
+    const res = await adminApi.getDrivers();
+    if (res?.success && res.drivers) {
+      setDriverList(res.drivers);
+    }
+  };
+
+  const handleOpenAddVehicle = () => {
+    setVehicleFormData(initialVehicleForm);
+    setVehicleFormError(null);
+    setIsAddVehicleModalOpen(true);
+  };
+
+  const handleOpenEditVehicle = (v: FleetVehicle) => {
+    setEditingVehicle(v);
+    setVehicleFormData({
+      brand: v.brand || v.make || "",
+      model: v.model || "",
+      year: v.year || new Date().getFullYear(),
+      license_plate: v.license_plate || v.plate_number || "",
+      color: v.color || "Obsidian Black",
+      category: v.category || "Executive SUV",
+      armored_level: v.armored_level || "None",
+      daily_rate_ngn: Number(v.daily_rate_ngn) || 450000,
+      daily_rate_usd: Number(v.daily_rate_usd) || Math.round((Number(v.daily_rate_ngn) || 450000) / 1500),
+      seats: v.seats || 4,
+      luggage_capacity: v.luggage_capacity || 4,
+      transmission: v.transmission || "Automatic",
+      status: v.status || "available",
+      current_location_name: v.current_location_name || v.current_hub || "Victoria Island Operations Hub",
+      hero_image_url: v.hero_image_url || "",
+      gallery_image_urls: (v.gallery_image_urls || []).join("\n"),
+      features: (v.features || []).join(", ") || "Starlink Wi-Fi, Executive Rear Seating",
+    });
+    setVehicleFormError(null);
+  };
+
+  const handleSaveVehicle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vehicleFormData.brand.trim() || !vehicleFormData.model.trim() || !vehicleFormData.license_plate.trim()) {
+      setVehicleFormError("Brand, Model, and License Plate are required.");
+      return;
+    }
+    if (!vehicleFormData.daily_rate_ngn || vehicleFormData.daily_rate_ngn <= 0) {
+      setVehicleFormError("Please enter a valid daily rate in NGN.");
+      return;
+    }
+
+    setIsSubmittingVehicle(true);
+    setVehicleFormError(null);
+
+    const payload = {
+      name: `${vehicleFormData.brand.trim()} ${vehicleFormData.model.trim()}`,
+      brand: vehicleFormData.brand.trim(),
+      model: vehicleFormData.model.trim(),
+      year: Number(vehicleFormData.year),
+      license_plate: vehicleFormData.license_plate.trim().toUpperCase(),
+      color: vehicleFormData.color.trim(),
+      category: vehicleFormData.category,
+      armored_level: vehicleFormData.armored_level,
+      daily_rate_ngn: Number(vehicleFormData.daily_rate_ngn),
+      daily_rate_usd: Number(vehicleFormData.daily_rate_usd) || Math.round(Number(vehicleFormData.daily_rate_ngn) / 1500),
+      seats: Number(vehicleFormData.seats),
+      luggage_capacity: Number(vehicleFormData.luggage_capacity),
+      transmission: vehicleFormData.transmission,
+      status: vehicleFormData.status,
+      current_location_name: vehicleFormData.current_location_name.trim(),
+      hero_image_url: vehicleFormData.hero_image_url.trim() || null,
+      gallery_image_urls: vehicleFormData.gallery_image_urls
+        .split(/[\n,]/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 5),
+      features: vehicleFormData.features
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
+    };
+
+    try {
+      if (editingVehicle) {
+        const res = await adminApi.updateVehicle(editingVehicle.id, payload);
+        if (res?.success) {
+          setEditingVehicle(null);
+          await reloadFleetAndKpis();
+        } else {
+          setVehicleFormError(res?.error || "Failed to update vehicle");
+        }
+      } else {
+        const res = await adminApi.createVehicle(payload);
+        if (res?.success) {
+          setIsAddVehicleModalOpen(false);
+          await reloadFleetAndKpis();
+        } else {
+          setVehicleFormError(res?.error || "Failed to register vehicle");
+        }
+      }
+    } catch (err: any) {
+      setVehicleFormError(err.message || "Operation failed");
+    } finally {
+      setIsSubmittingVehicle(false);
+    }
+  };
+
+  const handleDeleteVehicle = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to remove ${name} from the active fleet inventory?`)) {
+      return;
+    }
+    setDeletingVehicleId(id);
+    const res = await adminApi.deleteVehicle(id);
+    setDeletingVehicleId(null);
+    if (res?.success) {
+      await reloadFleetAndKpis();
+    } else {
+      alert(`Could not delete: ${res?.error || "Unknown error"}`);
+    }
+  };
+
+  const handleCreateDriver = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!driverFormData.full_name.trim() || !driverFormData.phone.trim() || !driverFormData.license_number.trim()) {
+      setDriverFormError("Full Name, Phone, and License Number are required.");
+      return;
+    }
+    setIsSubmittingDriver(true);
+    setDriverFormError(null);
+    const res = await adminApi.createDriver({
+      full_name: driverFormData.full_name.trim(),
+      phone: driverFormData.phone.trim(),
+      email: driverFormData.email.trim() || null,
+      license_number: driverFormData.license_number.trim(),
+      badge_number: driverFormData.badge_number.trim() || `CH-${Math.floor(100 + Math.random() * 900)}`,
+      security_clearance_level: driverFormData.security_clearance_level,
+    });
+    setIsSubmittingDriver(false);
+    if (res?.success) {
+      setIsAddDriverModalOpen(false);
+      setDriverFormData(initialDriverForm);
+      await reloadDrivers();
+    } else {
+      setDriverFormError(res?.error || "Failed to add driver");
+    }
+  };
+
+  const handleDeleteDriver = async (id: string, name: string) => {
+    if (!confirm(`Remove chauffeur ${name} from active roster?`)) return;
+    const res = await adminApi.deleteDriver(id);
+    if (res?.success) {
+      await reloadDrivers();
+    } else {
+      alert(`Could not delete: ${res?.error || "Unknown error"}`);
+    }
+  };
 
   // Ping Tracker action
   const handleAdminPing = async () => {
@@ -125,7 +362,6 @@ export default function AdminDashboardPage() {
     const res = await adminApi.updateUserVipTier(userId, newTier);
     setUpdatingUserId(null);
     if (res?.success) {
-      // Update local state
       setUserList((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, vip_tier: newTier } : u))
       );
@@ -591,7 +827,7 @@ export default function AdminDashboardPage() {
               <span className="material-symbols-outlined text-sm text-secondary">
                 share_location
               </span>
-              <span>Live GPS Map (14)</span>
+              <span>Live GPS Map ({overviewKpis?.carsOnTrip?.active ?? fleetList.filter((v) => v.status === "in_transit").length})</span>
             </button>
             <button
               onClick={() => setActiveTab("fleet")}
@@ -604,7 +840,7 @@ export default function AdminDashboardPage() {
               <span className="material-symbols-outlined text-sm text-secondary">
                 directions_car
               </span>
-              <span>Fleet Register (18)</span>
+              <span>Fleet Register ({fleetList.length})</span>
             </button>
             <button
               onClick={() => setActiveTab("handover")}
@@ -630,7 +866,7 @@ export default function AdminDashboardPage() {
               <span className="material-symbols-outlined text-sm text-secondary">
                 supervised_user_circle
               </span>
-              <span>Chauffeur Roster (14)</span>
+              <span>Chauffeur Roster ({driverList.length})</span>
             </button>
             <button
               onClick={() => setActiveTab("vip")}
@@ -704,7 +940,7 @@ export default function AdminDashboardPage() {
                     <span className="material-symbols-outlined text-secondary text-sm">
                       sensors
                     </span>
-                    <span>14 Active Trackers Monitored</span>
+                    <span>{fleetList.length} Active Fleet Monitored</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-on-surface-variant">
@@ -733,18 +969,18 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-2xl font-bold text-primary">
-                      {overviewKpis?.carsOnTrip?.active || 11}{" "}
+                      {overviewKpis?.carsOnTrip?.active ?? fleetList.filter((v) => v.status === "in_transit" || v.status === "reserved").length}{" "}
                       <span className="text-sm text-on-surface-variant font-normal">
-                        / {overviewKpis?.carsOnTrip?.total || 18}
+                        / {overviewKpis?.carsOnTrip?.total ?? fleetList.length}
                       </span>
                     </span>
                     <span className="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-semibold">
-                      {overviewKpis?.carsOnTrip?.percentage || 61}% Active
+                      {overviewKpis?.carsOnTrip?.percentage ?? (fleetList.length > 0 ? Math.round((fleetList.filter((v) => v.status === "in_transit").length / fleetList.length) * 100) : 0)}% Active
                     </span>
                   </div>
                   <div className="mt-3 pt-2 border-t border-surface-container flex items-center justify-between text-xs text-on-surface-variant">
                     <span>
-                      {overviewKpis?.carsOnTrip?.reserveCount || 7} In Reserve
+                      {overviewKpis?.carsOnTrip?.reserveCount ?? fleetList.filter((v) => v.status === "available").length} In Reserve
                     </span>
                     <span className="text-primary font-semibold">Ready</span>
                   </div>
@@ -763,14 +999,16 @@ export default function AdminDashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold text-primary">04</span>
+                    <span className="text-2xl font-bold text-primary">
+                      {overviewKpis?.transfersToday?.count ?? 0}
+                    </span>
                     <span className="text-xs text-on-surface-variant font-medium">
-                      En Route &amp; Ready
+                      Active Charters
                     </span>
                   </div>
                   <div className="mt-3 pt-2 border-t border-surface-container flex items-center gap-1.5 text-xs text-on-surface-variant">
                     <span className="w-2 h-2 rounded-full bg-secondary" />
-                    <span>2 VIP Airport Meet &amp; Greets</span>
+                    <span>{overviewKpis?.transfersToday?.vipMeetAndGreets ?? 0} VIP Escorts / Transfers</span>
                   </div>
                 </div>
 
@@ -788,14 +1026,16 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-2xl font-bold text-primary font-mono">
-                      {overviewKpis?.revenue?.amountFormatted || "₦84,250,000"}
+                      {overviewKpis?.revenue?.amountFormatted || "₦0"}
                     </span>
                   </div>
                   <div className="mt-3 pt-2 border-t border-surface-container flex items-center justify-between text-xs text-on-surface-variant">
                     <span className="text-emerald-700 font-medium">
                       100% Upfront Settled
                     </span>
-                    <span className="text-secondary font-semibold">+14.2%</span>
+                    <span className="text-secondary font-semibold">
+                      {overviewKpis?.revenue?.growthPercent ? `+${overviewKpis.revenue.growthPercent}%` : "Zero Outstanding"}
+                    </span>
                   </div>
                 </div>
 
@@ -813,9 +1053,9 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-2xl font-bold text-primary">
-                      {overviewKpis?.driversOnDuty?.active || 14}{" "}
+                      {overviewKpis?.driversOnDuty?.active ?? driverList.length}{" "}
                       <span className="text-sm text-on-surface-variant font-normal">
-                        / 18
+                        / {overviewKpis?.driversOnDuty?.total ?? driverList.length}
                       </span>
                     </span>
                     <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-semibold">
@@ -823,7 +1063,7 @@ export default function AdminDashboardPage() {
                     </span>
                   </div>
                   <div className="mt-3 pt-2 border-t border-surface-container flex items-center justify-between text-xs text-on-surface-variant">
-                    <span>Lead: Emmanuel Okafor</span>
+                    <span>Lead: {overviewKpis?.driversOnDuty?.leadChauffeur || (driverList.length > 0 ? driverList[0].full_name : "None assigned")}</span>
                     <span className="text-secondary font-semibold">5.0 ★</span>
                   </div>
                 </div>
@@ -1019,121 +1259,235 @@ export default function AdminDashboardPage() {
 
           {/* TAB 3: FLEET INVENTORY REGISTER */}
           {activeTab === "fleet" && (
-            <section className="bg-surface-container-lowest rounded-xl p-5 shadow-sm border border-surface-container/40 flex flex-col gap-4 animate-in fade-in duration-200">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-surface-container/40">
+            <section className="bg-surface-container-lowest rounded-xl p-5 shadow-sm border border-surface-container/40 flex flex-col gap-5 animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-surface-container/40">
                 <div>
-                  <span className="text-[11px] uppercase tracking-wider text-secondary font-semibold">
-                    Fleet Register
-                  </span>
-                  <h3 className="font-serif text-xl text-primary font-semibold">
-                    Executive Vehicle Fleet (18 Units)
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] uppercase tracking-wider text-secondary font-bold">
+                      Fleet Inventory Management
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-secondary/10 text-secondary text-[10px] font-semibold">
+                      Live Supabase Sync
+                    </span>
+                  </div>
+                  <h3 className="font-serif text-xl sm:text-2xl text-primary font-semibold mt-0.5">
+                    Executive Fleet Register ({fleetList.length} Units)
                   </h3>
+                  <p className="text-xs text-on-surface-variant mt-0.5">
+                    Register new vehicles, set daily charter rates, manage armored specifications, and track fleet availability.
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex items-center bg-surface-container-low rounded-lg p-0.5 border border-surface-container text-xs">
                     <button
                       onClick={() => setFleetFilter("all")}
-                      className={`px-2.5 py-1 rounded-md font-semibold ${
+                      className={`px-3 py-1.5 rounded-md font-semibold transition-all ${
                         fleetFilter === "all"
                           ? "bg-surface-container-lowest text-primary shadow-sm"
-                          : "text-on-surface-variant"
+                          : "text-on-surface-variant hover:text-primary"
                       }`}
                     >
-                      All (18)
+                      All ({fleetList.length})
                     </button>
                     <button
                       onClick={() => setFleetFilter("active")}
-                      className={`px-2.5 py-1 rounded-md font-semibold ${
+                      className={`px-3 py-1.5 rounded-md font-semibold transition-all ${
                         fleetFilter === "active"
                           ? "bg-surface-container-lowest text-primary shadow-sm"
-                          : "text-on-surface-variant"
+                          : "text-on-surface-variant hover:text-primary"
                       }`}
                     >
-                      Active (11)
+                      Active ({fleetList.filter((v) => v.status === "in_transit" || v.status === "reserved").length})
                     </button>
                     <button
                       onClick={() => setFleetFilter("reserve")}
-                      className={`px-2.5 py-1 rounded-md font-semibold ${
+                      className={`px-3 py-1.5 rounded-md font-semibold transition-all ${
                         fleetFilter === "reserve"
                           ? "bg-surface-container-lowest text-primary shadow-sm"
-                          : "text-on-surface-variant"
+                          : "text-on-surface-variant hover:text-primary"
                       }`}
                     >
-                      Reserve (7)
+                      Available ({fleetList.filter((v) => v.status === "available").length})
                     </button>
                   </div>
+                  <button
+                    onClick={handleOpenAddVehicle}
+                    className="px-4 py-2 rounded-xl bg-primary hover:bg-secondary text-white text-xs font-semibold flex items-center gap-2 transition-all shadow-md active:scale-95 shrink-0"
+                  >
+                    <span className="material-symbols-outlined text-base">add_circle</span>
+                    <span>+ Add Vehicle</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Table */}
-              <div className="overflow-x-auto w-full">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="text-on-surface-variant uppercase tracking-wider bg-surface-container-low/70">
-                      <th className="py-3 px-4 rounded-l-lg">Unit ID</th>
-                      <th className="py-3 px-4">Vehicle Model</th>
-                      <th className="py-3 px-4">Plate No</th>
-                      <th className="py-3 px-4">Operational Status</th>
-                      <th className="py-3 px-4">Assigned Chauffeur</th>
-                      <th className="py-3 px-4">Fuel / Battery</th>
-                      <th className="py-3 px-4 rounded-r-lg text-right">Hub</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-surface-container/50">
-                    {displayedFleet.map((v) => (
-                      <tr
-                        key={v.id}
-                        className="hover:bg-surface-container-low/50 transition-colors"
-                      >
-                        <td className="py-3.5 px-4 font-semibold text-primary">
-                          {v.id.toUpperCase()}
-                        </td>
-                        <td className="py-3.5 px-4 font-medium text-primary">
-                          {v.make} {v.model}
-                        </td>
-                        <td className="py-3.5 px-4 font-mono text-secondary font-semibold">
-                          {v.plate_number}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
-                              v.status === "in_transit"
-                                ? "bg-secondary-container text-on-secondary-container"
-                                : v.status === "reserved"
-                                ? "bg-amber-100 text-amber-800"
-                                : "bg-emerald-100 text-emerald-800"
-                            }`}
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                            {v.status === "in_transit"
-                              ? "On Trip"
-                              : v.status === "reserved"
-                              ? "Reserved"
-                              : "Available"}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-on-surface font-medium">
-                          {v.driver_name || "Unassigned"}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-secondary rounded-full"
-                                style={{ width: `${v.battery_percent || 85}%` }}
-                              />
-                            </div>
-                            <span>{v.battery_percent || 85}%</span>
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-4 text-right text-on-surface-variant">
-                          {v.current_hub || "Lagos Base"}
-                        </td>
+              {/* Table / Grid */}
+              {displayedFleet.length === 0 ? (
+                <div className="py-16 px-4 text-center rounded-xl bg-surface-container-low/40 border border-dashed border-surface-container flex flex-col items-center justify-center gap-3">
+                  <div className="w-14 h-14 rounded-2xl bg-surface-container flex items-center justify-center text-secondary">
+                    <span className="material-symbols-outlined text-3xl">directions_car</span>
+                  </div>
+                  <h4 className="font-serif text-lg text-primary font-semibold">
+                    No Vehicles Found
+                  </h4>
+                  <p className="text-xs text-on-surface-variant max-w-sm">
+                    {fleetList.length === 0
+                      ? "Your fleet inventory is empty. Click '+ Add Vehicle' above to register your first automobile."
+                      : "No vehicles match the selected filter criteria."}
+                  </p>
+                  <button
+                    onClick={handleOpenAddVehicle}
+                    className="mt-2 px-4 py-2 rounded-xl bg-primary hover:bg-secondary text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-sm">add</span>
+                    Register Vehicle
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto w-full rounded-xl border border-surface-container/60">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-on-surface-variant uppercase tracking-wider bg-surface-container-low/80 border-b border-surface-container">
+                        <th className="py-3 px-4 rounded-l-lg">Automobile</th>
+                        <th className="py-3 px-4">License Plate</th>
+                        <th className="py-3 px-4">Category &amp; Armor</th>
+                        <th className="py-3 px-4">Daily Rate</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Capacity</th>
+                        <th className="py-3 px-4">Operational Hub</th>
+                        <th className="py-3 px-4 rounded-r-lg text-right">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-surface-container/50">
+                      {displayedFleet.map((v) => {
+                        const vehicleBrand = v.brand || v.make || "";
+                        const vehiclePlate = v.license_plate || v.plate_number || "NO-PLATE";
+                        const vehicleName = v.name || `${vehicleBrand} ${v.model}`;
+                        const rateNgn = Number(v.daily_rate_ngn) || 0;
+                        const rateUsd = Number(v.daily_rate_usd) || Math.round(rateNgn / 1500);
+
+                        return (
+                          <tr
+                            key={v.id}
+                            className="hover:bg-surface-container-low/50 transition-colors"
+                          >
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-14 h-10 rounded-lg overflow-hidden bg-surface-container shrink-0 border border-surface-container/70 flex items-center justify-center relative">
+                                  {v.hero_image_url ? (
+                                    <img
+                                      src={v.hero_image_url}
+                                      alt={vehicleName}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        // Fallback if image fails to load
+                                        (e.target as HTMLElement).style.display = "none";
+                                      }}
+                                    />
+                                  ) : (
+                                    <span className="material-symbols-outlined text-secondary text-xl">
+                                      directions_car
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-semibold text-primary truncate max-w-[180px]">
+                                    {vehicleName}
+                                  </span>
+                                  <span className="text-[10px] text-on-surface-variant">
+                                    {v.year || 2024} • {v.color || "Obsidian Black"}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-secondary font-bold text-xs">
+                              {vehiclePlate}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className="font-medium text-primary">
+                                  {v.category || "Executive"}
+                                </span>
+                                {v.armored_level && v.armored_level !== "None" && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold uppercase tracking-wider">
+                                    <span className="material-symbols-outlined text-[10px]">shield</span>
+                                    {v.armored_level}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="flex flex-col">
+                                <span className="font-mono font-bold text-primary">
+                                  ₦{rateNgn.toLocaleString()}
+                                </span>
+                                <span className="text-[10px] text-on-surface-variant font-mono">
+                                  (~${rateUsd.toLocaleString()} USD)
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
+                                  v.status === "in_transit"
+                                    ? "bg-secondary-container text-on-secondary-container"
+                                    : v.status === "reserved"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : v.status === "maintenance"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-emerald-100 text-emerald-800"
+                                }`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                                {v.status === "in_transit"
+                                  ? "On Trip"
+                                  : v.status === "reserved"
+                                  ? "Reserved"
+                                  : v.status === "maintenance"
+                                  ? "Maintenance"
+                                  : "Available"}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-on-surface-variant">
+                              <div className="flex items-center gap-2">
+                                <span title="Seats" className="flex items-center gap-0.5">
+                                  <span className="material-symbols-outlined text-xs">person</span>
+                                  {v.seats || 4}
+                                </span>
+                                <span title="Luggage" className="flex items-center gap-0.5">
+                                  <span className="material-symbols-outlined text-xs">luggage</span>
+                                  {v.luggage_capacity || 4}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 text-on-surface-variant max-w-[140px] truncate">
+                              {v.current_location_name || v.current_hub || "Victoria Island Hub"}
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => handleOpenEditVehicle(v)}
+                                  className="p-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-primary transition-colors"
+                                  title="Edit Vehicle"
+                                >
+                                  <span className="material-symbols-outlined text-base">edit</span>
+                                </button>
+                                <button
+                                  disabled={deletingVehicleId === v.id}
+                                  onClick={() => handleDeleteVehicle(v.id, vehicleName)}
+                                  className="p-1.5 rounded-lg bg-surface-container-low hover:bg-red-50 text-on-surface-variant hover:text-red-700 transition-colors disabled:opacity-50"
+                                  title="Delete Vehicle"
+                                >
+                                  <span className="material-symbols-outlined text-base">delete</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
           )}
 
@@ -1305,70 +1659,98 @@ export default function AdminDashboardPage() {
                     Driver Management
                   </span>
                   <h3 className="font-serif text-xl text-primary font-semibold">
-                    Chauffeur Duty Roster (14 Active on Shift)
+                    Chauffeur Duty Roster ({driverList.length} Active Chauffeurs)
                   </h3>
                 </div>
-                <button
-                  onClick={() => setIsBroadcastModalOpen(true)}
-                  className="px-3 py-1.5 rounded-lg bg-primary hover:bg-secondary text-white text-xs font-semibold transition-colors"
-                >
-                  Broadcast Notice
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setDriverFormData(initialDriverForm);
+                      setDriverFormError(null);
+                      setIsAddDriverModalOpen(true);
+                    }}
+                    className="px-3.5 py-1.5 rounded-lg bg-primary hover:bg-secondary text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-sm">person_add</span>
+                    <span>+ Add Chauffeur</span>
+                  </button>
+                  <button
+                    onClick={() => setIsBroadcastModalOpen(true)}
+                    className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold transition-colors"
+                  >
+                    Broadcast Notice
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {driverList.map((d) => (
-                  <div
-                    key={d.id}
-                    className="p-4 rounded-xl bg-surface-container-low border border-surface-container flex flex-col gap-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="relative w-12 h-12 rounded-full overflow-hidden shrink-0 bg-surface-container">
-                        <img
-                          className="w-full h-full object-cover"
-                          alt={d.full_name}
-                          src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400"
-                        />
-                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-secondary rounded-full ring-2 ring-surface-container-lowest" />
+              {driverList.length === 0 ? (
+                <div className="py-12 px-4 text-center rounded-xl bg-surface-container-low/40 border border-dashed border-surface-container flex flex-col items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-3xl text-secondary">badge</span>
+                  <h4 className="font-serif text-base text-primary font-semibold">No Chauffeurs On Roster</h4>
+                  <p className="text-xs text-on-surface-variant">Click '+ Add Chauffeur' to recruit and vet your first executive driver.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {driverList.map((d) => (
+                    <div
+                      key={d.id}
+                      className="p-4 rounded-xl bg-surface-container-low border border-surface-container flex flex-col gap-3 group relative"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="relative w-12 h-12 rounded-full overflow-hidden shrink-0 bg-surface-container">
+                          <img
+                            className="w-full h-full object-cover"
+                            alt={d.full_name}
+                            src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400"
+                          />
+                          <span className="absolute bottom-0 right-0 w-3 h-3 bg-secondary rounded-full ring-2 ring-surface-container-lowest" />
+                        </div>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="text-sm text-primary font-semibold truncate">
+                            {d.full_name}
+                          </span>
+                          <span className="text-xs text-secondary font-semibold">
+                            {d.rating || 5.0} ★ • Senior Chauffeur
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteDriver(d.id, d.full_name)}
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-on-surface-variant hover:text-red-700 hover:bg-red-50 transition-all"
+                          title="Remove Chauffeur"
+                        >
+                          <span className="material-symbols-outlined text-base">delete</span>
+                        </button>
                       </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-sm text-primary font-semibold truncate">
-                          {d.full_name}
-                        </span>
-                        <span className="text-xs text-secondary font-semibold">
-                          {d.rating || 5.0} ★ • Senior Chauffeur
-                        </span>
+                      <div className="text-xs text-on-surface-variant space-y-1">
+                        <div className="flex justify-between">
+                          <span>Assigned:</span>{" "}
+                          <span className="font-medium text-primary truncate max-w-[140px]">
+                            {d.assigned_vehicle || "Standby"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Shift:</span>{" "}
+                          <span className="text-emerald-700 font-semibold">
+                            {d.status || "Active On Shift"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t border-surface-container flex items-center justify-between text-xs">
+                        <a
+                          href={`tel:${d.phone}`}
+                          className="text-secondary hover:underline font-semibold flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-sm">
+                            call
+                          </span>
+                          Call
+                        </a>
+                        <span className="text-primary font-mono">{d.badge_number || "CH-400"}</span>
                       </div>
                     </div>
-                    <div className="text-xs text-on-surface-variant space-y-1">
-                      <div className="flex justify-between">
-                        <span>Assigned:</span>{" "}
-                        <span className="font-medium text-primary truncate max-w-[140px]">
-                          {d.assigned_vehicle || "Standby"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Shift:</span>{" "}
-                        <span className="text-emerald-700 font-semibold">
-                          {d.status || "Active On Shift"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="pt-2 border-t border-surface-container flex items-center justify-between text-xs">
-                      <a
-                        href={`tel:${d.phone}`}
-                        className="text-secondary hover:underline font-semibold flex items-center gap-1"
-                      >
-                        <span className="material-symbols-outlined text-sm">
-                          call
-                        </span>
-                        Call
-                      </a>
-                      <span className="text-primary font-mono">{d.badge_number || "CH-400"}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
@@ -1514,13 +1896,13 @@ export default function AdminDashboardPage() {
                     Gross Charter Billings
                   </span>
                   <span className="text-2xl font-bold text-primary font-mono">
-                    ₦84,250,000
+                    {paymentSummary?.total || "₦0"}
                   </span>
                   <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
                     <span className="material-symbols-outlined text-xs">
                       trending_up
                     </span>{" "}
-                    +14.2% month-on-month
+                    {paymentLogs.length > 0 ? "+14.2% month-on-month" : "Awaiting Settlements"}
                   </span>
                 </div>
                 <div className="p-4 rounded-xl bg-surface-container-low flex flex-col gap-1">
@@ -1528,7 +1910,7 @@ export default function AdminDashboardPage() {
                     100% Upfront Verified Settlements
                   </span>
                   <span className="text-2xl font-bold text-primary font-mono">
-                    ₦84,250,000
+                    {paymentSummary?.total || "₦0"}
                   </span>
                   <span className="text-[11px] text-secondary font-semibold">
                     Zero Outstanding Receivables
@@ -1536,14 +1918,109 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="p-4 rounded-xl bg-surface-container-low flex flex-col gap-1">
                   <span className="text-xs text-on-surface-variant font-medium">
-                    VIP Escort &amp; Tarmac Add-on Volume
+                    Verified Transactions
                   </span>
                   <span className="text-2xl font-bold text-primary font-mono">
-                    ₦12,480,000
+                    {paymentLogs.length} Verified
                   </span>
-                  <span className="text-[11px] text-on-surface-variant">
-                    24 Escort Charters Completed
+                  <span className="text-[11px] text-emerald-700 font-medium">
+                    100% Gateway Reconciliation
                   </span>
+                </div>
+              </div>
+
+              {/* Paystack Payment Transaction Audit Trail */}
+              <div className="mt-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-secondary text-lg">
+                      receipt_long
+                    </span>
+                    <h4 className="font-title-md text-base text-primary font-semibold">
+                      Paystack Payment Logs &amp; Gateway Audit Trail
+                    </h4>
+                  </div>
+                  <span className="text-xs text-on-surface-variant">
+                    {paymentLogs.length} Records Logged
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-surface-container">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-surface-container-low border-b border-surface-container text-on-surface-variant uppercase tracking-wider text-[11px]">
+                        <th className="py-3 px-4 font-semibold">Payment Ref / Code</th>
+                        <th className="py-3 px-4 font-semibold">Customer</th>
+                        <th className="py-3 px-4 font-semibold">Vehicle</th>
+                        <th className="py-3 px-4 font-semibold">Channel</th>
+                        <th className="py-3 px-4 font-semibold">Amount</th>
+                        <th className="py-3 px-4 font-semibold">Status</th>
+                        <th className="py-3 px-4 font-semibold text-right">Settled At</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-y-surface-container text-primary">
+                      {paymentLogs.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-6 text-center text-on-surface-variant">
+                            No payment transactions recorded yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        paymentLogs.map((log) => (
+                          <tr key={log.id} className="hover:bg-surface-container-low/50 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="flex flex-col">
+                                <span className="font-mono font-semibold text-secondary">
+                                  {log.reference}
+                                </span>
+                                <span className="text-[10px] text-on-surface-variant">
+                                  {log.booking_code}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-primary">
+                                  {log.customer_name}
+                                </span>
+                                <span className="text-[10px] text-on-surface-variant">
+                                  {log.customer_email}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 font-medium text-on-surface">
+                              {log.vehicle_name || "Range Rover Autobiography"}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container text-on-surface text-[10px] uppercase font-semibold">
+                                <span className="material-symbols-outlined text-xs text-secondary">
+                                  {log.channel === "card" ? "credit_card" : "account_balance"}
+                                </span>
+                                {log.channel || "card"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-mono font-bold text-primary">
+                              {log.amount_formatted || `₦${Number(log.amount).toLocaleString()}`}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
+                                <span className="material-symbols-outlined text-xs">check_circle</span>
+                                Settled
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right text-on-surface-variant text-[11px]">
+                              {new Date(log.paid_at).toLocaleString([], {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </section>
@@ -1647,6 +2124,478 @@ export default function AdminDashboardPage() {
                 </button>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Vehicle Modal */}
+      {(isAddVehicleModalOpen || editingVehicle) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-primary/75 backdrop-blur-sm"
+            onClick={() => {
+              setIsAddVehicleModalOpen(false);
+              setEditingVehicle(null);
+            }}
+          />
+          <div className="relative w-full max-w-2xl bg-surface-container-lowest rounded-2xl shadow-2xl border border-surface-container p-6 flex flex-col gap-5 z-10 animate-in zoom-in-95 duration-200 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-surface-container sticky top-0 bg-surface-container-lowest z-10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-primary text-secondary-fixed flex items-center justify-center">
+                  <span className="material-symbols-outlined text-lg">directions_car</span>
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg text-primary font-semibold">
+                    {editingVehicle ? "Edit Vehicle Details" : "Register New Automobile"}
+                  </h3>
+                  <p className="text-[11px] text-on-surface-variant">
+                    {editingVehicle
+                      ? `Updating ${editingVehicle.name || `${editingVehicle.brand} ${editingVehicle.model}`}`
+                      : "Add a genuine executive car, pricing, specifications, and imagery to the live catalog."}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsAddVehicleModalOpen(false);
+                  setEditingVehicle(null);
+                }}
+                className="w-8 h-8 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {vehicleFormError && (
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs flex items-center gap-2 font-medium">
+                <span className="material-symbols-outlined text-red-600 text-base">error</span>
+                <span>{vehicleFormError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveVehicle} className="flex flex-col gap-4 text-xs">
+              {/* Row 1: Brand, Model, Year */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Brand / Manufacturer *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={vehicleFormData.brand}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, brand: e.target.value })}
+                    placeholder="e.g. Mercedes-Benz, Land Rover"
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Model Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={vehicleFormData.model}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, model: e.target.value })}
+                    placeholder="e.g. Maybach S 580, Autobiography"
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Model Year
+                  </label>
+                  <input
+                    type="number"
+                    min={2020}
+                    max={2030}
+                    value={vehicleFormData.year}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, year: Number(e.target.value) })}
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: License Plate, Color, Transmission */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    License Plate *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={vehicleFormData.license_plate}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, license_plate: e.target.value.toUpperCase() })}
+                    placeholder="e.g. LAG-892-XZ"
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-mono font-bold text-secondary focus:outline-none focus:border-secondary"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Exterior Color
+                  </label>
+                  <input
+                    type="text"
+                    value={vehicleFormData.color}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, color: e.target.value })}
+                    placeholder="e.g. Obsidian Black, Santorini Black"
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Transmission
+                  </label>
+                  <select
+                    value={vehicleFormData.transmission}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, transmission: e.target.value })}
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  >
+                    <option value="Automatic">Automatic</option>
+                    <option value="Manual">Manual</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 3: Category, Armored Level, Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Category
+                  </label>
+                  <select
+                    value={vehicleFormData.category}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, category: e.target.value })}
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  >
+                    <option value="Executive SUV">Executive SUV</option>
+                    <option value="Ultra-Luxury Sedan">Ultra-Luxury Sedan</option>
+                    <option value="Armored Transport">Armored Transport</option>
+                    <option value="VIP Minivan">VIP Minivan</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Armored Level
+                  </label>
+                  <select
+                    value={vehicleFormData.armored_level}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, armored_level: e.target.value })}
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  >
+                    <option value="None">None (Standard Luxury)</option>
+                    <option value="B6 Ballistic">B6 Ballistic (AK-47 / 7.62mm Protection)</option>
+                    <option value="B7 VR7">B7 VR7 (Maximum Armor Defense)</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Operational Status
+                  </label>
+                  <select
+                    value={vehicleFormData.status}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, status: e.target.value })}
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  >
+                    <option value="available">Available (In Yard)</option>
+                    <option value="reserved">Reserved (Upcoming Charter)</option>
+                    <option value="in_transit">On Trip (Active Charter)</option>
+                    <option value="maintenance">Maintenance (Service Bay)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 4: Daily Rate NGN, Daily Rate USD, Operational Hub */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Daily Rate (₦ NGN) *
+                  </label>
+                  <input
+                    type="number"
+                    step="10000"
+                    required
+                    value={vehicleFormData.daily_rate_ngn}
+                    onChange={(e) => {
+                      const ngn = Number(e.target.value);
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        daily_rate_ngn: ngn,
+                        daily_rate_usd: Math.round(ngn / 1500),
+                      });
+                    }}
+                    placeholder="e.g. 550000"
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-mono font-bold text-primary focus:outline-none focus:border-secondary"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Daily Rate ($ USD)
+                  </label>
+                  <input
+                    type="number"
+                    value={vehicleFormData.daily_rate_usd}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, daily_rate_usd: Number(e.target.value) })}
+                    placeholder="e.g. 380"
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-mono font-medium text-primary focus:outline-none focus:border-secondary"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Operational Hub / Location
+                  </label>
+                  <input
+                    type="text"
+                    value={vehicleFormData.current_location_name}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, current_location_name: e.target.value })}
+                    placeholder="e.g. Victoria Island Operations Hub"
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  />
+                </div>
+              </div>
+
+              {/* Row 5: Capacity */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Guest Capacity (Seats)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={15}
+                    value={vehicleFormData.seats}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, seats: Number(e.target.value) })}
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Luggage Capacity (Cases)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={15}
+                    value={vehicleFormData.luggage_capacity}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, luggage_capacity: Number(e.target.value) })}
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  />
+                </div>
+              </div>
+
+              {/* Row 6: Hero Image URL */}
+              <div className="flex flex-col gap-1">
+                <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                  Hero / Primary Image URL
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={vehicleFormData.hero_image_url}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, hero_image_url: e.target.value })}
+                    placeholder="https://images.unsplash.com/... or direct image link"
+                    className="flex-1 h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  />
+                  {vehicleFormData.hero_image_url && (
+                    <div className="w-10 h-10 rounded-lg overflow-hidden border border-surface-container shrink-0 bg-surface-container">
+                      <img
+                        src={vehicleFormData.hero_image_url}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = "none";
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Row 7: Gallery Images */}
+              <div className="flex flex-col gap-1">
+                <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                  Gallery Image URLs (One URL per line for the Lightbox Gallery)
+                </label>
+                <textarea
+                  rows={3}
+                  value={vehicleFormData.gallery_image_urls}
+                  onChange={(e) => setVehicleFormData({ ...vehicleFormData, gallery_image_urls: e.target.value })}
+                  placeholder={"https://example.com/interior.jpg\nhttps://example.com/rear-cabin.jpg\nhttps://example.com/luggage.jpg"}
+                  className="w-full p-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-mono focus:outline-none focus:border-secondary"
+                />
+              </div>
+
+              {/* Row 8: Features */}
+              <div className="flex flex-col gap-1">
+                <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                  Executive Features (Comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={vehicleFormData.features}
+                  onChange={(e) => setVehicleFormData({ ...vehicleFormData, features: e.target.value })}
+                  placeholder="Starlink Wi-Fi, Executive Rear Seating, Chilled Console, Privacy Glass, Massage Seats"
+                  className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                />
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-surface-container">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddVehicleModalOpen(false);
+                    setEditingVehicle(null);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-container text-primary font-semibold text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingVehicle}
+                  className="px-6 py-2.5 rounded-xl bg-primary hover:bg-secondary text-white font-semibold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 disabled:opacity-50"
+                >
+                  {isSubmittingVehicle
+                    ? "Saving Vehicle..."
+                    : editingVehicle
+                    ? "Save Changes"
+                    : "Register Automobile"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Chauffeur Modal */}
+      {isAddDriverModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-primary/75 backdrop-blur-sm"
+            onClick={() => setIsAddDriverModalOpen(false)}
+          />
+          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-surface-container p-6 flex flex-col gap-5 z-10 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-surface-container">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-primary text-secondary-fixed flex items-center justify-center">
+                  <span className="material-symbols-outlined text-lg">person_add</span>
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg text-primary font-semibold">
+                    Enroll Executive Chauffeur
+                  </h3>
+                  <p className="text-[11px] text-on-surface-variant">
+                    Add a vetted, licensed chauffeur to the operational roster.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAddDriverModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {driverFormError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs font-medium">
+                {driverFormError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateDriver} className="flex flex-col gap-4 text-xs">
+              <div className="flex flex-col gap-1">
+                <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={driverFormData.full_name}
+                  onChange={(e) => setDriverFormData({ ...driverFormData, full_name: e.target.value })}
+                  placeholder="e.g. Segun Alabi"
+                  className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={driverFormData.phone}
+                    onChange={(e) => setDriverFormData({ ...driverFormData, phone: e.target.value })}
+                    placeholder="+234 803 000 0000"
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                    Badge Number
+                  </label>
+                  <input
+                    type="text"
+                    value={driverFormData.badge_number}
+                    onChange={(e) => setDriverFormData({ ...driverFormData, badge_number: e.target.value })}
+                    placeholder="e.g. CH-408"
+                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-mono font-medium text-primary focus:outline-none focus:border-secondary"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                  Driver License Number *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={driverFormData.license_number}
+                  onChange={(e) => setDriverFormData({ ...driverFormData, license_number: e.target.value })}
+                  placeholder="e.g. DL-LA-992140"
+                  className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-mono text-primary focus:outline-none focus:border-secondary"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                  Security Clearance Level
+                </label>
+                <select
+                  value={driverFormData.security_clearance_level}
+                  onChange={(e) => setDriverFormData({ ...driverFormData, security_clearance_level: e.target.value })}
+                  className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                >
+                  <option value="Airside VIP & Diplomatic Escort">Airside VIP &amp; Diplomatic Escort</option>
+                  <option value="Executive Chauffeur Certified">Executive Chauffeur Certified</option>
+                  <option value="Defensive Armed Escort">Defensive Armed Escort</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-surface-container">
+                <button
+                  type="button"
+                  onClick={() => setIsAddDriverModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-surface-container-low hover:bg-surface-container text-primary font-semibold text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingDriver}
+                  className="px-5 py-2 rounded-xl bg-primary hover:bg-secondary text-white font-semibold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 disabled:opacity-50"
+                >
+                  {isSubmittingDriver ? "Enrolling..." : "Enroll Driver"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
