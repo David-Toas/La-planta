@@ -14,11 +14,14 @@
 # Environment Variables & Secrets
 .env
 .env.*
-!.env.example
 *.pem
 *.key
 *.cert
 service-account.json
+
+# Local Supabase schema and environment template
+/supabase-schema.sql
+/.env.example
 
 # Logs
 /logs
@@ -38,4 +41,3 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
-
