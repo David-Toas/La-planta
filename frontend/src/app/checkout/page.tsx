@@ -23,11 +23,9 @@ function CheckoutContent() {
   const [rentalDays, setRentalDays] = useState<number>(3);
   const [bookingCode, setBookingCode] = useState<string>("LP-LOS-89240");
   const [handoverMode, setHandoverMode] = useState<"delivery" | "office">("delivery");
-  const [deliveryAddress, setDeliveryAddress] = useState(
-    "The Wheatbaker Hotel, 4 Onitolo Rd, Ikoyi, Lagos"
-  );
-  const [deliveryWindow, setDeliveryWindow] = useState("Nov 14, 2024 • 17:30 WAT");
-  const [flightNumber, setFlightNumber] = useState("BA 075");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryWindow, setDeliveryWindow] = useState("");
+  const [flightNumber, setFlightNumber] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"card" | "transfer" | "wallet">("card");
 
   // Guest details (fallback if not signed in)
@@ -106,9 +104,9 @@ function CheckoutContent() {
     ? vehicle.daily_rate_usd * rentalDays
     : Math.round(totalAmountNgn / 1400);
 
-  const effectiveEmail = user?.email || guestEmail || "client@laplanta.ng";
-  const effectiveName = user?.name || guestName || "Adekunle Balogun";
-  const effectivePhone = user?.phone || guestPhone || "+234 800 000 0000";
+  const effectiveEmail = user?.email || guestEmail || "";
+  const effectiveName = user?.name || guestName || "";
+  const effectivePhone = user?.phone || guestPhone || "";
 
   /**
    * Launch Paystack Inline Checkout
@@ -116,6 +114,15 @@ function CheckoutContent() {
   const handlePayWithPaystack = async () => {
     setIsProcessing(true);
     setPaymentError(null);
+
+    if (!effectiveEmail) {
+      setIsProcessing(false);
+      setPaymentError(
+        "Please provide your email address or sign in to complete your reservation."
+      );
+      if (!user) openAuthModal();
+      return;
+    }
 
     const paystackPublicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "";
 
@@ -597,6 +604,7 @@ function CheckoutContent() {
                                 onChange={(e) =>
                                   setDeliveryWindow(e.target.value)
                                 }
+                                placeholder="e.g. Tomorrow • 10:00 AM WAT"
                                 type="text"
                               />
                               <span className="material-symbols-outlined absolute left-3.5 text-secondary text-lg">
@@ -670,36 +678,99 @@ function CheckoutContent() {
                           </div>
                         </div>
 
-                        {/* Guest Information Block */}
-                        <div className="p-4 sm:p-5 rounded-xl bg-surface-container-low/90 border border-secondary/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div className="flex items-center gap-3.5">
-                            <div className="w-12 h-12 rounded-full bg-primary text-secondary-fixed flex items-center justify-center font-bold text-base shadow-sm shrink-0">
-                              {effectiveName.charAt(0)}
-                            </div>
-                            <div className="flex flex-col">
-                              <div className="flex items-center gap-2">
-                                <span className="font-title-md text-base text-primary font-semibold">
-                                  {effectiveName}
+                        {/* Guest / Account Information Block */}
+                        {user ? (
+                          <div className="p-4 sm:p-5 rounded-xl bg-surface-container-low/90 border border-secondary/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3.5">
+                              <div className="w-12 h-12 rounded-full bg-primary text-secondary-fixed flex items-center justify-center font-bold text-base shadow-sm shrink-0">
+                                {user.name ? user.name.charAt(0).toUpperCase() : "U"}
+                              </div>
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-title-md text-base text-primary font-semibold">
+                                    {user.name}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-[10px] font-bold uppercase tracking-wider">
+                                    {user.vipTier || "Verified VIP"}
+                                  </span>
+                                </div>
+                                <span className="font-body-sm text-xs text-on-surface-variant">
+                                  {user.email} {user.phone ? `• ${user.phone}` : ""}
                                 </span>
-                                <span className="px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-[10px] font-bold uppercase tracking-wider">
-                                  {user?.vipTier
-                                    ? user.vipTier
-                                    : "Verified VIP"}
+                                <span className="font-label-sm text-[11px] text-emerald-800 font-medium flex items-center gap-1 mt-0.5">
+                                  <span className="material-symbols-outlined text-sm">
+                                    check_circle
+                                  </span>{" "}
+                                  Account verified. Reservation voucher and dispatch tracking will link directly to your profile.
                                 </span>
                               </div>
-                              <span className="font-body-sm text-xs text-on-surface-variant">
-                                {effectiveEmail} • {effectivePhone}
-                              </span>
-                              <span className="font-label-sm text-[11px] text-emerald-800 font-medium flex items-center gap-1 mt-0.5">
-                                <span className="material-symbols-outlined text-sm">
-                                  check_circle
-                                </span>{" "}
-                                Automated background confirmation ready (Email,
-                                SMS &amp; WhatsApp)
-                              </span>
                             </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="flex flex-col gap-4">
+                            <div className="p-4 rounded-xl bg-surface-container-low border border-black/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <span className="material-symbols-outlined text-secondary text-2xl">
+                                  account_circle
+                                </span>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-semibold text-primary">
+                                    Have an Executive Account?
+                                  </span>
+                                  <span className="text-xs text-on-surface-variant">
+                                    Sign in or register to auto-populate your verified details and earn VIP mileage.
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={openAuthModal}
+                                className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-secondary text-xs uppercase tracking-wider font-semibold transition-colors shrink-0"
+                              >
+                                Sign In / Register
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="flex flex-col gap-1.5">
+                                <label className="font-label-sm text-xs uppercase tracking-wider text-on-surface-variant">
+                                  Full Name *
+                                </label>
+                                <input
+                                  type="text"
+                                  value={guestName}
+                                  onChange={(e) => setGuestName(e.target.value)}
+                                  placeholder="e.g. John Doe"
+                                  className="w-full h-11 px-3.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                <label className="font-label-sm text-xs uppercase tracking-wider text-on-surface-variant">
+                                  Email Address *
+                                </label>
+                                <input
+                                  type="email"
+                                  value={guestEmail}
+                                  onChange={(e) => setGuestEmail(e.target.value)}
+                                  placeholder="e.g. client@example.com"
+                                  className="w-full h-11 px-3.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                <label className="font-label-sm text-xs uppercase tracking-wider text-on-surface-variant">
+                                  Phone Number *
+                                </label>
+                                <input
+                                  type="tel"
+                                  value={guestPhone}
+                                  onChange={(e) => setGuestPhone(e.target.value)}
+                                  placeholder="e.g. +234 800 000 0000"
+                                  className="w-full h-11 px-3.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 

@@ -91,6 +91,34 @@ export const adminApi = {
   },
 
   /**
+   * Upload image directly from admin laptop to Supabase storage
+   */
+  async uploadFile(file: File): Promise<{ success: boolean; url?: string; error?: string }> {
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (e) => reject(e);
+        reader.readAsDataURL(file);
+      });
+      const fileData = await base64Promise;
+
+      const res = await fetch(`${BACKEND_URL}/api/admin/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          fileData,
+          contentType: file.type,
+        }),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message || "Upload failed" };
+    }
+  },
+
+  /**
    * Chauffeur roster
    */
   async getDrivers() {

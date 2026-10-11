@@ -399,4 +399,54 @@ adminRouter.delete("/drivers/:id", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/admin/upload
+ * Directly upload an image from admin device to Supabase storage bucket "vehicles"
+ */
+adminRouter.post("/upload", async (req: Request, res: Response) => {
+  try {
+    const { filename, fileData, contentType } = req.body;
+    if (!fileData) {
+      return res.status(400).json({ error: "No file data provided" });
+    }
+
+    // Extract base64 payload
+    const base64Match = fileData.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+    const mimeType = contentType || (base64Match ? base64Match[1] : "image/jpeg");
+    const rawBase64 = base64Match ? base64Match[2] : fileData;
+    const buffer = Buffer.from(rawBase64, "base64");
+
+    // Clean extension
+    const ext = filename?.split(".").pop() || mimeType.split("/")[1] || "jpg";
+    const cleanFilename = `veh_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+
+    // Ensure bucket exists
+    try {
+      await supabase.storage.createBucket("vehicles", { public: true });
+    } catch (_) {
+      // Bucket might already exist, safe to ignore
+    }
+
+    const { data, error } = await supabase.storage
+      .from("vehicles")
+      .upload(cleanFilename, buffer, {
+        contentType: mimeType,
+        upsert: true,
+      });
+
+    if (error) throw error;
+
+    const { data: pubUrlData } = supabase.storage
+      .from("vehicles")
+      .getPublicUrl(cleanFilename);
+
+    console.log(`\x1b[32m[Admin Upload Success]\x1b[0m ${cleanFilename} -> ${pubUrlData.publicUrl}`);
+    return res.json({ success: true, url: pubUrlData.publicUrl, path: cleanFilename });
+  } catch (err: any) {
+    console.error("[Admin Upload Error]:", err);
+    return res.status(500).json({ error: err.message || "Failed to upload file" });
+  }
+});
+
+
 

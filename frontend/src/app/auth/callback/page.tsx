@@ -13,12 +13,23 @@ export default function AuthCallbackPage() {
 
     async function handleAuth() {
       try {
+        const getDestination = () => {
+          if (typeof window !== "undefined") {
+            const dest = sessionStorage.getItem("laPlanta_intended_destination");
+            if (dest) {
+              sessionStorage.removeItem("laPlanta_intended_destination");
+              return dest;
+            }
+          }
+          return "/account";
+        };
+
         // 1. Check if Supabase client already auto-resolved the session from the URL hash/code
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
         if (session) {
           if (isMounted) setStatus("VIP credentials verified. Opening executive suite...");
-          router.replace("/account");
+          router.replace(getDestination());
           return;
         }
 
@@ -47,7 +58,7 @@ export default function AuthCallbackPage() {
 
             if (data?.session) {
               if (isMounted) setStatus("Welcome to La Planta Prime. Loading your account...");
-              router.replace("/account");
+              router.replace(getDestination());
               return;
             }
           }
@@ -57,7 +68,7 @@ export default function AuthCallbackPage() {
         const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
           if (session) {
             if (isMounted) setStatus("Session active. Redirecting...");
-            router.replace("/account");
+            router.replace(getDestination());
           }
         });
 

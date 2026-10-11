@@ -2,10 +2,26 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
+import { useAuth } from "@/context/auth-context";
 
 export default function VehicleDetailsPage() {
+  const router = useRouter();
+  const { user, openAuthModal } = useAuth();
+
+  const handleReserve = (destination = "/checkout") => {
+    if (user) {
+      router.push(destination);
+    } else {
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("laPlanta_intended_destination", destination);
+      }
+      openAuthModal();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-surface flex flex-col">
       <Navbar />
@@ -309,7 +325,7 @@ export default function VehicleDetailsPage() {
 </div>
 </div>
 {/*  CTA Button  */}
-<button onClick={() => {}} className="w-full py-4 rounded-xl bg-primary-container text-on-primary font-label-md text-label-md uppercase tracking-wider font-semibold shadow-md hover:bg-secondary transition-all duration-300 flex items-center justify-center gap-2 group mt-1" type="button"><span className="">Proceed to Reservation</span><span className="material-symbols-outlined text-base group-hover:translate-x-1 transition-transform">arrow_forward</span></button>
+<button onClick={() => handleReserve("/checkout")} className="w-full py-4 rounded-xl bg-primary-container text-on-primary font-label-md text-label-md uppercase tracking-wider font-semibold shadow-md hover:bg-secondary transition-all duration-300 flex items-center justify-center gap-2 group mt-1 cursor-pointer" type="button"><span className="">Proceed to Reservation</span><span className="material-symbols-outlined text-base group-hover:translate-x-1 transition-transform">arrow_forward</span></button>
 {/*  Trust / Guarantee Badges  */}
 <div className="flex flex-col gap-2 pt-2">
 <div className="flex items-center gap-2 text-on-surface-variant font-label-sm text-label-sm">

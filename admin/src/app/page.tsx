@@ -4,7 +4,14 @@ import React, { useState, useEffect } from "react";
 import { useAdminAuth } from "@/context/admin-auth-context";
 import { adminApi } from "@/lib/api";
 
-type TabType = "overview" | "map" | "fleet" | "handover" | "drivers" | "vip" | "revenue";
+type TabType =
+  | "overview"
+  | "map"
+  | "fleet"
+  | "handover"
+  | "drivers"
+  | "vip"
+  | "revenue";
 
 interface FleetVehicle {
   id: string;
@@ -68,7 +75,9 @@ export default function AdminDashboardPage() {
   const [fleetList, setFleetList] = useState<FleetVehicle[]>([]);
   const [driverList, setDriverList] = useState<DriverItem[]>([]);
   const [userList, setUserList] = useState<UserProfile[]>([]);
-  const [fleetFilter, setFleetFilter] = useState<"all" | "active" | "reserve">("all");
+  const [fleetFilter, setFleetFilter] = useState<"all" | "active" | "reserve">(
+    "all",
+  );
   const [paymentLogs, setPaymentLogs] = useState<any[]>([]);
   const [paymentSummary, setPaymentSummary] = useState<any>(null);
 
@@ -78,12 +87,17 @@ export default function AdminDashboardPage() {
 
   // VIP Update State
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
-  const [vipFeedback, setVipFeedback] = useState<{ id: string; text: string } | null>(null);
+  const [vipFeedback, setVipFeedback] = useState<{
+    id: string;
+    text: string;
+  } | null>(null);
 
   // Broadcast Modal State
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
   const [broadcastMsg, setBroadcastMsg] = useState("");
-  const [broadcastCorridor, setBroadcastCorridor] = useState("Lagos & Abuja All Corridors");
+  const [broadcastCorridor, setBroadcastCorridor] = useState(
+    "Lagos & Abuja All Corridors",
+  );
   const [broadcastSuccess, setBroadcastSuccess] = useState(false);
 
   // Initial Fetch & Live Polling
@@ -135,10 +149,14 @@ export default function AdminDashboardPage() {
 
   // Vehicle Management Modal States
   const [isAddVehicleModalOpen, setIsAddVehicleModalOpen] = useState(false);
-  const [editingVehicle, setEditingVehicle] = useState<FleetVehicle | null>(null);
+  const [editingVehicle, setEditingVehicle] = useState<FleetVehicle | null>(
+    null,
+  );
   const [isSubmittingVehicle, setIsSubmittingVehicle] = useState(false);
   const [vehicleFormError, setVehicleFormError] = useState<string | null>(null);
-  const [deletingVehicleId, setDeletingVehicleId] = useState<string | null>(null);
+  const [deletingVehicleId, setDeletingVehicleId] = useState<string | null>(
+    null,
+  );
 
   const initialVehicleForm = {
     brand: "",
@@ -157,9 +175,13 @@ export default function AdminDashboardPage() {
     current_location_name: "Victoria Island Operations Hub",
     hero_image_url: "",
     gallery_image_urls: "",
-    features: "Starlink Wi-Fi, Executive Rear Seating, Chilled Refreshments Console, Acoustic Privacy Glass, Massage Seats",
+    features:
+      "Starlink Wi-Fi, Executive Rear Seating, Chilled Refreshments Console, Acoustic Privacy Glass, Massage Seats",
   };
   const [vehicleFormData, setVehicleFormData] = useState(initialVehicleForm);
+  const [isUploadingHero, setIsUploadingHero] = useState(false);
+  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
 
   // Driver Management Modal States
   const [isAddDriverModalOpen, setIsAddDriverModalOpen] = useState(false);
@@ -213,26 +235,115 @@ export default function AdminDashboardPage() {
       category: v.category || "Executive SUV",
       armored_level: v.armored_level || "None",
       daily_rate_ngn: Number(v.daily_rate_ngn) || 450000,
-      daily_rate_usd: Number(v.daily_rate_usd) || Math.round((Number(v.daily_rate_ngn) || 450000) / 1500),
+      daily_rate_usd:
+        Number(v.daily_rate_usd) ||
+        Math.round((Number(v.daily_rate_ngn) || 450000) / 1500),
       seats: v.seats || 4,
       luggage_capacity: v.luggage_capacity || 4,
       transmission: v.transmission || "Automatic",
       status: v.status || "available",
-      current_location_name: v.current_location_name || v.current_hub || "Victoria Island Operations Hub",
+      current_location_name:
+        v.current_location_name ||
+        v.current_hub ||
+        "Victoria Island Operations Hub",
       hero_image_url: v.hero_image_url || "",
       gallery_image_urls: (v.gallery_image_urls || []).join("\n"),
-      features: (v.features || []).join(", ") || "Starlink Wi-Fi, Executive Rear Seating",
+      features:
+        (v.features || []).join(", ") ||
+        "Starlink Wi-Fi, Executive Rear Seating",
     });
     setVehicleFormError(null);
+    setImageUploadError(null);
+  };
+
+  const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingHero(true);
+    setImageUploadError(null);
+    try {
+      const res = await adminApi.uploadFile(file);
+      if (res?.success && res.url) {
+        setVehicleFormData((prev) => ({ ...prev, hero_image_url: res.url! }));
+      } else {
+        setImageUploadError(
+          res?.error || "Failed to upload photo from device.",
+        );
+      }
+    } catch (err: any) {
+      setImageUploadError(err.message || "Failed to upload photo.");
+    } finally {
+      setIsUploadingHero(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleGalleryUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setIsUploadingGallery(true);
+    setImageUploadError(null);
+    try {
+      const uploadPromises = Array.from(files).map((f) =>
+        adminApi.uploadFile(f),
+      );
+      const results = await Promise.all(uploadPromises);
+      const successfulUrls = results
+        .filter((r) => r?.success && r.url)
+        .map((r) => r.url as string);
+
+      if (successfulUrls.length > 0) {
+        setVehicleFormData((prev) => {
+          const existing = prev.gallery_image_urls
+            ? prev.gallery_image_urls
+                .split("\n")
+                .filter((s) => s.trim().length > 0)
+            : [];
+          return {
+            ...prev,
+            gallery_image_urls: [...existing, ...successfulUrls].join("\n"),
+          };
+        });
+      } else {
+        setImageUploadError("Could not upload photos. Please try again.");
+      }
+    } catch (err: any) {
+      setImageUploadError(err.message || "Failed to upload gallery photos.");
+    } finally {
+      setIsUploadingGallery(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleRemoveGalleryImage = (indexToRemove: number) => {
+    setVehicleFormData((prev) => {
+      const existing = prev.gallery_image_urls
+        ? prev.gallery_image_urls.split("\n").filter((s) => s.trim().length > 0)
+        : [];
+      const updated = existing.filter((_, idx) => idx !== indexToRemove);
+      return {
+        ...prev,
+        gallery_image_urls: updated.join("\n"),
+      };
+    });
   };
 
   const handleSaveVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vehicleFormData.brand.trim() || !vehicleFormData.model.trim() || !vehicleFormData.license_plate.trim()) {
+    if (
+      !vehicleFormData.brand.trim() ||
+      !vehicleFormData.model.trim() ||
+      !vehicleFormData.license_plate.trim()
+    ) {
       setVehicleFormError("Brand, Model, and License Plate are required.");
       return;
     }
-    if (!vehicleFormData.daily_rate_ngn || vehicleFormData.daily_rate_ngn <= 0) {
+    if (
+      !vehicleFormData.daily_rate_ngn ||
+      vehicleFormData.daily_rate_ngn <= 0
+    ) {
       setVehicleFormError("Please enter a valid daily rate in NGN.");
       return;
     }
@@ -250,7 +361,9 @@ export default function AdminDashboardPage() {
       category: vehicleFormData.category,
       armored_level: vehicleFormData.armored_level,
       daily_rate_ngn: Number(vehicleFormData.daily_rate_ngn),
-      daily_rate_usd: Number(vehicleFormData.daily_rate_usd) || Math.round(Number(vehicleFormData.daily_rate_ngn) / 1500),
+      daily_rate_usd:
+        Number(vehicleFormData.daily_rate_usd) ||
+        Math.round(Number(vehicleFormData.daily_rate_ngn) / 1500),
       seats: Number(vehicleFormData.seats),
       luggage_capacity: Number(vehicleFormData.luggage_capacity),
       transmission: vehicleFormData.transmission,
@@ -293,7 +406,11 @@ export default function AdminDashboardPage() {
   };
 
   const handleDeleteVehicle = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to remove ${name} from the active fleet inventory?`)) {
+    if (
+      !confirm(
+        `Are you sure you want to remove ${name} from the active fleet inventory?`,
+      )
+    ) {
       return;
     }
     setDeletingVehicleId(id);
@@ -308,7 +425,11 @@ export default function AdminDashboardPage() {
 
   const handleCreateDriver = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!driverFormData.full_name.trim() || !driverFormData.phone.trim() || !driverFormData.license_number.trim()) {
+    if (
+      !driverFormData.full_name.trim() ||
+      !driverFormData.phone.trim() ||
+      !driverFormData.license_number.trim()
+    ) {
       setDriverFormError("Full Name, Phone, and License Number are required.");
       return;
     }
@@ -319,7 +440,9 @@ export default function AdminDashboardPage() {
       phone: driverFormData.phone.trim(),
       email: driverFormData.email.trim() || null,
       license_number: driverFormData.license_number.trim(),
-      badge_number: driverFormData.badge_number.trim() || `CH-${Math.floor(100 + Math.random() * 900)}`,
+      badge_number:
+        driverFormData.badge_number.trim() ||
+        `CH-${Math.floor(100 + Math.random() * 900)}`,
       security_clearance_level: driverFormData.security_clearance_level,
     });
     setIsSubmittingDriver(false);
@@ -347,7 +470,9 @@ export default function AdminDashboardPage() {
     setIsPinging(true);
     const res = await adminApi.pingTracker("TRK-892-SIM");
     if (res?.success) {
-      setPingAlert(`✓ Sent "WHERE#" ping to SIM ${res.simPhone || "+2348037294810"} (Express :4000 ACK)`);
+      setPingAlert(
+        `✓ Sent "WHERE#" ping to SIM ${res.simPhone || "+2348037294810"} (Express :4000 ACK)`,
+      );
     } else {
       setPingAlert(`Notice: ${res?.error || "Dispatched"}`);
     }
@@ -363,7 +488,7 @@ export default function AdminDashboardPage() {
     setUpdatingUserId(null);
     if (res?.success) {
       setUserList((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, vip_tier: newTier } : u))
+        prev.map((u) => (u.id === userId ? { ...u, vip_tier: newTier } : u)),
       );
       setVipFeedback({
         id: userId,
@@ -395,7 +520,8 @@ export default function AdminDashboardPage() {
 
   // Filtered fleet
   const displayedFleet = fleetList.filter((v) => {
-    if (fleetFilter === "active") return v.status === "in_transit" || v.status === "reserved";
+    if (fleetFilter === "active")
+      return v.status === "in_transit" || v.status === "reserved";
     if (fleetFilter === "reserve") return v.status === "available";
     return true;
   });
@@ -443,34 +569,6 @@ export default function AdminDashboardPage() {
             </button>
           </div>
 
-          {/* Regional Status Badge */}
-          <div className="p-3.5 mx-3 mt-3 rounded-xl bg-surface-container-low border border-surface-container/70 flex flex-col gap-1.5 shrink-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-secondary" />
-                </span>
-                <span className="text-[11px] uppercase tracking-wider text-primary font-bold">
-                  LOS &amp; ABV DISPATCH
-                </span>
-              </div>
-              <span className="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-bold">
-                14 EN ROUTE
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-[11px] text-on-surface-variant">
-              <span>Backend :4000</span>
-              <span
-                className={`font-semibold uppercase ${
-                  backendHealth === "online" ? "text-emerald-700" : "text-amber-700"
-                }`}
-              >
-                ● {backendHealth}
-              </span>
-            </div>
-          </div>
-
           {/* Navigation Links */}
           <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
             <div className="flex flex-col gap-1">
@@ -498,7 +596,9 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center gap-3">
                   <span
                     className={`material-symbols-outlined text-lg ${
-                      activeTab === "overview" ? "text-secondary-fixed" : "text-secondary"
+                      activeTab === "overview"
+                        ? "text-secondary-fixed"
+                        : "text-secondary"
                     }`}
                   >
                     dashboard
@@ -525,16 +625,15 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center gap-3">
                   <span
                     className={`material-symbols-outlined text-lg ${
-                      activeTab === "map" ? "text-secondary-fixed" : "text-secondary"
+                      activeTab === "map"
+                        ? "text-secondary-fixed"
+                        : "text-secondary"
                     }`}
                   >
                     share_location
                   </span>
                   <span>Live GPS Map</span>
                 </div>
-                <span className="text-[10px] text-secondary font-semibold bg-surface-container px-1.5 py-0.5 rounded">
-                  14 PING
-                </span>
               </button>
 
               {/* Sub-Nav 3: Fleet */}
@@ -552,16 +651,15 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center gap-3">
                   <span
                     className={`material-symbols-outlined text-lg ${
-                      activeTab === "fleet" ? "text-secondary-fixed" : "text-secondary"
+                      activeTab === "fleet"
+                        ? "text-secondary-fixed"
+                        : "text-secondary"
                     }`}
                   >
                     directions_car
                   </span>
                   <span>Fleet Inventory</span>
                 </div>
-                <span className="text-[10px] text-on-surface-variant font-semibold">
-                  18 Units
-                </span>
               </button>
 
               {/* Sub-Nav 4: Handover Queue */}
@@ -579,16 +677,15 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center gap-3">
                   <span
                     className={`material-symbols-outlined text-lg ${
-                      activeTab === "handover" ? "text-secondary-fixed" : "text-secondary"
+                      activeTab === "handover"
+                        ? "text-secondary-fixed"
+                        : "text-secondary"
                     }`}
                   >
                     fact_check
                   </span>
                   <span>Handover &amp; Checks</span>
                 </div>
-                <span className="text-[10px] text-emerald-800 font-semibold bg-emerald-100 px-1.5 py-0.5 rounded">
-                  ACTIVE
-                </span>
               </button>
 
               {/* Sub-Nav 5: Chauffeurs */}
@@ -606,16 +703,15 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center gap-3">
                   <span
                     className={`material-symbols-outlined text-lg ${
-                      activeTab === "drivers" ? "text-secondary-fixed" : "text-secondary"
+                      activeTab === "drivers"
+                        ? "text-secondary-fixed"
+                        : "text-secondary"
                     }`}
                   >
                     supervised_user_circle
                   </span>
                   <span>Chauffeur Roster</span>
                 </div>
-                <span className="text-[10px] text-on-surface-variant font-semibold">
-                  14 Duty
-                </span>
               </button>
 
               {/* Sub-Nav 6: VIP Management (Crucial User Requirement) */}
@@ -633,16 +729,15 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center gap-3">
                   <span
                     className={`material-symbols-outlined text-lg ${
-                      activeTab === "vip" ? "text-secondary-fixed" : "text-secondary"
+                      activeTab === "vip"
+                        ? "text-secondary-fixed"
+                        : "text-secondary"
                     }`}
                   >
                     workspace_premium
                   </span>
-                  <span>VIP Members Admin</span>
+                  <span>Members / Clients</span>
                 </div>
-                <span className="text-[10px] text-amber-800 font-semibold bg-amber-100 px-1.5 py-0.5 rounded">
-                  TIERS
-                </span>
               </button>
 
               {/* Sub-Nav 7: Revenue */}
@@ -660,16 +755,15 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center gap-3">
                   <span
                     className={`material-symbols-outlined text-lg ${
-                      activeTab === "revenue" ? "text-secondary-fixed" : "text-secondary"
+                      activeTab === "revenue"
+                        ? "text-secondary-fixed"
+                        : "text-secondary"
                     }`}
                   >
                     payments
                   </span>
                   <span>Revenue &amp; Invoices</span>
                 </div>
-                <span className="text-[10px] text-secondary font-bold font-mono">
-                  ₦84.2M
-                </span>
               </button>
             </div>
 
@@ -679,32 +773,22 @@ export default function AdminDashboardPage() {
                 External Links
               </span>
               <a
-                href="http://localhost:3000"
+                href={
+                  process.env.NEXT_PUBLIC_CLIENT_URL || "http://localhost:3000"
+                }
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="flex items-center justify-between px-3 py-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-low text-xs transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <span className="material-symbols-outlined text-lg text-secondary">
                     home
                   </span>
-                  <span>Client Website (:3000)</span>
+                  <span>Client Website</span>
                 </div>
-                <span className="material-symbols-outlined text-sm">open_in_new</span>
-              </a>
-              <a
-                href="http://localhost:3000/fleet"
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-between px-3 py-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-low text-xs transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-lg text-secondary">
-                    garage
-                  </span>
-                  <span>Fleet Catalog</span>
-                </div>
-                <span className="material-symbols-outlined text-sm">open_in_new</span>
+                <span className="material-symbols-outlined text-sm">
+                  open_in_new
+                </span>
               </a>
             </div>
           </nav>
@@ -769,7 +853,8 @@ export default function AdminDashboardPage() {
                 </span>
               </div>
               <span className="text-xs text-on-surface-variant hidden md:block">
-                Autonomous telematics monitoring, chauffeur dispatch &amp; VIP tier control
+                Autonomous telematics monitoring, chauffeur dispatch &amp; VIP
+                tier control
               </span>
             </div>
           </div>
@@ -796,106 +881,13 @@ export default function AdminDashboardPage() {
               onClick={() => setIsBroadcastModalOpen(true)}
               className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-primary hover:bg-secondary text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-sm"
             >
-              <span className="material-symbols-outlined text-sm">campaign</span>
+              <span className="material-symbols-outlined text-sm">
+                campaign
+              </span>
               <span>Broadcast</span>
             </button>
           </div>
         </header>
-
-        {/* Quick Horizontal Sub-Navigation Pills */}
-        <div className="sticky top-20 z-20 bg-surface-container-low/95 backdrop-blur-md border-b border-surface-container px-4 sm:px-8 py-2.5 overflow-x-auto">
-          <div className="flex items-center gap-2 min-w-max">
-            <button
-              onClick={() => setActiveTab("overview")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                activeTab === "overview"
-                  ? "bg-primary text-white shadow-sm"
-                  : "bg-surface-container-lowest text-on-surface hover:bg-surface-container"
-              }`}
-            >
-              <span className="material-symbols-outlined text-sm">dashboard</span>
-              <span>Operations Overview</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("map")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                activeTab === "map"
-                  ? "bg-primary text-white shadow-sm"
-                  : "bg-surface-container-lowest text-on-surface hover:bg-surface-container"
-              }`}
-            >
-              <span className="material-symbols-outlined text-sm text-secondary">
-                share_location
-              </span>
-              <span>Live GPS Map ({overviewKpis?.carsOnTrip?.active ?? fleetList.filter((v) => v.status === "in_transit").length})</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("fleet")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                activeTab === "fleet"
-                  ? "bg-primary text-white shadow-sm"
-                  : "bg-surface-container-lowest text-on-surface hover:bg-surface-container"
-              }`}
-            >
-              <span className="material-symbols-outlined text-sm text-secondary">
-                directions_car
-              </span>
-              <span>Fleet Register ({fleetList.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("handover")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                activeTab === "handover"
-                  ? "bg-primary text-white shadow-sm"
-                  : "bg-surface-container-lowest text-on-surface hover:bg-surface-container"
-              }`}
-            >
-              <span className="material-symbols-outlined text-sm text-secondary">
-                fact_check
-              </span>
-              <span>Handover Queue</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("drivers")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                activeTab === "drivers"
-                  ? "bg-primary text-white shadow-sm"
-                  : "bg-surface-container-lowest text-on-surface hover:bg-surface-container"
-              }`}
-            >
-              <span className="material-symbols-outlined text-sm text-secondary">
-                supervised_user_circle
-              </span>
-              <span>Chauffeur Roster ({driverList.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("vip")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                activeTab === "vip"
-                  ? "bg-primary text-white shadow-sm"
-                  : "bg-surface-container-lowest text-on-surface hover:bg-surface-container"
-              }`}
-            >
-              <span className="material-symbols-outlined text-sm text-amber-600">
-                workspace_premium
-              </span>
-              <span>VIP Tier Admin</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("revenue")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                activeTab === "revenue"
-                  ? "bg-primary text-white shadow-sm"
-                  : "bg-surface-container-lowest text-on-surface hover:bg-surface-container"
-              }`}
-            >
-              <span className="material-symbols-outlined text-sm text-secondary">
-                payments
-              </span>
-              <span>Revenue &amp; Invoices</span>
-            </button>
-          </div>
-        </div>
 
         {/* MAIN BODY CONTAINER */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 flex flex-col gap-6 max-w-7xl w-full mx-auto">
@@ -969,18 +961,36 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-2xl font-bold text-primary">
-                      {overviewKpis?.carsOnTrip?.active ?? fleetList.filter((v) => v.status === "in_transit" || v.status === "reserved").length}{" "}
+                      {overviewKpis?.carsOnTrip?.active ??
+                        fleetList.filter(
+                          (v) =>
+                            v.status === "in_transit" ||
+                            v.status === "reserved",
+                        ).length}{" "}
                       <span className="text-sm text-on-surface-variant font-normal">
                         / {overviewKpis?.carsOnTrip?.total ?? fleetList.length}
                       </span>
                     </span>
                     <span className="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-semibold">
-                      {overviewKpis?.carsOnTrip?.percentage ?? (fleetList.length > 0 ? Math.round((fleetList.filter((v) => v.status === "in_transit").length / fleetList.length) * 100) : 0)}% Active
+                      {overviewKpis?.carsOnTrip?.percentage ??
+                        (fleetList.length > 0
+                          ? Math.round(
+                              (fleetList.filter(
+                                (v) => v.status === "in_transit",
+                              ).length /
+                                fleetList.length) *
+                                100,
+                            )
+                          : 0)}
+                      % Active
                     </span>
                   </div>
                   <div className="mt-3 pt-2 border-t border-surface-container flex items-center justify-between text-xs text-on-surface-variant">
                     <span>
-                      {overviewKpis?.carsOnTrip?.reserveCount ?? fleetList.filter((v) => v.status === "available").length} In Reserve
+                      {overviewKpis?.carsOnTrip?.reserveCount ??
+                        fleetList.filter((v) => v.status === "available")
+                          .length}{" "}
+                      In Reserve
                     </span>
                     <span className="text-primary font-semibold">Ready</span>
                   </div>
@@ -1008,7 +1018,10 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="mt-3 pt-2 border-t border-surface-container flex items-center gap-1.5 text-xs text-on-surface-variant">
                     <span className="w-2 h-2 rounded-full bg-secondary" />
-                    <span>{overviewKpis?.transfersToday?.vipMeetAndGreets ?? 0} VIP Escorts / Transfers</span>
+                    <span>
+                      {overviewKpis?.transfersToday?.vipMeetAndGreets ?? 0} VIP
+                      Escorts / Transfers
+                    </span>
                   </div>
                 </div>
 
@@ -1034,7 +1047,9 @@ export default function AdminDashboardPage() {
                       100% Upfront Settled
                     </span>
                     <span className="text-secondary font-semibold">
-                      {overviewKpis?.revenue?.growthPercent ? `+${overviewKpis.revenue.growthPercent}%` : "Zero Outstanding"}
+                      {overviewKpis?.revenue?.growthPercent
+                        ? `+${overviewKpis.revenue.growthPercent}%`
+                        : "Zero Outstanding"}
                     </span>
                   </div>
                 </div>
@@ -1055,7 +1070,9 @@ export default function AdminDashboardPage() {
                     <span className="text-2xl font-bold text-primary">
                       {overviewKpis?.driversOnDuty?.active ?? driverList.length}{" "}
                       <span className="text-sm text-on-surface-variant font-normal">
-                        / {overviewKpis?.driversOnDuty?.total ?? driverList.length}
+                        /{" "}
+                        {overviewKpis?.driversOnDuty?.total ??
+                          driverList.length}
                       </span>
                     </span>
                     <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-semibold">
@@ -1063,7 +1080,13 @@ export default function AdminDashboardPage() {
                     </span>
                   </div>
                   <div className="mt-3 pt-2 border-t border-surface-container flex items-center justify-between text-xs text-on-surface-variant">
-                    <span>Lead: {overviewKpis?.driversOnDuty?.leadChauffeur || (driverList.length > 0 ? driverList[0].full_name : "None assigned")}</span>
+                    <span>
+                      Lead:{" "}
+                      {overviewKpis?.driversOnDuty?.leadChauffeur ||
+                        (driverList.length > 0
+                          ? driverList[0].full_name
+                          : "None assigned")}
+                    </span>
                     <span className="text-secondary font-semibold">5.0 ★</span>
                   </div>
                 </div>
@@ -1185,7 +1208,9 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="text-xs text-on-surface-variant flex items-center justify-between mt-1">
                       <span>Driver: Segun Alabi</span>
-                      <span className="text-secondary font-medium">54 km/h</span>
+                      <span className="text-secondary font-medium">
+                        54 km/h
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1199,7 +1224,9 @@ export default function AdminDashboardPage() {
                   <div className="absolute left-7 -top-6 bg-surface-container-lowest/95 backdrop-blur-md rounded-xl p-3.5 shadow-xl w-64 border border-surface-container">
                     <div className="flex items-center justify-between text-xs font-semibold text-secondary">
                       <span>LP-02 • ACTIVE CHARTER</span>
-                      <span className="text-primary font-bold">VICTORIA ISLAND</span>
+                      <span className="text-primary font-bold">
+                        VICTORIA ISLAND
+                      </span>
                     </div>
                     <div className="text-sm text-primary font-semibold mt-1">
                       Range Rover Autobiography
@@ -1208,7 +1235,9 @@ export default function AdminDashboardPage() {
                       <span className="font-medium text-primary">
                         Dr. Adekunle Balogun
                       </span>
-                      <span className="text-secondary font-semibold">ETA: 17m</span>
+                      <span className="text-secondary font-semibold">
+                        ETA: 17m
+                      </span>
                     </div>
                     <div className="text-xs text-on-surface-variant flex items-center justify-between mt-0.5">
                       <span>Emmanuel Okafor</span>
@@ -1226,7 +1255,9 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="absolute right-6 -top-2 bg-surface-container-lowest/95 backdrop-blur-md rounded-xl p-3 shadow-xl w-56 text-right border border-surface-container">
                     <div className="flex items-center justify-between text-xs font-semibold text-secondary">
-                      <span className="text-primary font-bold">LP-01 • READY</span>
+                      <span className="text-primary font-bold">
+                        LP-01 • READY
+                      </span>
                       <span>IKOYI</span>
                     </div>
                     <div className="text-sm text-primary font-semibold mt-1">
@@ -1274,7 +1305,8 @@ export default function AdminDashboardPage() {
                     Executive Fleet Register ({fleetList.length} Units)
                   </h3>
                   <p className="text-xs text-on-surface-variant mt-0.5">
-                    Register new vehicles, set daily charter rates, manage armored specifications, and track fleet availability.
+                    Register new vehicles, set daily charter rates, manage
+                    armored specifications, and track fleet availability.
                   </p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -1297,7 +1329,15 @@ export default function AdminDashboardPage() {
                           : "text-on-surface-variant hover:text-primary"
                       }`}
                     >
-                      Active ({fleetList.filter((v) => v.status === "in_transit" || v.status === "reserved").length})
+                      Active (
+                      {
+                        fleetList.filter(
+                          (v) =>
+                            v.status === "in_transit" ||
+                            v.status === "reserved",
+                        ).length
+                      }
+                      )
                     </button>
                     <button
                       onClick={() => setFleetFilter("reserve")}
@@ -1307,14 +1347,18 @@ export default function AdminDashboardPage() {
                           : "text-on-surface-variant hover:text-primary"
                       }`}
                     >
-                      Available ({fleetList.filter((v) => v.status === "available").length})
+                      Available (
+                      {fleetList.filter((v) => v.status === "available").length}
+                      )
                     </button>
                   </div>
                   <button
                     onClick={handleOpenAddVehicle}
                     className="px-4 py-2 rounded-xl bg-primary hover:bg-secondary text-white text-xs font-semibold flex items-center gap-2 transition-all shadow-md active:scale-95 shrink-0"
                   >
-                    <span className="material-symbols-outlined text-base">add_circle</span>
+                    <span className="material-symbols-outlined text-base">
+                      add_circle
+                    </span>
                     <span>+ Add Vehicle</span>
                   </button>
                 </div>
@@ -1324,7 +1368,9 @@ export default function AdminDashboardPage() {
               {displayedFleet.length === 0 ? (
                 <div className="py-16 px-4 text-center rounded-xl bg-surface-container-low/40 border border-dashed border-surface-container flex flex-col items-center justify-center gap-3">
                   <div className="w-14 h-14 rounded-2xl bg-surface-container flex items-center justify-center text-secondary">
-                    <span className="material-symbols-outlined text-3xl">directions_car</span>
+                    <span className="material-symbols-outlined text-3xl">
+                      directions_car
+                    </span>
                   </div>
                   <h4 className="font-serif text-lg text-primary font-semibold">
                     No Vehicles Found
@@ -1338,7 +1384,9 @@ export default function AdminDashboardPage() {
                     onClick={handleOpenAddVehicle}
                     className="mt-2 px-4 py-2 rounded-xl bg-primary hover:bg-secondary text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
                   >
-                    <span className="material-symbols-outlined text-sm">add</span>
+                    <span className="material-symbols-outlined text-sm">
+                      add
+                    </span>
                     Register Vehicle
                   </button>
                 </div>
@@ -1354,16 +1402,22 @@ export default function AdminDashboardPage() {
                         <th className="py-3 px-4">Status</th>
                         <th className="py-3 px-4">Capacity</th>
                         <th className="py-3 px-4">Operational Hub</th>
-                        <th className="py-3 px-4 rounded-r-lg text-right">Actions</th>
+                        <th className="py-3 px-4 rounded-r-lg text-right">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-container/50">
                       {displayedFleet.map((v) => {
                         const vehicleBrand = v.brand || v.make || "";
-                        const vehiclePlate = v.license_plate || v.plate_number || "NO-PLATE";
-                        const vehicleName = v.name || `${vehicleBrand} ${v.model}`;
+                        const vehiclePlate =
+                          v.license_plate || v.plate_number || "NO-PLATE";
+                        const vehicleName =
+                          v.name || `${vehicleBrand} ${v.model}`;
                         const rateNgn = Number(v.daily_rate_ngn) || 0;
-                        const rateUsd = Number(v.daily_rate_usd) || Math.round(rateNgn / 1500);
+                        const rateUsd =
+                          Number(v.daily_rate_usd) ||
+                          Math.round(rateNgn / 1500);
 
                         return (
                           <tr
@@ -1380,7 +1434,9 @@ export default function AdminDashboardPage() {
                                       className="w-full h-full object-cover"
                                       onError={(e) => {
                                         // Fallback if image fails to load
-                                        (e.target as HTMLElement).style.display = "none";
+                                        (
+                                          e.target as HTMLElement
+                                        ).style.display = "none";
                                       }}
                                     />
                                   ) : (
@@ -1394,7 +1450,8 @@ export default function AdminDashboardPage() {
                                     {vehicleName}
                                   </span>
                                   <span className="text-[10px] text-on-surface-variant">
-                                    {v.year || 2024} • {v.color || "Obsidian Black"}
+                                    {v.year || 2024} •{" "}
+                                    {v.color || "Obsidian Black"}
                                   </span>
                                 </div>
                               </div>
@@ -1407,12 +1464,15 @@ export default function AdminDashboardPage() {
                                 <span className="font-medium text-primary">
                                   {v.category || "Executive"}
                                 </span>
-                                {v.armored_level && v.armored_level !== "None" && (
-                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold uppercase tracking-wider">
-                                    <span className="material-symbols-outlined text-[10px]">shield</span>
-                                    {v.armored_level}
-                                  </span>
-                                )}
+                                {v.armored_level &&
+                                  v.armored_level !== "None" && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold uppercase tracking-wider">
+                                      <span className="material-symbols-outlined text-[10px]">
+                                        shield
+                                      </span>
+                                      {v.armored_level}
+                                    </span>
+                                  )}
                               </div>
                             </td>
                             <td className="py-3.5 px-4">
@@ -1431,36 +1491,48 @@ export default function AdminDashboardPage() {
                                   v.status === "in_transit"
                                     ? "bg-secondary-container text-on-secondary-container"
                                     : v.status === "reserved"
-                                    ? "bg-amber-100 text-amber-800"
-                                    : v.status === "maintenance"
-                                    ? "bg-red-100 text-red-800"
-                                    : "bg-emerald-100 text-emerald-800"
+                                      ? "bg-amber-100 text-amber-800"
+                                      : v.status === "maintenance"
+                                        ? "bg-red-100 text-red-800"
+                                        : "bg-emerald-100 text-emerald-800"
                                 }`}
                               >
                                 <span className="w-1.5 h-1.5 rounded-full bg-current" />
                                 {v.status === "in_transit"
                                   ? "On Trip"
                                   : v.status === "reserved"
-                                  ? "Reserved"
-                                  : v.status === "maintenance"
-                                  ? "Maintenance"
-                                  : "Available"}
+                                    ? "Reserved"
+                                    : v.status === "maintenance"
+                                      ? "Maintenance"
+                                      : "Available"}
                               </span>
                             </td>
                             <td className="py-3.5 px-4 text-on-surface-variant">
                               <div className="flex items-center gap-2">
-                                <span title="Seats" className="flex items-center gap-0.5">
-                                  <span className="material-symbols-outlined text-xs">person</span>
+                                <span
+                                  title="Seats"
+                                  className="flex items-center gap-0.5"
+                                >
+                                  <span className="material-symbols-outlined text-xs">
+                                    person
+                                  </span>
                                   {v.seats || 4}
                                 </span>
-                                <span title="Luggage" className="flex items-center gap-0.5">
-                                  <span className="material-symbols-outlined text-xs">luggage</span>
+                                <span
+                                  title="Luggage"
+                                  className="flex items-center gap-0.5"
+                                >
+                                  <span className="material-symbols-outlined text-xs">
+                                    luggage
+                                  </span>
                                   {v.luggage_capacity || 4}
                                 </span>
                               </div>
                             </td>
                             <td className="py-3.5 px-4 text-on-surface-variant max-w-[140px] truncate">
-                              {v.current_location_name || v.current_hub || "Victoria Island Hub"}
+                              {v.current_location_name ||
+                                v.current_hub ||
+                                "Victoria Island Hub"}
                             </td>
                             <td className="py-3.5 px-4 text-right">
                               <div className="flex items-center justify-end gap-1.5">
@@ -1469,15 +1541,21 @@ export default function AdminDashboardPage() {
                                   className="p-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-primary transition-colors"
                                   title="Edit Vehicle"
                                 >
-                                  <span className="material-symbols-outlined text-base">edit</span>
+                                  <span className="material-symbols-outlined text-base">
+                                    edit
+                                  </span>
                                 </button>
                                 <button
                                   disabled={deletingVehicleId === v.id}
-                                  onClick={() => handleDeleteVehicle(v.id, vehicleName)}
+                                  onClick={() =>
+                                    handleDeleteVehicle(v.id, vehicleName)
+                                  }
                                   className="p-1.5 rounded-lg bg-surface-container-low hover:bg-red-50 text-on-surface-variant hover:text-red-700 transition-colors disabled:opacity-50"
                                   title="Delete Vehicle"
                                 >
-                                  <span className="material-symbols-outlined text-base">delete</span>
+                                  <span className="material-symbols-outlined text-base">
+                                    delete
+                                  </span>
                                 </button>
                               </div>
                             </td>
@@ -1659,7 +1737,8 @@ export default function AdminDashboardPage() {
                     Driver Management
                   </span>
                   <h3 className="font-serif text-xl text-primary font-semibold">
-                    Chauffeur Duty Roster ({driverList.length} Active Chauffeurs)
+                    Chauffeur Duty Roster ({driverList.length} Active
+                    Chauffeurs)
                   </h3>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1671,7 +1750,9 @@ export default function AdminDashboardPage() {
                     }}
                     className="px-3.5 py-1.5 rounded-lg bg-primary hover:bg-secondary text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
                   >
-                    <span className="material-symbols-outlined text-sm">person_add</span>
+                    <span className="material-symbols-outlined text-sm">
+                      person_add
+                    </span>
                     <span>+ Add Chauffeur</span>
                   </button>
                   <button
@@ -1685,9 +1766,16 @@ export default function AdminDashboardPage() {
 
               {driverList.length === 0 ? (
                 <div className="py-12 px-4 text-center rounded-xl bg-surface-container-low/40 border border-dashed border-surface-container flex flex-col items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-3xl text-secondary">badge</span>
-                  <h4 className="font-serif text-base text-primary font-semibold">No Chauffeurs On Roster</h4>
-                  <p className="text-xs text-on-surface-variant">Click '+ Add Chauffeur' to recruit and vet your first executive driver.</p>
+                  <span className="material-symbols-outlined text-3xl text-secondary">
+                    badge
+                  </span>
+                  <h4 className="font-serif text-base text-primary font-semibold">
+                    No Chauffeurs On Roster
+                  </h4>
+                  <p className="text-xs text-on-surface-variant">
+                    Click '+ Add Chauffeur' to recruit and vet your first
+                    executive driver.
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1718,7 +1806,9 @@ export default function AdminDashboardPage() {
                           className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-on-surface-variant hover:text-red-700 hover:bg-red-50 transition-all"
                           title="Remove Chauffeur"
                         >
-                          <span className="material-symbols-outlined text-base">delete</span>
+                          <span className="material-symbols-outlined text-base">
+                            delete
+                          </span>
                         </button>
                       </div>
                       <div className="text-xs text-on-surface-variant space-y-1">
@@ -1745,7 +1835,9 @@ export default function AdminDashboardPage() {
                           </span>
                           Call
                         </a>
-                        <span className="text-primary font-mono">{d.badge_number || "CH-400"}</span>
+                        <span className="text-primary font-mono">
+                          {d.badge_number || "CH-400"}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -1766,7 +1858,10 @@ export default function AdminDashboardPage() {
                     Client Membership &amp; VIP Status Administration
                   </h3>
                   <p className="text-xs text-on-surface-variant mt-1 max-w-2xl">
-                    Newly registered users default to <strong>Member</strong> status. Only fleet administrators can promote clients to VIP tiers based on annual charters and security profile requirements.
+                    Newly registered users default to <strong>Member</strong>{" "}
+                    status. Only fleet administrators can promote clients to VIP
+                    tiers based on annual charters and security profile
+                    requirements.
                   </p>
                 </div>
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
@@ -1802,7 +1897,9 @@ export default function AdminDashboardPage() {
                           <td className="py-3.5 px-4 font-semibold text-primary">
                             <div className="flex items-center gap-2.5">
                               <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center font-bold text-xs text-primary">
-                                {u.full_name ? u.full_name.charAt(0).toUpperCase() : "M"}
+                                {u.full_name
+                                  ? u.full_name.charAt(0).toUpperCase()
+                                  : "M"}
                               </div>
                               <div className="flex flex-col">
                                 <span className="font-medium text-primary">
@@ -1815,7 +1912,11 @@ export default function AdminDashboardPage() {
                             </div>
                           </td>
                           <td className="py-3.5 px-4 font-mono text-on-surface">
-                            {u.phone || <span className="text-on-surface-variant italic">No phone yet</span>}
+                            {u.phone || (
+                              <span className="text-on-surface-variant italic">
+                                No phone yet
+                              </span>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 text-on-surface-variant">
                             {u.email}
@@ -1823,25 +1924,27 @@ export default function AdminDashboardPage() {
                           <td className="py-3.5 px-4">
                             <span
                               className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                currentTier === "standard" || currentTier === "member"
+                                currentTier === "standard" ||
+                                currentTier === "member"
                                   ? "bg-surface-container text-on-surface"
                                   : currentTier === "executive"
-                                  ? "bg-secondary-fixed text-on-secondary-fixed"
-                                  : currentTier === "first_class"
-                                  ? "bg-amber-100 text-amber-900"
-                                  : "bg-purple-100 text-purple-900"
+                                    ? "bg-secondary-fixed text-on-secondary-fixed"
+                                    : currentTier === "first_class"
+                                      ? "bg-amber-100 text-amber-900"
+                                      : "bg-purple-100 text-purple-900"
                               }`}
                             >
                               <span className="material-symbols-outlined text-xs">
                                 verified
                               </span>
-                              {currentTier === "standard" || currentTier === "member"
+                              {currentTier === "standard" ||
+                              currentTier === "member"
                                 ? "Member"
                                 : currentTier === "executive"
-                                ? "VIP Executive"
-                                : currentTier === "first_class"
-                                ? "VIP First Class"
-                                : "VIP Diplomatic"}
+                                  ? "VIP Executive"
+                                  : currentTier === "first_class"
+                                    ? "VIP First Class"
+                                    : "VIP Diplomatic"}
                             </span>
                           </td>
                           <td className="py-3.5 px-4 text-right">
@@ -1849,13 +1952,21 @@ export default function AdminDashboardPage() {
                               <select
                                 disabled={updatingUserId === u.id}
                                 value={currentTier}
-                                onChange={(e) => handleUpdateTier(u.id, e.target.value)}
+                                onChange={(e) =>
+                                  handleUpdateTier(u.id, e.target.value)
+                                }
                                 className="h-8 px-2.5 rounded-lg bg-surface-container-low border border-surface-container text-xs font-semibold text-primary focus:outline-none focus:border-secondary cursor-pointer disabled:opacity-50"
                               >
-                                <option value="standard">Member (Default)</option>
+                                <option value="standard">
+                                  Member (Default)
+                                </option>
                                 <option value="executive">VIP Executive</option>
-                                <option value="first_class">VIP First Class</option>
-                                <option value="diplomatic">VIP Diplomatic</option>
+                                <option value="first_class">
+                                  VIP First Class
+                                </option>
+                                <option value="diplomatic">
+                                  VIP Diplomatic
+                                </option>
                               </select>
                               {vipFeedback && vipFeedback.id === u.id && (
                                 <span className="text-[11px] font-medium text-emerald-700 animate-in fade-in">
@@ -1902,7 +2013,9 @@ export default function AdminDashboardPage() {
                     <span className="material-symbols-outlined text-xs">
                       trending_up
                     </span>{" "}
-                    {paymentLogs.length > 0 ? "+14.2% month-on-month" : "Awaiting Settlements"}
+                    {paymentLogs.length > 0
+                      ? "+14.2% month-on-month"
+                      : "Awaiting Settlements"}
                   </span>
                 </div>
                 <div className="p-4 rounded-xl bg-surface-container-low flex flex-col gap-1">
@@ -1949,25 +2062,35 @@ export default function AdminDashboardPage() {
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-surface-container-low border-b border-surface-container text-on-surface-variant uppercase tracking-wider text-[11px]">
-                        <th className="py-3 px-4 font-semibold">Payment Ref / Code</th>
+                        <th className="py-3 px-4 font-semibold">
+                          Payment Ref / Code
+                        </th>
                         <th className="py-3 px-4 font-semibold">Customer</th>
                         <th className="py-3 px-4 font-semibold">Vehicle</th>
                         <th className="py-3 px-4 font-semibold">Channel</th>
                         <th className="py-3 px-4 font-semibold">Amount</th>
                         <th className="py-3 px-4 font-semibold">Status</th>
-                        <th className="py-3 px-4 font-semibold text-right">Settled At</th>
+                        <th className="py-3 px-4 font-semibold text-right">
+                          Settled At
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-y-surface-container text-primary">
                       {paymentLogs.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="py-6 text-center text-on-surface-variant">
+                          <td
+                            colSpan={7}
+                            className="py-6 text-center text-on-surface-variant"
+                          >
                             No payment transactions recorded yet.
                           </td>
                         </tr>
                       ) : (
                         paymentLogs.map((log) => (
-                          <tr key={log.id} className="hover:bg-surface-container-low/50 transition-colors">
+                          <tr
+                            key={log.id}
+                            className="hover:bg-surface-container-low/50 transition-colors"
+                          >
                             <td className="py-3 px-4">
                               <div className="flex flex-col">
                                 <span className="font-mono font-semibold text-secondary">
@@ -1994,17 +2117,22 @@ export default function AdminDashboardPage() {
                             <td className="py-3 px-4">
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container text-on-surface text-[10px] uppercase font-semibold">
                                 <span className="material-symbols-outlined text-xs text-secondary">
-                                  {log.channel === "card" ? "credit_card" : "account_balance"}
+                                  {log.channel === "card"
+                                    ? "credit_card"
+                                    : "account_balance"}
                                 </span>
                                 {log.channel || "card"}
                               </span>
                             </td>
                             <td className="py-3 px-4 font-mono font-bold text-primary">
-                              {log.amount_formatted || `₦${Number(log.amount).toLocaleString()}`}
+                              {log.amount_formatted ||
+                                `₦${Number(log.amount).toLocaleString()}`}
                             </td>
                             <td className="py-3 px-4">
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
-                                <span className="material-symbols-outlined text-xs">check_circle</span>
+                                <span className="material-symbols-outlined text-xs">
+                                  check_circle
+                                </span>
                                 Settled
                               </span>
                             </td>
@@ -2035,18 +2163,9 @@ export default function AdminDashboardPage() {
                 La Planta Fleet Command Console
               </span>
               <span>•</span>
-              <span>Version 2.4 (Lagos &amp; Abuja Dispatch)</span>
             </div>
             <div className="flex items-center gap-4">
               <span>&copy; 2026 La Planta Luxury Car Hire Ltd.</span>
-              <a
-                href="http://localhost:3000"
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-primary transition-colors underline"
-              >
-                Public Website (:3000)
-              </a>
             </div>
           </div>
         </footer>
@@ -2082,10 +2201,15 @@ export default function AdminDashboardPage() {
                 <span className="material-symbols-outlined text-emerald-600">
                   check_circle
                 </span>
-                <span>Broadcast message dispatched to 14 active chauffeurs!</span>
+                <span>
+                  Broadcast message dispatched to 14 active chauffeurs!
+                </span>
               </div>
             ) : (
-              <form onSubmit={handleSendBroadcast} className="flex flex-col gap-4 text-xs">
+              <form
+                onSubmit={handleSendBroadcast}
+                className="flex flex-col gap-4 text-xs"
+              >
                 <div className="flex flex-col gap-1.5">
                   <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
                     Target Operational Corridor
@@ -2142,11 +2266,15 @@ export default function AdminDashboardPage() {
             <div className="flex items-center justify-between pb-3 border-b border-surface-container sticky top-0 bg-surface-container-lowest z-10">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-primary text-secondary-fixed flex items-center justify-center">
-                  <span className="material-symbols-outlined text-lg">directions_car</span>
+                  <span className="material-symbols-outlined text-lg">
+                    directions_car
+                  </span>
                 </div>
                 <div>
                   <h3 className="font-serif text-lg text-primary font-semibold">
-                    {editingVehicle ? "Edit Vehicle Details" : "Register New Automobile"}
+                    {editingVehicle
+                      ? "Edit Vehicle Details"
+                      : "Register New Automobile"}
                   </h3>
                   <p className="text-[11px] text-on-surface-variant">
                     {editingVehicle
@@ -2168,12 +2296,17 @@ export default function AdminDashboardPage() {
 
             {vehicleFormError && (
               <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs flex items-center gap-2 font-medium">
-                <span className="material-symbols-outlined text-red-600 text-base">error</span>
+                <span className="material-symbols-outlined text-red-600 text-base">
+                  error
+                </span>
                 <span>{vehicleFormError}</span>
               </div>
             )}
 
-            <form onSubmit={handleSaveVehicle} className="flex flex-col gap-4 text-xs">
+            <form
+              onSubmit={handleSaveVehicle}
+              className="flex flex-col gap-4 text-xs"
+            >
               {/* Row 1: Brand, Model, Year */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="flex flex-col gap-1">
@@ -2184,7 +2317,12 @@ export default function AdminDashboardPage() {
                     type="text"
                     required
                     value={vehicleFormData.brand}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, brand: e.target.value })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        brand: e.target.value,
+                      })
+                    }
                     placeholder="e.g. Mercedes-Benz, Land Rover"
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   />
@@ -2197,7 +2335,12 @@ export default function AdminDashboardPage() {
                     type="text"
                     required
                     value={vehicleFormData.model}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, model: e.target.value })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        model: e.target.value,
+                      })
+                    }
                     placeholder="e.g. Maybach S 580, Autobiography"
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   />
@@ -2211,7 +2354,12 @@ export default function AdminDashboardPage() {
                     min={2020}
                     max={2030}
                     value={vehicleFormData.year}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, year: Number(e.target.value) })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        year: Number(e.target.value),
+                      })
+                    }
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   />
                 </div>
@@ -2227,7 +2375,12 @@ export default function AdminDashboardPage() {
                     type="text"
                     required
                     value={vehicleFormData.license_plate}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, license_plate: e.target.value.toUpperCase() })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        license_plate: e.target.value.toUpperCase(),
+                      })
+                    }
                     placeholder="e.g. LAG-892-XZ"
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-mono font-bold text-secondary focus:outline-none focus:border-secondary"
                   />
@@ -2239,7 +2392,12 @@ export default function AdminDashboardPage() {
                   <input
                     type="text"
                     value={vehicleFormData.color}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, color: e.target.value })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        color: e.target.value,
+                      })
+                    }
                     placeholder="e.g. Obsidian Black, Santorini Black"
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   />
@@ -2250,7 +2408,12 @@ export default function AdminDashboardPage() {
                   </label>
                   <select
                     value={vehicleFormData.transmission}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, transmission: e.target.value })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        transmission: e.target.value,
+                      })
+                    }
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   >
                     <option value="Automatic">Automatic</option>
@@ -2267,11 +2430,18 @@ export default function AdminDashboardPage() {
                   </label>
                   <select
                     value={vehicleFormData.category}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, category: e.target.value })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        category: e.target.value,
+                      })
+                    }
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   >
                     <option value="Executive SUV">Executive SUV</option>
-                    <option value="Ultra-Luxury Sedan">Ultra-Luxury Sedan</option>
+                    <option value="Ultra-Luxury Sedan">
+                      Ultra-Luxury Sedan
+                    </option>
                     <option value="Armored Transport">Armored Transport</option>
                     <option value="VIP Minivan">VIP Minivan</option>
                   </select>
@@ -2282,12 +2452,21 @@ export default function AdminDashboardPage() {
                   </label>
                   <select
                     value={vehicleFormData.armored_level}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, armored_level: e.target.value })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        armored_level: e.target.value,
+                      })
+                    }
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   >
                     <option value="None">None (Standard Luxury)</option>
-                    <option value="B6 Ballistic">B6 Ballistic (AK-47 / 7.62mm Protection)</option>
-                    <option value="B7 VR7">B7 VR7 (Maximum Armor Defense)</option>
+                    <option value="B6 Ballistic">
+                      B6 Ballistic (AK-47 / 7.62mm Protection)
+                    </option>
+                    <option value="B7 VR7">
+                      B7 VR7 (Maximum Armor Defense)
+                    </option>
                   </select>
                 </div>
                 <div className="flex flex-col gap-1">
@@ -2296,13 +2475,22 @@ export default function AdminDashboardPage() {
                   </label>
                   <select
                     value={vehicleFormData.status}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, status: e.target.value })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        status: e.target.value,
+                      })
+                    }
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   >
                     <option value="available">Available (In Yard)</option>
-                    <option value="reserved">Reserved (Upcoming Charter)</option>
+                    <option value="reserved">
+                      Reserved (Upcoming Charter)
+                    </option>
                     <option value="in_transit">On Trip (Active Charter)</option>
-                    <option value="maintenance">Maintenance (Service Bay)</option>
+                    <option value="maintenance">
+                      Maintenance (Service Bay)
+                    </option>
                   </select>
                 </div>
               </div>
@@ -2337,7 +2525,12 @@ export default function AdminDashboardPage() {
                   <input
                     type="number"
                     value={vehicleFormData.daily_rate_usd}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, daily_rate_usd: Number(e.target.value) })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        daily_rate_usd: Number(e.target.value),
+                      })
+                    }
                     placeholder="e.g. 380"
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-mono font-medium text-primary focus:outline-none focus:border-secondary"
                   />
@@ -2349,7 +2542,12 @@ export default function AdminDashboardPage() {
                   <input
                     type="text"
                     value={vehicleFormData.current_location_name}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, current_location_name: e.target.value })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        current_location_name: e.target.value,
+                      })
+                    }
                     placeholder="e.g. Victoria Island Operations Hub"
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   />
@@ -2367,7 +2565,12 @@ export default function AdminDashboardPage() {
                     min={1}
                     max={15}
                     value={vehicleFormData.seats}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, seats: Number(e.target.value) })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        seats: Number(e.target.value),
+                      })
+                    }
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   />
                 </div>
@@ -2380,52 +2583,228 @@ export default function AdminDashboardPage() {
                     min={1}
                     max={15}
                     value={vehicleFormData.luggage_capacity}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, luggage_capacity: Number(e.target.value) })}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        luggage_capacity: Number(e.target.value),
+                      })
+                    }
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   />
                 </div>
               </div>
 
-              {/* Row 6: Hero Image URL */}
-              <div className="flex flex-col gap-1">
-                <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
-                  Hero / Primary Image URL
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={vehicleFormData.hero_image_url}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, hero_image_url: e.target.value })}
-                    placeholder="https://images.unsplash.com/... or direct image link"
-                    className="flex-1 h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
-                  />
-                  {vehicleFormData.hero_image_url && (
-                    <div className="w-10 h-10 rounded-lg overflow-hidden border border-surface-container shrink-0 bg-surface-container">
-                      <img
-                        src={vehicleFormData.hero_image_url}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = "none";
-                        }}
-                      />
-                    </div>
-                  )}
+              {/* Image Upload Error Notice */}
+              {imageUploadError && (
+                <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-xs flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm">
+                    error
+                  </span>
+                  <span>{imageUploadError}</span>
                 </div>
+              )}
+
+              {/* Row 6: Hero / Primary Image Direct Upload */}
+              <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-surface-container-low/70 border border-surface-container">
+                <div className="flex items-center justify-between">
+                  <label className="text-primary uppercase font-bold text-[11px] flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-secondary text-base">
+                      photo_camera
+                    </span>
+                    Hero / Primary Vehicle Photo
+                  </label>
+                  <span className="text-[10px] text-on-surface-variant font-medium">
+                    Displayed on catalog cards &amp; headers
+                  </span>
+                </div>
+
+                {/* Upload from Laptop Button & Preview */}
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    id="hero-file-input"
+                    className="hidden"
+                    onChange={handleHeroUpload}
+                    disabled={isUploadingHero}
+                  />
+
+                  <label
+                    htmlFor="hero-file-input"
+                    className={`cursor-pointer px-4 py-2.5 rounded-xl border-2 border-dashed border-secondary/40 hover:border-secondary bg-surface-container-lowest flex items-center gap-2.5 text-xs font-semibold text-primary transition-all shadow-sm ${
+                      isUploadingHero ? "opacity-50 pointer-events-none" : ""
+                    }`}
+                  >
+                    {isUploadingHero ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span>Uploading from Device...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-secondary text-base">
+                          upload_file
+                        </span>
+                        <span>Upload Photo from Laptop</span>
+                      </>
+                    )}
+                  </label>
+
+                  {/* Or Direct URL Input */}
+                  <div className="flex-1 w-full flex items-center gap-2">
+                    <input
+                      type="url"
+                      value={vehicleFormData.hero_image_url}
+                      onChange={(e) =>
+                        setVehicleFormData({
+                          ...vehicleFormData,
+                          hero_image_url: e.target.value,
+                        })
+                      }
+                      placeholder="Or paste external photo URL..."
+                      className="w-full h-10 px-3 rounded-xl bg-surface-container-lowest border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
+                    />
+                    {vehicleFormData.hero_image_url && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVehicleFormData({
+                            ...vehicleFormData,
+                            hero_image_url: "",
+                          })
+                        }
+                        className="px-2 py-1 text-[10px] text-destructive hover:underline shrink-0"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Thumbnail Preview */}
+                {vehicleFormData.hero_image_url && (
+                  <div className="relative w-full h-32 rounded-xl overflow-hidden border border-surface-container bg-surface-container mt-1 group">
+                    <img
+                      src={vehicleFormData.hero_image_url}
+                      alt="Hero Preview"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-white flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      Primary Photo Active
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Row 7: Gallery Images */}
-              <div className="flex flex-col gap-1">
-                <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
-                  Gallery Image URLs (One URL per line for the Lightbox Gallery)
-                </label>
-                <textarea
-                  rows={3}
-                  value={vehicleFormData.gallery_image_urls}
-                  onChange={(e) => setVehicleFormData({ ...vehicleFormData, gallery_image_urls: e.target.value })}
-                  placeholder={"https://example.com/interior.jpg\nhttps://example.com/rear-cabin.jpg\nhttps://example.com/luggage.jpg"}
-                  className="w-full p-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-mono focus:outline-none focus:border-secondary"
-                />
+              {/* Row 7: Gallery Images Direct Upload (Multiple Files) */}
+              <div className="flex flex-col gap-2.5 p-3.5 rounded-xl bg-surface-container-low/70 border border-surface-container">
+                <div className="flex items-center justify-between">
+                  <label className="text-primary uppercase font-bold text-[11px] flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-secondary text-base">
+                      collections
+                    </span>
+                    Vehicle Gallery Photos (Multi-Angle &amp; Interior)
+                  </label>
+                  <span className="text-[10px] text-secondary font-semibold">
+                    {vehicleFormData.gallery_image_urls
+                      ? `${vehicleFormData.gallery_image_urls.split("\n").filter((s) => s.trim().length > 0).length} Photos Attached`
+                      : "0 Photos"}
+                  </span>
+                </div>
+
+                {/* Direct File Picker (Multiple) */}
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    id="gallery-file-input"
+                    className="hidden"
+                    onChange={handleGalleryUpload}
+                    disabled={isUploadingGallery}
+                  />
+
+                  <label
+                    htmlFor="gallery-file-input"
+                    className={`cursor-pointer px-4 py-2.5 rounded-xl border-2 border-dashed border-secondary/40 hover:border-secondary bg-surface-container-lowest flex items-center gap-2.5 text-xs font-semibold text-primary transition-all shadow-sm ${
+                      isUploadingGallery ? "opacity-50 pointer-events-none" : ""
+                    }`}
+                  >
+                    {isUploadingGallery ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-secondary border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span>Uploading Selected Photos...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-secondary text-base">
+                          add_photo_alternate
+                        </span>
+                        <span>Upload Multiple Photos from Laptop</span>
+                      </>
+                    )}
+                  </label>
+
+                  <span className="text-[11px] text-on-surface-variant">
+                    Select 2–8 images (e.g. side angles, dashboard, rear
+                    executive lounge, trunk)
+                  </span>
+                </div>
+
+                {/* Gallery Thumbnails Grid with Delete (✕) on each */}
+                {vehicleFormData.gallery_image_urls &&
+                  vehicleFormData.gallery_image_urls
+                    .split("\n")
+                    .filter((s) => s.trim().length > 0).length > 0 && (
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-1">
+                      {vehicleFormData.gallery_image_urls
+                        .split("\n")
+                        .filter((s) => s.trim().length > 0)
+                        .map((url, idx) => (
+                          <div
+                            key={idx}
+                            className="relative group h-20 rounded-lg overflow-hidden border border-surface-container bg-surface-container"
+                          >
+                            <img
+                              src={url.trim()}
+                              alt={`Gallery ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveGalleryImage(idx)}
+                              title="Remove Photo"
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/80 hover:bg-destructive text-white flex items-center justify-center transition-colors shadow-md text-xs font-bold"
+                            >
+                              ✕
+                            </button>
+                            <span className="absolute bottom-1 left-1 px-1 py-0.2 rounded bg-black/60 text-[9px] text-white">
+                              #{idx + 1}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
+                {/* Collapsible raw URLs textarea for advanced editing */}
+                <details className="text-[10px] text-on-surface-variant pt-1 cursor-pointer">
+                  <summary className="hover:text-primary transition-colors">
+                    Advanced: View or paste raw image URLs
+                  </summary>
+                  <textarea
+                    rows={2}
+                    value={vehicleFormData.gallery_image_urls}
+                    onChange={(e) =>
+                      setVehicleFormData({
+                        ...vehicleFormData,
+                        gallery_image_urls: e.target.value,
+                      })
+                    }
+                    placeholder="https://example.com/photo1.jpg&#10;https://example.com/photo2.jpg"
+                    className="w-full p-2.5 rounded-xl bg-surface-container-lowest border border-surface-container text-[11px] font-mono mt-1.5 focus:outline-none focus:border-secondary"
+                  />
+                </details>
               </div>
 
               {/* Row 8: Features */}
@@ -2436,7 +2815,12 @@ export default function AdminDashboardPage() {
                 <input
                   type="text"
                   value={vehicleFormData.features}
-                  onChange={(e) => setVehicleFormData({ ...vehicleFormData, features: e.target.value })}
+                  onChange={(e) =>
+                    setVehicleFormData({
+                      ...vehicleFormData,
+                      features: e.target.value,
+                    })
+                  }
                   placeholder="Starlink Wi-Fi, Executive Rear Seating, Chilled Console, Privacy Glass, Massage Seats"
                   className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                 />
@@ -2462,8 +2846,8 @@ export default function AdminDashboardPage() {
                   {isSubmittingVehicle
                     ? "Saving Vehicle..."
                     : editingVehicle
-                    ? "Save Changes"
-                    : "Register Automobile"}
+                      ? "Save Changes"
+                      : "Register Automobile"}
                 </button>
               </div>
             </form>
@@ -2482,7 +2866,9 @@ export default function AdminDashboardPage() {
             <div className="flex items-center justify-between pb-3 border-b border-surface-container">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-primary text-secondary-fixed flex items-center justify-center">
-                  <span className="material-symbols-outlined text-lg">person_add</span>
+                  <span className="material-symbols-outlined text-lg">
+                    person_add
+                  </span>
                 </div>
                 <div>
                   <h3 className="font-serif text-lg text-primary font-semibold">
@@ -2507,7 +2893,10 @@ export default function AdminDashboardPage() {
               </div>
             )}
 
-            <form onSubmit={handleCreateDriver} className="flex flex-col gap-4 text-xs">
+            <form
+              onSubmit={handleCreateDriver}
+              className="flex flex-col gap-4 text-xs"
+            >
               <div className="flex flex-col gap-1">
                 <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
                   Full Name *
@@ -2516,7 +2905,12 @@ export default function AdminDashboardPage() {
                   type="text"
                   required
                   value={driverFormData.full_name}
-                  onChange={(e) => setDriverFormData({ ...driverFormData, full_name: e.target.value })}
+                  onChange={(e) =>
+                    setDriverFormData({
+                      ...driverFormData,
+                      full_name: e.target.value,
+                    })
+                  }
                   placeholder="e.g. Segun Alabi"
                   className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                 />
@@ -2531,7 +2925,12 @@ export default function AdminDashboardPage() {
                     type="tel"
                     required
                     value={driverFormData.phone}
-                    onChange={(e) => setDriverFormData({ ...driverFormData, phone: e.target.value })}
+                    onChange={(e) =>
+                      setDriverFormData({
+                        ...driverFormData,
+                        phone: e.target.value,
+                      })
+                    }
                     placeholder="+234 803 000 0000"
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   />
@@ -2543,7 +2942,12 @@ export default function AdminDashboardPage() {
                   <input
                     type="text"
                     value={driverFormData.badge_number}
-                    onChange={(e) => setDriverFormData({ ...driverFormData, badge_number: e.target.value })}
+                    onChange={(e) =>
+                      setDriverFormData({
+                        ...driverFormData,
+                        badge_number: e.target.value,
+                      })
+                    }
                     placeholder="e.g. CH-408"
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-mono font-medium text-primary focus:outline-none focus:border-secondary"
                   />
@@ -2558,7 +2962,12 @@ export default function AdminDashboardPage() {
                   type="text"
                   required
                   value={driverFormData.license_number}
-                  onChange={(e) => setDriverFormData({ ...driverFormData, license_number: e.target.value })}
+                  onChange={(e) =>
+                    setDriverFormData({
+                      ...driverFormData,
+                      license_number: e.target.value,
+                    })
+                  }
                   placeholder="e.g. DL-LA-992140"
                   className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-mono text-primary focus:outline-none focus:border-secondary"
                 />
@@ -2570,12 +2979,23 @@ export default function AdminDashboardPage() {
                 </label>
                 <select
                   value={driverFormData.security_clearance_level}
-                  onChange={(e) => setDriverFormData({ ...driverFormData, security_clearance_level: e.target.value })}
+                  onChange={(e) =>
+                    setDriverFormData({
+                      ...driverFormData,
+                      security_clearance_level: e.target.value,
+                    })
+                  }
                   className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                 >
-                  <option value="Airside VIP & Diplomatic Escort">Airside VIP &amp; Diplomatic Escort</option>
-                  <option value="Executive Chauffeur Certified">Executive Chauffeur Certified</option>
-                  <option value="Defensive Armed Escort">Defensive Armed Escort</option>
+                  <option value="Airside VIP & Diplomatic Escort">
+                    Airside VIP &amp; Diplomatic Escort
+                  </option>
+                  <option value="Executive Chauffeur Certified">
+                    Executive Chauffeur Certified
+                  </option>
+                  <option value="Defensive Armed Escort">
+                    Defensive Armed Escort
+                  </option>
                 </select>
               </div>
 
@@ -2602,4 +3022,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-

@@ -2,17 +2,32 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/context/auth-context";
 
 export default function HomePage() {
+  const router = useRouter();
+  const { user, openAuthModal } = useAuth();
   const [pickupType, setPickupType] = useState<"office" | "delivery">("office");
   const [flightTracking, setFlightTracking] = useState(true);
   const [selectedCity, setSelectedCity] = useState(
     "Lagos (VI, Ikoyi, Lekki & Airport)",
   );
+
+  const handleReserve = (destination = "/checkout") => {
+    if (user) {
+      router.push(destination);
+    } else {
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("laPlanta_intended_destination", destination);
+      }
+      openAuthModal();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">
@@ -319,12 +334,13 @@ export default function HomePage() {
                       >
                         Details
                       </Link>
-                      <Link
-                        href="/checkout"
-                        className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-secondary text-xs uppercase tracking-wider font-semibold transition-colors"
+                      <button
+                        type="button"
+                        onClick={() => handleReserve("/checkout")}
+                        className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-secondary text-xs uppercase tracking-wider font-semibold transition-colors cursor-pointer"
                       >
                         Reserve
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 </CardContent>
@@ -406,12 +422,13 @@ export default function HomePage() {
                       >
                         Details
                       </Link>
-                      <Link
-                        href="/checkout"
-                        className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-secondary text-xs uppercase tracking-wider font-semibold transition-colors"
+                      <button
+                        type="button"
+                        onClick={() => handleReserve("/checkout")}
+                        className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-secondary text-xs uppercase tracking-wider font-semibold transition-colors cursor-pointer"
                       >
                         Reserve
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 </CardContent>
@@ -493,12 +510,13 @@ export default function HomePage() {
                       >
                         Details
                       </Link>
-                      <Link
-                        href="/checkout"
-                        className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-secondary text-xs uppercase tracking-wider font-semibold transition-colors"
+                      <button
+                        type="button"
+                        onClick={() => handleReserve("/checkout")}
+                        className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-secondary text-xs uppercase tracking-wider font-semibold transition-colors cursor-pointer"
                       >
                         Reserve
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 </CardContent>

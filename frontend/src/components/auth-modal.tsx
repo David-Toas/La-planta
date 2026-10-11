@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 
 export function AuthModal() {
+  const router = useRouter();
   const {
     isAuthModalOpen,
     closeAuthModal,
@@ -15,9 +17,9 @@ export function AuthModal() {
 
   const [activeTab, setActiveTab] = useState<"signin" | "signup">("signin");
 
-  // Sign In form fields
-  const [signInEmail, setSignInEmail] = useState("a.balogun@executivecorp.ng");
-  const [signInPassword, setSignInPassword] = useState("client123456");
+  // Sign In form fields (clean start)
+  const [signInEmail, setSignInEmail] = useState("");
+  const [signInPassword, setSignInPassword] = useState("");
   const [showSignInPassword, setShowSignInPassword] = useState(false);
 
   // Sign Up form fields
@@ -95,6 +97,13 @@ export function AuthModal() {
       setTimeout(() => {
         setAlertMessage(null);
         closeAuthModal();
+        if (typeof window !== "undefined") {
+          const redirectUrl = sessionStorage.getItem("laPlanta_intended_destination");
+          if (redirectUrl) {
+            sessionStorage.removeItem("laPlanta_intended_destination");
+            router.push(redirectUrl);
+          }
+        }
       }, 500);
     } else {
       setAlertMessage({
@@ -140,12 +149,19 @@ export function AuthModal() {
     if (res.success) {
       setAlertMessage({
         type: "success",
-        text: "Account registered successfully! Check your email for confirmation if required.",
+        text: "Account registered successfully! Proceeding to your reservation...",
       });
       setTimeout(() => {
         setAlertMessage(null);
         closeAuthModal();
-      }, 900);
+        if (typeof window !== "undefined") {
+          const redirectUrl = sessionStorage.getItem("laPlanta_intended_destination");
+          if (redirectUrl) {
+            sessionStorage.removeItem("laPlanta_intended_destination");
+            router.push(redirectUrl);
+          }
+        }
+      }, 700);
     } else {
       setAlertMessage({
         type: "error",
