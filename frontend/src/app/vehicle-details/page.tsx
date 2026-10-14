@@ -25,7 +25,7 @@ export default function VehicleDetailsPage() {
   return (
     <div className="min-h-screen bg-surface flex flex-col">
       <Navbar />
-<main className="w-full pt-20 bg-surface min-h-[calc(100vh-80px)]"><div className="flex flex-col w-full">
+<main className="w-full pt-16 lg:pt-20 bg-surface min-h-[calc(100vh-80px)]"><div className="flex flex-col w-full">
 <div className="max-w-7xl mx-auto px-6 lg:px-12 py-10 w-full">
 {/*  Top Breadcrumbs & Classification Meta  */}
 <nav className="flex items-center gap-2 mb-6">
@@ -344,6 +344,28 @@ export default function VehicleDetailsPage() {
 </div>
 </div>
 </main>
+
+      {/* Mobile Sticky Booking Bar (Visible only on mobile, sits above bottom dock) */}
+      <div className="fixed bottom-14 left-0 right-0 z-40 lg:hidden p-3 bg-[#0a0d14]/95 backdrop-blur-xl border-t border-white/[0.08] shadow-[0_-8px_20px_rgba(0,0,0,0.5)] flex items-center justify-between gap-3 px-4">
+        <div className="flex flex-col">
+          <span className="text-[10px] uppercase font-bold tracking-widest text-secondary">
+            Daily Charter
+          </span>
+          <div className="flex items-baseline gap-1">
+            <span className="text-lg font-bold text-white font-serif">₦620,000</span>
+            <span className="text-[10px] text-stone-400">/day</span>
+          </div>
+        </div>
+        <button
+          onClick={() => handleReserve("/checkout")}
+          type="button"
+          className="px-6 py-2.5 rounded-xl bg-secondary hover:bg-secondary/90 text-primary font-bold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 flex items-center gap-1.5"
+        >
+          <span>Reserve Now</span>
+          <span className="material-symbols-outlined text-sm">arrow_forward</span>
+        </button>
+      </div>
+
       <Footer />
     </div>
   );

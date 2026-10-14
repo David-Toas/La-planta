@@ -7,7 +7,7 @@ import { Navbar } from "@/components/navbar";
 export default function HandoverInspectionPage() {
   return (
     <div className="min-h-screen bg-surface flex flex-col">
-      <Navbar /><main className="w-full pt-20 bg-surface min-h-[calc(100vh-20rem)]"><div className="flex flex-col w-full">
+      <Navbar /><main className="w-full pt-16 lg:pt-20 bg-surface min-h-[calc(100vh-20rem)]"><div className="flex flex-col w-full">
 {/*  Status & Context Master Banner  */}
 <div className="w-full bg-surface-container-low py-space-sm px-margin">
 <div className="max-w-[1280px] mx-auto flex flex-col md:flex-row md:items-center justify-between gap-space-sm">

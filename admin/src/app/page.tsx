@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useAdminAuth } from "@/context/admin-auth-context";
 import { adminApi } from "@/lib/api";
+import { GoogleFleetMap } from "@/components/google-fleet-map";
 
 type TabType =
   | "overview"
@@ -11,7 +12,8 @@ type TabType =
   | "handover"
   | "drivers"
   | "vip"
-  | "revenue";
+  | "revenue"
+  | "requests";
 
 interface FleetVehicle {
   id: string;
@@ -81,6 +83,25 @@ export default function AdminDashboardPage() {
   const [paymentLogs, setPaymentLogs] = useState<any[]>([]);
   const [paymentSummary, setPaymentSummary] = useState<any>(null);
 
+  // Concierge Requests State (Cancellations & Extensions)
+  const [bookingRequests, setBookingRequests] = useState<any[]>([]);
+  const [requestFilter, setRequestFilter] = useState<
+    "pending" | "cancellation" | "extension" | "all"
+  >("pending");
+  const [processingRequestId, setProcessingRequestId] = useState<
+    string | null
+  >(null);
+  const [refundActionModal, setRefundActionModal] = useState<any | null>(null);
+  const [refundWireReference, setRefundWireReference] = useState("");
+  const [refundInternalNotes, setRefundInternalNotes] = useState("");
+  const [requestActionSuccess, setRequestActionSuccess] = useState<
+    string | null
+  >(null);
+
+  // Transactional Email Logs State
+  const [emailLogs, setEmailLogs] = useState<any[]>([]);
+  const [previewingEmail, setPreviewingEmail] = useState<any | null>(null);
+
   // Interaction States
   const [isPinging, setIsPinging] = useState(false);
   const [pingAlert, setPingAlert] = useState<string | null>(null);
@@ -145,7 +166,118 @@ export default function AdminDashboardPage() {
         });
       }
     });
+
+    // 7. Concierge Requests (Cancellations & Extensions)
+    adminApi.getBookingRequests().then((res) => {
+      if (res?.success && res.requests) {
+        setBookingRequests(res.requests);
+      }
+    });
+
+    // 8. Transactional Email Logs
+    adminApi.getEmailLogs().then((res) => {
+      if (res?.success && res.logs) {
+        setEmailLogs(res.logs);
+      }
+    });
+
+    // 9. Automated 10-second telemetry & fleet refresh poller
+    const poller = setInterval(() => {
+      adminApi.getFleet().then((res) => {
+        if (res?.success && res.vehicles) {
+          setFleetList(res.vehicles);
+        }
+      });
+      adminApi.getOverview().then((res) => {
+        if (res?.success && res.kpis) {
+          setOverviewKpis(res.kpis);
+        }
+      });
+    }, 10000);
+
+    return () => clearInterval(poller);
   }, []);
+
+  const reloadRequests = async () => {
+    const res = await adminApi.getBookingRequests();
+    if (res?.success && res.requests) {
+      setBookingRequests(res.requests);
+    }
+    const mailRes = await adminApi.getEmailLogs();
+    if (mailRes?.success && mailRes.logs) {
+      setEmailLogs(mailRes.logs);
+    }
+  };
+
+  const handleConfirmCancellationAndRefund = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!refundActionModal) return;
+    setProcessingRequestId(refundActionModal.id);
+    const note = `Manual Wire Ref: ${
+      refundWireReference || "LP-WIRE-" + Date.now()
+    }. ${refundInternalNotes || "Confirmed by operations director."}`;
+    const res = await adminApi.updateBookingRequest(
+      refundActionModal.id,
+      "refunded_and_cancelled",
+      note,
+    );
+    setProcessingRequestId(null);
+    if (res?.success) {
+      setRefundActionModal(null);
+      setRefundWireReference("");
+      setRefundInternalNotes("");
+      setRequestActionSuccess(
+        `Cancellation confirmed for ${refundActionModal.bookingCode}. Manual refund logged & VIP email dispatched.`,
+      );
+      await reloadRequests();
+      await reloadFleetAndKpis();
+      setTimeout(() => setRequestActionSuccess(null), 4000);
+    } else {
+      alert(res?.error || "Failed to process cancellation");
+    }
+  };
+
+  const handleApproveExtension = async (reqItem: any) => {
+    if (
+      !confirm(
+        `Approve +${reqItem.extraDays || 1} day(s) extension for booking ${
+          reqItem.bookingCode
+        }?`,
+      )
+    )
+      return;
+    setProcessingRequestId(reqItem.id);
+    const res = await adminApi.updateBookingRequest(
+      reqItem.id,
+      "approved",
+      `Extension of ${reqItem.extraDays} days approved by operations director.`,
+    );
+    setProcessingRequestId(null);
+    if (res?.success) {
+      setRequestActionSuccess(
+        `Extension approved for ${reqItem.bookingCode}. Schedule updated.`,
+      );
+      await reloadRequests();
+      setTimeout(() => setRequestActionSuccess(null), 4000);
+    } else {
+      alert(res?.error || "Failed to approve extension");
+    }
+  };
+
+  const handleRejectRequest = async (reqItem: any) => {
+    const reason = prompt("Enter reason for declining this request:");
+    if (reason === null) return;
+    setProcessingRequestId(reqItem.id);
+    const res = await adminApi.updateBookingRequest(
+      reqItem.id,
+      "rejected",
+      reason || "Operational capacity unavailable",
+    );
+    setProcessingRequestId(null);
+    if (res?.success) {
+      await reloadRequests();
+    }
+  };
 
   // Vehicle Management Modal States
   const [isAddVehicleModalOpen, setIsAddVehicleModalOpen] = useState(false);
@@ -765,6 +897,41 @@ export default function AdminDashboardPage() {
                   <span>Revenue &amp; Invoices</span>
                 </div>
               </button>
+
+              {/* Sub-Nav 8: Concierge Requests & Refunds */}
+              <button
+                onClick={() => {
+                  setActiveTab("requests");
+                  setIsSidebarOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all text-left ${
+                  activeTab === "requests"
+                    ? "bg-primary text-white shadow-sm"
+                    : "text-on-surface-variant hover:text-primary hover:bg-surface-container-low"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`material-symbols-outlined text-lg ${
+                      activeTab === "requests"
+                        ? "text-secondary-fixed"
+                        : "text-secondary"
+                    }`}
+                  >
+                    assignment_return
+                  </span>
+                  <span>Requests &amp; Refunds</span>
+                </div>
+                {bookingRequests.filter((r) => r.status === "pending").length >
+                  0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                    {
+                      bookingRequests.filter((r) => r.status === "pending")
+                        .length
+                    }
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* General Navigation Separator */}
@@ -912,6 +1079,39 @@ export default function AdminDashboardPage() {
           {/* TAB 1: OPERATIONS OVERVIEW & KPIS */}
           {activeTab === "overview" && (
             <section className="flex flex-col gap-6 animate-in fade-in duration-200">
+              {/* Concierge Action Notification Banner */}
+              {bookingRequests.filter((r) => r.status === "pending").length >
+                0 && (
+                <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-sm animate-in fade-in">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-800 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-2xl">
+                        assignment_late
+                      </span>
+                    </div>
+                    <div>
+                      <strong className="block text-sm font-bold text-amber-950">
+                        {
+                          bookingRequests.filter((r) => r.status === "pending")
+                            .length
+                        }{" "}
+                        Pending Concierge Request(s) Awaiting Clearance
+                      </strong>
+                      <span className="text-[11px] text-amber-900/80">
+                        Guests have requested charter cancellations (manual wire
+                        refunds required) or extensions. Review and contact guests.
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab("requests")}
+                    className="px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs tracking-wider uppercase transition-colors shrink-0 shadow-sm"
+                  >
+                    Open Requests Desk &rarr;
+                  </button>
+                </div>
+              )}
+
               {/* Telematics Status Ribbon */}
               <div className="w-full bg-surface-container-lowest rounded-xl shadow-sm p-4 border border-surface-container/40 flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <div className="flex items-center gap-3 flex-wrap">
@@ -1168,123 +1368,30 @@ export default function AdminDashboardPage() {
             <section className="bg-surface-container-lowest rounded-xl p-5 shadow-sm border border-surface-container/40 flex flex-col gap-4 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-surface-container/40">
                 <div>
-                  <span className="text-[11px] uppercase tracking-widest text-secondary font-semibold">
-                    Live Telematics Corridor
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] uppercase tracking-widest text-secondary font-semibold">
+                      Live Telematics Corridor
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-bold">
+                      Google Maps Live
+                    </span>
+                  </div>
                   <h3 className="font-serif text-xl text-primary font-semibold">
-                    Road Corridor Fleet Monitoring (Lagos &amp; Abuja)
+                    Nationwide Executive Fleet Corridor (Nigeria)
                   </h3>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-1 rounded-full bg-secondary-container text-on-secondary-container text-xs font-semibold">
-                    GPS Accuracy: 99.8%
+                    GPS Accuracy: 99.9%
                   </span>
                 </div>
               </div>
 
-              {/* Map Canvas */}
-              <div
-                className="relative w-full h-[480px] sm:h-[520px] rounded-xl overflow-hidden bg-cover bg-center shadow-inner"
-                style={{
-                  backgroundImage:
-                    "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAN1OwOgub9651Bb5KmJaZF2apbxPMYhED1jOthp4kgwa8ao5FNIH0SkLpMqhdxydeuNthQvFZwfQKWk48uVG0i_bDQmKbS4kOBUqhyY0Er0gmhJadjY9wTCRmiPowl7YB1y2M2DPrw2clomENBX9DuBZJUTYYz6gIZt3fAZWkG6PqqSrmi4zt_82KKbVpwZe7rV_1qO5dGJDsQtJuksJ4h10bwE6pKNcX5aUyW7g8sFuquz_XyD7AK')",
-                }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/20 to-primary/40 backdrop-blur-[1px]" />
-
-                {/* Pin 1: Airport Corridor */}
-                <div className="absolute top-16 left-12 sm:left-24 group cursor-pointer z-10">
-                  <div className="relative flex items-center justify-center">
-                    <span className="animate-ping absolute inline-flex h-8 w-8 rounded-full bg-secondary opacity-60" />
-                    <span className="relative inline-flex rounded-full h-4 w-4 bg-secondary shadow-lg" />
-                  </div>
-                  <div className="absolute left-6 -top-2 bg-surface-container-lowest/95 backdrop-blur-md rounded-xl p-3 shadow-xl w-60 border border-surface-container">
-                    <div className="flex items-center justify-between text-xs font-semibold text-secondary">
-                      <span>LP-03 • ON TRIP</span>
-                      <span className="text-primary font-bold">AIRPORT</span>
-                    </div>
-                    <div className="text-sm text-primary font-semibold mt-1">
-                      Toyota Land Cruiser 300
-                    </div>
-                    <div className="text-xs text-on-surface-variant flex items-center justify-between mt-1">
-                      <span>Driver: Segun Alabi</span>
-                      <span className="text-secondary font-medium">
-                        54 km/h
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Pin 2: Range Rover Victoria Island */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 group cursor-pointer z-10">
-                  <div className="relative flex items-center justify-center">
-                    <span className="animate-ping absolute inline-flex h-10 w-10 rounded-full bg-primary opacity-50" />
-                    <span className="relative inline-flex rounded-full h-5 w-5 bg-primary shadow-xl ring-2 ring-secondary" />
-                  </div>
-                  <div className="absolute left-7 -top-6 bg-surface-container-lowest/95 backdrop-blur-md rounded-xl p-3.5 shadow-xl w-64 border border-surface-container">
-                    <div className="flex items-center justify-between text-xs font-semibold text-secondary">
-                      <span>LP-02 • ACTIVE CHARTER</span>
-                      <span className="text-primary font-bold">
-                        VICTORIA ISLAND
-                      </span>
-                    </div>
-                    <div className="text-sm text-primary font-semibold mt-1">
-                      Range Rover Autobiography
-                    </div>
-                    <div className="text-xs text-on-surface-variant flex items-center justify-between mt-1">
-                      <span className="font-medium text-primary">
-                        Dr. Adekunle Balogun
-                      </span>
-                      <span className="text-secondary font-semibold">
-                        ETA: 17m
-                      </span>
-                    </div>
-                    <div className="text-xs text-on-surface-variant flex items-center justify-between mt-0.5">
-                      <span>Emmanuel Okafor</span>
-                      <span className="text-primary font-mono text-[11px]">
-                        LAG-892-XZ
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Pin 3: Ikoyi */}
-                <div className="absolute bottom-20 right-16 sm:right-32 group cursor-pointer z-10">
-                  <div className="relative flex items-center justify-center">
-                    <span className="relative inline-flex rounded-full h-4 w-4 bg-secondary shadow-lg" />
-                  </div>
-                  <div className="absolute right-6 -top-2 bg-surface-container-lowest/95 backdrop-blur-md rounded-xl p-3 shadow-xl w-56 text-right border border-surface-container">
-                    <div className="flex items-center justify-between text-xs font-semibold text-secondary">
-                      <span className="text-primary font-bold">
-                        LP-01 • READY
-                      </span>
-                      <span>IKOYI</span>
-                    </div>
-                    <div className="text-sm text-primary font-semibold mt-1">
-                      Mercedes-Benz S580
-                    </div>
-                    <div className="text-xs text-on-surface-variant mt-1">
-                      Driver: Babatunde Adeleke
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bottom Bar */}
-                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between bg-primary/80 backdrop-blur-md rounded-lg px-4 py-2 text-white text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-secondary text-base">
-                      near_me
-                    </span>
-                    <span>Continuous GPS Telematics</span>
-                  </div>
-                  <button
-                    onClick={handleAdminPing}
-                    className="px-3 py-1 rounded bg-secondary text-white font-semibold hover:bg-secondary/90 transition-colors"
-                  >
-                    Trigger Ping Update
-                  </button>
-                </div>
-              </div>
+              {/* Google Fleet Map Engine with Nationwide Bounds, Traffic & Telematics */}
+              <GoogleFleetMap
+                vehicles={fleetList as any}
+                onPingTracker={handleAdminPing}
+              />
             </section>
           )}
 
@@ -2143,6 +2250,557 @@ export default function AdminDashboardPage() {
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* TAB 8: CONCIERGE REQUESTS & REFUNDS (CANCELLATIONS & EXTENSIONS) */}
+          {activeTab === "requests" && (
+            <section className="bg-surface-container-lowest rounded-xl p-5 shadow-sm border border-surface-container/40 flex flex-col gap-5 animate-in fade-in duration-200">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-surface-container/40">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] uppercase tracking-wider text-secondary font-semibold">
+                      Concierge Operations Desk
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-800 text-[10px] font-bold">
+                      {bookingRequests.filter((r) => r.status === "pending").length}{" "}
+                      Pending Review
+                    </span>
+                  </div>
+                  <h3 className="font-serif text-xl sm:text-2xl text-primary font-semibold mt-0.5">
+                    Guest Requests &amp; Manual Refund Clearance
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={reloadRequests}
+                    className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary transition-colors flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-sm">sync</span>
+                    Refresh Queue
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Success Toast */}
+              {requestActionSuccess && (
+                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs flex items-center gap-3 shadow-sm animate-in fade-in">
+                  <span className="material-symbols-outlined text-emerald-600 text-xl shrink-0">
+                    check_circle
+                  </span>
+                  <div className="flex-1 font-semibold">
+                    {requestActionSuccess}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick KPI Quartet */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col gap-1">
+                  <span className="text-[11px] uppercase tracking-wider text-amber-900 font-semibold">
+                    Pending Cancellations
+                  </span>
+                  <span className="text-2xl font-bold font-mono text-amber-950">
+                    {
+                      bookingRequests.filter(
+                        (r) =>
+                          r.status === "pending" && r.type === "cancellation",
+                      ).length
+                    }
+                  </span>
+                  <span className="text-[11px] text-amber-800">
+                    Requires phone contact &amp; wire refund
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex flex-col gap-1">
+                  <span className="text-[11px] uppercase tracking-wider text-blue-900 font-semibold">
+                    Pending Extensions
+                  </span>
+                  <span className="text-2xl font-bold font-mono text-blue-950">
+                    {
+                      bookingRequests.filter(
+                        (r) =>
+                          r.status === "pending" && r.type === "extension",
+                      ).length
+                    }
+                  </span>
+                  <span className="text-[11px] text-blue-800">
+                    Chauffeur &amp; corridor continuity
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-surface-container-low flex flex-col gap-1">
+                  <span className="text-[11px] uppercase tracking-wider text-secondary font-semibold">
+                    Total Value in Refund Review
+                  </span>
+                  <span className="text-2xl font-bold font-mono text-primary">
+                    ₦
+                    {bookingRequests
+                      .filter(
+                        (r) =>
+                          r.status === "pending" && r.type === "cancellation",
+                      )
+                      .reduce((sum, r) => sum + (Number(r.refundAmount) || 0), 0)
+                      .toLocaleString()}
+                  </span>
+                  <span className="text-[11px] text-on-surface-variant">
+                    Subject to executive sign-off
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-surface-container-low flex flex-col gap-1">
+                  <span className="text-[11px] uppercase tracking-wider text-secondary font-semibold">
+                    Transactional Emails
+                  </span>
+                  <span className="text-2xl font-bold font-mono text-primary">
+                    {emailLogs.length} Sent
+                  </span>
+                  <span className="text-[11px] text-emerald-700 font-semibold">
+                    Resend / SMTP &bull; 100% Logged
+                  </span>
+                </div>
+              </div>
+
+              {/* Filter Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-surface-container/30">
+                <button
+                  onClick={() => setRequestFilter("pending")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+                    requestFilter === "pending"
+                      ? "bg-primary text-white"
+                      : "bg-surface-container-low text-on-surface hover:bg-surface-container"
+                  }`}
+                >
+                  Pending Action (
+                  {bookingRequests.filter((r) => r.status === "pending").length})
+                </button>
+                <button
+                  onClick={() => setRequestFilter("cancellation")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+                    requestFilter === "cancellation"
+                      ? "bg-primary text-white"
+                      : "bg-surface-container-low text-on-surface hover:bg-surface-container"
+                  }`}
+                >
+                  Cancellations Only (
+                  {bookingRequests.filter((r) => r.type === "cancellation").length}
+                  )
+                </button>
+                <button
+                  onClick={() => setRequestFilter("extension")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+                    requestFilter === "extension"
+                      ? "bg-primary text-white"
+                      : "bg-surface-container-low text-on-surface hover:bg-surface-container"
+                  }`}
+                >
+                  Extensions Only (
+                  {bookingRequests.filter((r) => r.type === "extension").length})
+                </button>
+                <button
+                  onClick={() => setRequestFilter("all")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+                    requestFilter === "all"
+                      ? "bg-primary text-white"
+                      : "bg-surface-container-low text-on-surface hover:bg-surface-container"
+                  }`}
+                >
+                  All Requests ({bookingRequests.length})
+                </button>
+              </div>
+
+              {/* Requests List */}
+              {(() => {
+                const displayedRequests = bookingRequests.filter((r) => {
+                  if (requestFilter === "pending") return r.status === "pending";
+                  if (requestFilter === "cancellation")
+                    return r.type === "cancellation";
+                  if (requestFilter === "extension")
+                    return r.type === "extension";
+                  return true;
+                });
+
+                if (displayedRequests.length === 0) {
+                  return (
+                    <div className="py-16 px-4 text-center rounded-2xl bg-surface-container-low/40 border border-dashed border-surface-container flex flex-col items-center justify-center gap-3">
+                      <span className="material-symbols-outlined text-4xl text-secondary">
+                        done_all
+                      </span>
+                      <h4 className="font-serif text-lg text-primary font-semibold">
+                        No Requests Awaiting Review
+                      </h4>
+                      <p className="text-xs text-on-surface-variant max-w-md">
+                        All guest cancellation requests have been settled and all
+                        itinerary extensions have been resolved by the operations
+                        desk.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {displayedRequests.map((req) => {
+                      const isPending = req.status === "pending";
+                      const isCancellation = req.type === "cancellation";
+                      const cleanPhone = (req.guestPhone || "").replace(/\D/g, "");
+
+                      return (
+                        <div
+                          key={req.id}
+                          className={`p-5 rounded-2xl border transition-all flex flex-col justify-between gap-4 ${
+                            isPending
+                              ? isCancellation
+                                ? "bg-amber-500/[0.04] border-amber-500/30 shadow-sm"
+                                : "bg-blue-500/[0.04] border-blue-500/30 shadow-sm"
+                              : "bg-surface-container-low border-surface-container/60 opacity-90"
+                          }`}
+                        >
+                          <div className="flex flex-col gap-3">
+                            {/* Card Top Pill Bar */}
+                            <div className="flex items-center justify-between gap-2">
+                              <span
+                                className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                                  isCancellation
+                                    ? "bg-red-500/10 text-red-700 border border-red-500/20"
+                                    : "bg-blue-500/10 text-blue-700 border border-blue-500/20"
+                                }`}
+                              >
+                                {isCancellation
+                                  ? "Cancellation & Refund Request"
+                                  : `Extension Request (+${
+                                      req.extraDays || 1
+                                    } Days)`}
+                              </span>
+
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono ${
+                                  req.status === "pending"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : req.status === "refunded_and_cancelled"
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : req.status === "approved"
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : "bg-surface-container text-on-surface-variant"
+                                }`}
+                              >
+                                {req.status === "pending"
+                                  ? "Pending Review"
+                                  : req.status === "refunded_and_cancelled"
+                                    ? "Refunded & Cancelled"
+                                    : req.status.toUpperCase()}
+                              </span>
+                            </div>
+
+                            {/* Client & Booking Summary */}
+                            <div className="flex items-start justify-between gap-3 pt-1">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-serif text-base text-primary font-bold">
+                                    {req.guestName}
+                                  </h4>
+                                  <span className="px-2 py-0.2 rounded bg-secondary-fixed text-on-secondary-fixed text-[10px] font-bold uppercase">
+                                    {req.vipTier || "Member"}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-on-surface-variant mt-0.5 font-mono">
+                                  Booking:{" "}
+                                  <strong className="text-primary">
+                                    {req.bookingCode}
+                                  </strong>{" "}
+                                  &bull; {req.vehicleName}
+                                </div>
+                              </div>
+
+                              <div className="text-right text-[11px] text-on-surface-variant shrink-0">
+                                {new Date(req.createdAt).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Request Details Box */}
+                            {isCancellation ? (
+                              <div className="p-3.5 rounded-xl bg-surface-container-lowest border border-black/[0.04] text-xs flex flex-col gap-2">
+                                <div>
+                                  <span className="text-[10px] uppercase font-semibold text-on-surface-variant">
+                                    Client Stated Reason:
+                                  </span>
+                                  <p className="font-medium text-primary mt-0.5">
+                                    &ldquo;{req.reason}&rdquo;
+                                  </p>
+                                </div>
+
+                                {req.notes && (
+                                  <div>
+                                    <span className="text-[10px] uppercase font-semibold text-on-surface-variant">
+                                      Additional Notes:
+                                    </span>
+                                    <p className="text-on-surface-variant mt-0.5">
+                                      {req.notes}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {/* Bank Details Box */}
+                                <div className="p-2.5 rounded-lg bg-surface-container-low border border-surface-container/60 grid grid-cols-2 gap-2 text-[11px]">
+                                  <div>
+                                    <span className="text-on-surface-variant block text-[10px] uppercase">
+                                      Refund Destination
+                                    </span>
+                                    <span className="font-semibold text-primary">
+                                      {req.refundBank || "Zenith Bank Plc"}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-on-surface-variant block text-[10px] uppercase">
+                                      Account NUBAN
+                                    </span>
+                                    <span className="font-mono font-bold text-primary">
+                                      {req.refundAccount || "1029384756"}
+                                    </span>
+                                  </div>
+                                  <div className="col-span-2 pt-1 border-t border-surface-container flex items-center justify-between">
+                                    <span className="text-on-surface-variant">
+                                      Beneficiary:{" "}
+                                      <strong className="text-primary">
+                                        {req.refundAccountName || req.guestName}
+                                      </strong>
+                                    </span>
+                                    <span className="font-mono font-bold text-emerald-700 text-xs">
+                                      Refund:{" "}
+                                      {req.refundAmountFormatted ||
+                                        "₦1,350,000"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-3.5 rounded-xl bg-surface-container-lowest border border-black/[0.04] text-xs flex flex-col gap-2">
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                  <div>
+                                    <span className="text-on-surface-variant block text-[10px] uppercase">
+                                      Requested Duration
+                                    </span>
+                                    <span className="font-bold text-primary text-xs">
+                                      +{req.extraDays || 1} Extra Day(s)
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-on-surface-variant block text-[10px] uppercase">
+                                      Proposed Return
+                                    </span>
+                                    <span className="font-semibold text-primary">
+                                      {req.newReturnDate || "Nov 19, 2024"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] uppercase font-semibold text-on-surface-variant">
+                                    Reason &amp; Itinerary:
+                                  </span>
+                                  <p className="font-medium text-primary mt-0.5">
+                                    {req.reason}
+                                  </p>
+                                </div>
+                                {req.notes && (
+                                  <p className="text-[11px] text-on-surface-variant">
+                                    {req.notes}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Resolution Notes if resolved */}
+                            {req.adminNotes && (
+                              <div className="p-2.5 rounded-lg bg-surface-container-low text-[11px] text-on-surface-variant">
+                                <strong className="text-primary block text-[10px] uppercase">
+                                  Director Clearance Note:
+                                </strong>
+                                {req.adminNotes}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons Bar */}
+                          <div className="pt-2 border-t border-surface-container/60 flex flex-wrap items-center justify-between gap-2">
+                            {/* 1-Click Call & WhatsApp Direct Outreach */}
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={`tel:${req.guestPhone || "+2348023456789"}`}
+                                className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary transition-colors flex items-center gap-1.5"
+                                title="Call Guest directly"
+                              >
+                                <span className="material-symbols-outlined text-sm text-secondary">
+                                  call
+                                </span>
+                                Call Guest
+                              </a>
+                              <a
+                                href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                                  `Hello ${req.guestName}, this is La Planta Prime VIP Concierge reaching out regarding your ${
+                                    isCancellation ? "cancellation" : "extension"
+                                  } request for booking ${req.bookingCode}.`,
+                                )}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-emerald-800 transition-colors flex items-center gap-1.5"
+                                title="Chat on WhatsApp"
+                              >
+                                <span className="material-symbols-outlined text-sm text-emerald-600">
+                                  chat
+                                </span>
+                                WhatsApp
+                              </a>
+                            </div>
+
+                            {/* Primary Operational Decisions */}
+                            {isPending && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRejectRequest(req)}
+                                  disabled={processingRequestId === req.id}
+                                  className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-red-50 hover:text-red-700 text-xs font-semibold text-on-surface-variant transition-colors"
+                                >
+                                  Decline
+                                </button>
+
+                                {isCancellation ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setRefundActionModal(req)}
+                                    disabled={processingRequestId === req.id}
+                                    className="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5"
+                                  >
+                                    <span className="material-symbols-outlined text-sm">
+                                      check
+                                    </span>
+                                    Confirm Cancellation &amp; Refund
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveExtension(req)}
+                                    disabled={processingRequestId === req.id}
+                                    className="px-3.5 py-1.5 rounded-lg bg-primary hover:bg-secondary text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5"
+                                  >
+                                    <span className="material-symbols-outlined text-sm">
+                                      check
+                                    </span>
+                                    Approve Extension (+{req.extraDays || 1}d)
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* Transactional Email Audit Ledger Sub-Section */}
+              <div className="mt-6 pt-6 border-t border-surface-container/40 flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="font-serif text-lg text-primary font-bold">
+                      Transactional Email Dispatch Ledger
+                    </h4>
+                    <p className="text-xs text-on-surface-variant">
+                      Audit trail of VIP Welcome, Booking Confirmation, and
+                      Cancellation Notice emails sent via Resend REST API or
+                      Nodemailer SMTP.
+                    </p>
+                  </div>
+                  <span className="text-xs font-mono text-secondary font-semibold">
+                    Provider: Resend / Luxury Simulation
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-surface-container/60 bg-surface-container-low/40">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-surface-container text-on-surface-variant text-[11px] uppercase tracking-wider font-semibold">
+                        <th className="py-3 px-4">Recipient</th>
+                        <th className="py-3 px-4">Email Subject &bull; Type</th>
+                        <th className="py-3 px-4">Gateway</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Sent At</th>
+                        <th className="py-3 px-4 text-right">Inspection</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-container/40">
+                      {emailLogs.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="py-8 text-center text-on-surface-variant italic"
+                          >
+                            No transactional emails logged yet. Emails are
+                            dispatched upon signup, booking payment, or
+                            cancellation.
+                          </td>
+                        </tr>
+                      ) : (
+                        emailLogs.map((mail) => (
+                          <tr
+                            key={mail.id}
+                            className="hover:bg-surface-container/40 transition-colors"
+                          >
+                            <td className="py-3 px-4 font-mono font-medium text-primary">
+                              {mail.to}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-primary truncate max-w-xs">
+                                  {mail.subject}
+                                </span>
+                                <span className="text-[10px] uppercase font-mono text-secondary">
+                                  {mail.type}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 font-mono text-[11px]">
+                              {mail.provider}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
+                                {mail.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-on-surface-variant text-[11px]">
+                              {new Date(mail.sentAt).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              {mail.html ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewingEmail(mail)}
+                                  className="px-2.5 py-1 rounded bg-surface-container hover:bg-secondary hover:text-white text-[11px] font-semibold text-primary transition-colors"
+                                >
+                                  Preview HTML
+                                </button>
+                              ) : (
+                                <span className="text-on-surface-variant/60 text-[11px]">
+                                  &mdash;
+                                </span>
+                              )}
                             </td>
                           </tr>
                         ))
@@ -3016,6 +3674,188 @@ export default function AdminDashboardPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM CANCELLATION & MANUAL REFUND MODAL */}
+      {refundActionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-primary/75 backdrop-blur-sm"
+            onClick={() => setRefundActionModal(null)}
+          />
+          <div className="relative w-full max-w-lg bg-surface-container-lowest rounded-2xl shadow-2xl border border-surface-container p-6 sm:p-7 flex flex-col gap-5 z-10 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-surface-container">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-red-500/10 text-red-600 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-xl">
+                    price_check
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg text-primary font-bold">
+                    Authorize Cancellation &amp; Manual Refund
+                  </h3>
+                  <span className="text-[11px] text-on-surface-variant font-mono">
+                    Booking {refundActionModal.bookingCode} &bull;{" "}
+                    {refundActionModal.guestName}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setRefundActionModal(null)}
+                className="w-8 h-8 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleConfirmCancellationAndRefund}
+              className="flex flex-col gap-4 text-xs"
+            >
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-950 flex flex-col gap-2">
+                <div className="flex items-center justify-between font-bold text-xs">
+                  <span>Refund Amount to Wire:</span>
+                  <span className="font-mono text-base text-amber-950">
+                    {refundActionModal.refundAmountFormatted || "₦1,350,000"}
+                  </span>
+                </div>
+                <div className="text-[11px] text-amber-900/90 leading-relaxed border-t border-amber-500/20 pt-2">
+                  <span>Destination Account: </span>
+                  <strong>
+                    {refundActionModal.refundBank || "Zenith Bank"} &bull;{" "}
+                    {refundActionModal.refundAccount || "1029384756"} (
+                    {refundActionModal.refundAccountName ||
+                      refundActionModal.guestName}
+                    )
+                  </strong>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
+                  Bank Wire Transfer Reference Code *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={refundWireReference}
+                  onChange={(e) => setRefundWireReference(e.target.value)}
+                  placeholder="e.g. ZENITH-WIRE-992140 or NIP-TX-8842"
+                  className="w-full h-10 px-3 rounded-lg bg-surface-container-low border border-surface-container font-mono text-xs text-primary font-bold focus:outline-none focus:border-secondary"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
+                  Internal Settlement &amp; Operations Notes
+                </label>
+                <textarea
+                  rows={2}
+                  value={refundInternalNotes}
+                  onChange={(e) => setRefundInternalNotes(e.target.value)}
+                  placeholder="Verified identity by phone with client. Chauffeur notified..."
+                  className="w-full p-3 rounded-lg bg-surface-container-low border border-surface-container text-xs focus:outline-none focus:border-secondary"
+                />
+              </div>
+
+              <div className="p-3 rounded-lg bg-surface-container-low/70 text-[11px] text-on-surface-variant leading-relaxed">
+                <strong className="block text-primary text-[10px] uppercase font-bold mb-1">
+                  Automated Actions on Confirmation:
+                </strong>
+                &bull; Vehicle availability is released back to active fleet.
+                <br />
+                &bull; Booking record updated to &lsquo;cancelled / refunded&rsquo;.
+                <br />
+                &bull; VIP Cancellation &amp; Refund Notice email dispatched to{" "}
+                <span className="font-mono text-primary font-semibold">
+                  {refundActionModal.guestEmail}
+                </span>
+                .
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-surface-container">
+                <button
+                  type="button"
+                  onClick={() => setRefundActionModal(null)}
+                  className="px-4 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-container text-xs font-semibold text-primary transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={processingRequestId === refundActionModal.id}
+                  className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs uppercase tracking-wider font-semibold transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {processingRequestId === refundActionModal.id ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Processing Refund...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-base">
+                        check
+                      </span>
+                      Confirm Cancellation &amp; Refund
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TRANSACTIONAL EMAIL HTML PREVIEW MODAL */}
+      {previewingEmail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-primary/75 backdrop-blur-sm"
+            onClick={() => setPreviewingEmail(null)}
+          />
+          <div className="relative w-full max-w-3xl bg-surface-container-lowest rounded-2xl shadow-2xl border border-surface-container overflow-hidden z-10 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            <div className="p-4 sm:p-5 bg-surface-container-lowest border-b border-surface-container flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-primary text-secondary-fixed flex items-center justify-center">
+                  <span className="material-symbols-outlined text-lg">
+                    mark_email_read
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-serif text-base text-primary font-bold truncate max-w-md">
+                    {previewingEmail.subject}
+                  </h3>
+                  <div className="flex items-center gap-2 text-[11px] text-on-surface-variant">
+                    <span>
+                      To: <strong>{previewingEmail.to}</strong>
+                    </span>
+                    <span>&bull;</span>
+                    <span className="font-mono uppercase text-secondary">
+                      {previewingEmail.type}
+                    </span>
+                    <span>&bull;</span>
+                    <span className="font-mono">{previewingEmail.provider}</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setPreviewingEmail(null)}
+                className="w-8 h-8 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 bg-[#07090e]">
+              <iframe
+                title="Email Preview"
+                srcDoc={previewingEmail.html}
+                className="w-full min-h-[550px] border-0 rounded-xl bg-[#07090e]"
+              />
+            </div>
           </div>
         </div>
       )}

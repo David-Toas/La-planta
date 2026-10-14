@@ -29,9 +29,37 @@ export default function AccountPage() {
     null,
   );
 
-  // Amend itinerary modal state
+  // Amend itinerary modal state (legacy support)
   const [isAmendModalOpen, setIsAmendModalOpen] = useState(false);
   const [amendSuccess, setAmendSuccess] = useState(false);
+
+  // Dedicated Guest Cancellation & Extension Request States
+  const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
+  const [isExtensionModalOpen, setIsExtensionModalOpen] = useState(false);
+  const [activeRequest, setActiveRequest] = useState<any | null>(null);
+
+  // Cancellation Form
+  const [cancellationReason, setCancellationReason] = useState(
+    "Corporate schedule change / Board meeting rescheduled"
+  );
+  const [cancellationNotes, setCancellationNotes] = useState("");
+  const [refundBank, setRefundBank] = useState("Zenith Bank Plc");
+  const [refundAccount, setRefundAccount] = useState("1029384756");
+  const [refundAccountName, setRefundAccountName] = useState(
+    user?.name || "Dr. Adekunle Balogun"
+  );
+  const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
+  const [cancellationSuccessMsg, setCancellationSuccessMsg] = useState<string | null>(null);
+
+  // Extension Form
+  const [extensionDays, setExtensionDays] = useState(2);
+  const [newReturnDate, setNewReturnDate] = useState("Nov 19, 2024 (18:00 WAT)");
+  const [extensionReason, setExtensionReason] = useState(
+    "Executive meetings extended in Victoria Island"
+  );
+  const [extensionNotes, setExtensionNotes] = useState("");
+  const [isSubmittingExtension, setIsSubmittingExtension] = useState(false);
+  const [extensionSuccessMsg, setExtensionSuccessMsg] = useState<string | null>(null);
 
   // Profile edit state
   const [profileName, setProfileName] = useState(user?.name || "");
@@ -82,7 +110,132 @@ export default function AccountPage() {
         }
       });
     }
+
+    // Sync guest booking request from localStorage or backend
+    try {
+      const stored = localStorage.getItem("laplanta_active_request_LP-8842");
+      if (stored) {
+        setActiveRequest(JSON.parse(stored));
+      }
+    } catch {}
+
+    backendApi.getBookingRequests().then((res) => {
+      if (res?.success && res.requests) {
+        const found = res.requests.find(
+          (r: any) =>
+            r.bookingCode === "#LP-8842" || r.bookingCode === "LP-8842",
+        );
+        if (found) {
+          setActiveRequest(found);
+          try {
+            localStorage.setItem(
+              "laplanta_active_request_LP-8842",
+              JSON.stringify(found),
+            );
+          } catch {}
+        }
+      }
+    });
   }, [user, session]);
+
+  const handleSubmitCancellation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingCancellation(true);
+    setCancellationSuccessMsg(null);
+
+    const payload = {
+      bookingCode: "#LP-8842",
+      vehicleName: "Range Rover Autobiography LWB",
+      guestName: user?.name || "Dr. Adekunle Balogun",
+      guestEmail: user?.email || "a.balogun@executivecorp.ng",
+      guestPhone: user?.phone || "+234 802 345 6789",
+      vipTier: user?.vipTier || "VIP Executive",
+      type: "cancellation",
+      reason: cancellationReason,
+      refundBank,
+      refundAccount,
+      refundAccountName,
+      refundAmount: 1350000,
+      refundAmountFormatted: "₦1,350,000",
+      notes:
+        cancellationNotes ||
+        "Client requests cancellation with manual wire refund to primary bank.",
+    };
+
+    const res = await backendApi.submitBookingRequest(payload);
+    setIsSubmittingCancellation(false);
+
+    const requestObj = res?.request || {
+      ...payload,
+      id: `req-${Date.now()}`,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    };
+
+    setActiveRequest(requestObj);
+    try {
+      localStorage.setItem(
+        "laplanta_active_request_LP-8842",
+        JSON.stringify(requestObj),
+      );
+    } catch {}
+
+    setCancellationSuccessMsg(
+      "Cancellation request dispatched! Our concierge desk will call you within 15 minutes to confirm and process your manual refund.",
+    );
+    setTimeout(() => {
+      setIsCancellationModalOpen(false);
+      setCancellationSuccessMsg(null);
+    }, 2800);
+  };
+
+  const handleSubmitExtension = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingExtension(true);
+    setExtensionSuccessMsg(null);
+
+    const payload = {
+      bookingCode: "#LP-8842",
+      vehicleName: "Range Rover Autobiography LWB",
+      guestName: user?.name || "Dr. Adekunle Balogun",
+      guestEmail: user?.email || "a.balogun@executivecorp.ng",
+      guestPhone: user?.phone || "+234 802 345 6789",
+      vipTier: user?.vipTier || "VIP Executive",
+      type: "extension",
+      extraDays: extensionDays,
+      newReturnDate,
+      reason: extensionReason,
+      notes:
+        extensionNotes ||
+        `Requesting extension of ${extensionDays} extra day(s).`,
+    };
+
+    const res = await backendApi.submitBookingRequest(payload);
+    setIsSubmittingExtension(false);
+
+    const requestObj = res?.request || {
+      ...payload,
+      id: `req-${Date.now()}`,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    };
+
+    setActiveRequest(requestObj);
+    try {
+      localStorage.setItem(
+        "laplanta_active_request_LP-8842",
+        JSON.stringify(requestObj),
+      );
+    } catch {}
+
+    setExtensionSuccessMsg(
+      `Extension request (+${extensionDays} days) dispatched to operations desk! A concierge will confirm within 15 minutes.`,
+    );
+    setTimeout(() => {
+      setIsExtensionModalOpen(false);
+      setExtensionSuccessMsg(null);
+    }, 2800);
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,7 +314,7 @@ export default function AccountPage() {
     <div className="min-h-screen bg-surface flex flex-col">
       <Navbar />
 
-      <main className="w-full pt-20 bg-surface flex-1">
+      <main className="w-full pt-16 lg:pt-20 bg-surface flex-1">
         {/* TOP PROFILE BANNER */}
         <section className="w-full bg-surface-container-lowest shadow-sm border-b border-black/[0.04] py-8 lg:py-10">
           <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -501,6 +654,103 @@ export default function AccountPage() {
                             </div>
                           </div>
 
+                          {/* Real-time Concierge Request Alert Banners */}
+                          {activeRequest &&
+                            activeRequest.status === "pending" &&
+                            activeRequest.type === "cancellation" && (
+                              <div className="mt-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 flex items-start gap-3 text-xs animate-in fade-in duration-200">
+                                <span className="material-symbols-outlined text-amber-600 text-lg shrink-0 mt-0.5">
+                                  pending_actions
+                                </span>
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between font-semibold text-amber-950">
+                                    <span>
+                                      Cancellation Requested • Under Concierge Review
+                                    </span>
+                                    <span className="text-[10px] font-mono uppercase bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded font-bold">
+                                      Pending Verification
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-amber-900/85 mt-1 leading-relaxed">
+                                    Reason: &ldquo;{activeRequest.reason}&rdquo;.
+                                    Our executive operations director is reviewing
+                                    your itinerary. A concierge will call{" "}
+                                    <strong className="font-mono">
+                                      {activeRequest.guestPhone ||
+                                        user?.phone ||
+                                        "+234 802 345 6789"}
+                                    </strong>{" "}
+                                    shortly to confirm your manual wire refund of{" "}
+                                    <strong className="text-amber-950 font-bold">
+                                      {activeRequest.refundAmountFormatted ||
+                                        "₦1,350,000"}
+                                    </strong>{" "}
+                                    to{" "}
+                                    {activeRequest.refundBank || "your bank"}.
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                          {activeRequest &&
+                            activeRequest.status === "pending" &&
+                            activeRequest.type === "extension" && (
+                              <div className="mt-4 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-900 flex items-start gap-3 text-xs animate-in fade-in duration-200">
+                                <span className="material-symbols-outlined text-blue-600 text-lg shrink-0 mt-0.5">
+                                  update
+                                </span>
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between font-semibold text-blue-950">
+                                    <span>
+                                      Extension Requested (+
+                                      {activeRequest.extraDays} Days) • Pending Review
+                                    </span>
+                                    <span className="text-[10px] font-mono uppercase bg-blue-200/80 text-blue-900 px-2 py-0.5 rounded font-bold">
+                                      In Operations Queue
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-blue-900/85 mt-1 leading-relaxed">
+                                    Requested Return:{" "}
+                                    <strong className="text-blue-950">
+                                      {activeRequest.newReturnDate}
+                                    </strong>
+                                    . Chauffeur roster &amp; corridor telematics
+                                    allocation are being verified by the operations desk.
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                          {activeRequest &&
+                            activeRequest.status === "refunded_and_cancelled" && (
+                              <div className="mt-4 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 flex items-start gap-3 text-xs animate-in fade-in duration-200">
+                                <span className="material-symbols-outlined text-emerald-600 text-lg shrink-0 mt-0.5">
+                                  check_circle
+                                </span>
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between font-semibold text-emerald-950">
+                                    <span>
+                                      Charter Cancelled &amp; Refund Dispatched
+                                    </span>
+                                    <span className="text-[10px] font-mono uppercase bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded font-bold">
+                                      Refund Settled
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-emerald-900/85 mt-1 leading-relaxed">
+                                    Manual wire refund of{" "}
+                                    <strong>
+                                      {activeRequest.refundAmountFormatted ||
+                                        "₦1,350,000"}
+                                    </strong>{" "}
+                                    has been processed to{" "}
+                                    {activeRequest.refundBank || "your account"}.
+                                    Confirmation receipt has been sent to your
+                                    email.
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
                           {/* Route Details */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6 bg-surface-container-low/70 rounded-xl p-4">
                             <div className="flex flex-col gap-1">
@@ -584,14 +834,24 @@ export default function AccountPage() {
                             Track Delivery (Live GPS)
                           </Link>
                           <button
-                            onClick={() => setIsAmendModalOpen(true)}
-                            className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all text-xs uppercase tracking-wider font-semibold"
+                            onClick={() => setIsExtensionModalOpen(true)}
+                            className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary hover:text-primary transition-all text-xs uppercase tracking-wider font-semibold border border-black/[0.04]"
                             type="button"
                           >
-                            <span className="material-symbols-outlined text-base">
-                              edit_calendar
+                            <span className="material-symbols-outlined text-base text-secondary">
+                              update
                             </span>
-                            Amend Itinerary
+                            Request Extension
+                          </button>
+                          <button
+                            onClick={() => setIsCancellationModalOpen(true)}
+                            className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 hover:text-red-800 transition-all text-xs uppercase tracking-wider font-semibold border border-red-200"
+                            type="button"
+                          >
+                            <span className="material-symbols-outlined text-base text-red-600">
+                              event_busy
+                            </span>
+                            Request Cancellation
                           </button>
                         </div>
                       </div>
@@ -1115,91 +1375,369 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* AMEND ITINERARY MODAL */}
-      {isAmendModalOpen && (
+      {/* CANCELLATION REQUEST MODAL */}
+      {isCancellationModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
           <div
-            className="fixed inset-0 bg-primary/70 backdrop-blur-sm"
-            onClick={() => setIsAmendModalOpen(false)}
+            className="fixed inset-0 bg-primary/75 backdrop-blur-sm"
+            onClick={() => setIsCancellationModalOpen(false)}
           />
-          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-black/[0.08] overflow-hidden z-10 p-6 sm:p-7 flex flex-col gap-5 animate-in zoom-in-95 duration-200">
+          <div className="relative w-full max-w-lg bg-surface-container-lowest rounded-2xl shadow-2xl border border-black/[0.08] overflow-hidden z-10 p-6 sm:p-8 flex flex-col gap-5 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-3 border-b border-black/[0.06]">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-secondary">
-                  edit_calendar
-                </span>
-                <h3 className="font-serif text-lg text-primary font-semibold">
-                  Amend Charter Itinerary
-                </h3>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-red-500/10 text-red-600 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-xl">
+                    event_busy
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg text-primary font-bold">
+                    Request Charter Cancellation
+                  </h3>
+                  <span className="text-[11px] text-on-surface-variant font-mono">
+                    Booking #LP-8842 • Range Rover Autobiography
+                  </span>
+                </div>
               </div>
               <button
-                onClick={() => setIsAmendModalOpen(false)}
+                onClick={() => setIsCancellationModalOpen(false)}
                 className="w-8 h-8 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface flex items-center justify-center"
               >
                 <span className="material-symbols-outlined text-lg">close</span>
               </button>
             </div>
 
-            {amendSuccess ? (
-              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex flex-col gap-2">
-                <div className="flex items-center gap-2 font-semibold">
-                  <span className="material-symbols-outlined text-emerald-600">
+            {cancellationSuccessMsg ? (
+              <div className="p-5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs flex flex-col gap-2.5 animate-in fade-in">
+                <div className="flex items-center gap-2 font-bold text-sm text-emerald-800">
+                  <span className="material-symbols-outlined text-emerald-600 text-xl">
                     check_circle
                   </span>
-                  Amendment Request Dispatched!
+                  Cancellation Request Dispatched!
                 </div>
-                <p>
-                  Your dedicated support liaison Miss Clara Danjuma has received
-                  your itinerary adjustment and will confirm via WhatsApp within
-                  10 minutes.
+                <p className="leading-relaxed">
+                  {cancellationSuccessMsg}
                 </p>
-                <button
-                  onClick={() => {
-                    setIsAmendModalOpen(false);
-                    setAmendSuccess(false);
-                  }}
-                  className="mt-2 w-full py-2 bg-primary text-white rounded-lg text-xs font-semibold"
-                >
-                  Done
-                </button>
+                <div className="p-3 bg-white/80 rounded-lg border border-emerald-100 flex items-center justify-between font-mono text-[11px]">
+                  <span>Refund Amount In Review:</span>
+                  <strong className="text-emerald-800 text-sm">₦1,350,000</strong>
+                </div>
               </div>
             ) : (
-              <div className="flex flex-col gap-4 text-xs">
-                <p className="text-on-surface-variant">
-                  Adjust your scheduled pickup time, delivery location, or add
-                  armed escort protocol for booking <strong>#LP-8842</strong>.
-                </p>
+              <form onSubmit={handleSubmitCancellation} className="flex flex-col gap-4 text-xs">
+                {/* VIP Protocol Notice */}
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-950 flex items-start gap-2.5 leading-relaxed">
+                  <span className="material-symbols-outlined text-amber-700 text-base shrink-0 mt-0.5">
+                    info
+                  </span>
+                  <div>
+                    <strong className="block font-semibold">
+                      VIP Charter Protocol
+                    </strong>
+                    Guest users cannot unilaterally cancel active vehicle allocations. Our operations director will review your request, contact you via phone or WhatsApp within 15 minutes, and process your manual wire refund in accordance with charter terms.
+                  </div>
+                </div>
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
-                    Requested Change Type
+                    Reason for Cancellation
                   </label>
-                  <select className="w-full h-10 px-3 rounded-lg bg-surface-container-low border border-surface-container font-medium text-xs">
-                    <option>Extend Rental Period (+1 or more days)</option>
-                    <option>Change Pickup / Delivery Address</option>
-                    <option>Adjust Staging Flight Arrival Time</option>
-                    <option>Request Backup Chase Escrow Vehicle</option>
+                  <select
+                    value={cancellationReason}
+                    onChange={(e) => setCancellationReason(e.target.value)}
+                    className="w-full h-10 px-3 rounded-lg bg-surface-container-low border border-surface-container font-medium text-xs focus:outline-none focus:border-secondary"
+                  >
+                    <option value="Corporate schedule change / Board meeting rescheduled">
+                      Corporate schedule change / Board meeting rescheduled
+                    </option>
+                    <option value="Flight delayed / International itinerary cancelled">
+                      Flight delayed / International itinerary cancelled
+                    </option>
+                    <option value="Medical or personal emergency">
+                      Medical or personal emergency
+                    </option>
+                    <option value="Switching to another fleet vehicle / corridor">
+                      Switching to another fleet vehicle / corridor
+                    </option>
+                    <option value="Other VIP protocol adjustments">
+                      Other VIP protocol adjustments
+                    </option>
+                  </select>
+                </div>
+
+                {/* Refund Bank Details */}
+                <div className="p-3.5 rounded-xl bg-surface-container-low/70 border border-black/[0.04] flex flex-col gap-3">
+                  <span className="text-[11px] uppercase tracking-wider text-secondary font-bold">
+                    Designated Account for Manual Refund Wire
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] uppercase font-semibold text-on-surface-variant">
+                        Bank Name
+                      </label>
+                      <input
+                        type="text"
+                        value={refundBank}
+                        onChange={(e) => setRefundBank(e.target.value)}
+                        placeholder="e.g. Zenith Bank, GTBank"
+                        required
+                        className="w-full h-9 px-3 rounded-lg bg-surface-container-lowest border border-surface-container text-xs font-medium"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] uppercase font-semibold text-on-surface-variant">
+                        NUBAN Account Number
+                      </label>
+                      <input
+                        type="text"
+                        value={refundAccount}
+                        onChange={(e) => setRefundAccount(e.target.value)}
+                        placeholder="10-digit account"
+                        required
+                        className="w-full h-9 px-3 rounded-lg bg-surface-container-lowest border border-surface-container text-xs font-mono font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] uppercase font-semibold text-on-surface-variant">
+                      Account Beneficiary Name
+                    </label>
+                    <input
+                      type="text"
+                      value={refundAccountName}
+                      onChange={(e) => setRefundAccountName(e.target.value)}
+                      placeholder="e.g. Dr. Adekunle Balogun"
+                      required
+                      className="w-full h-9 px-3 rounded-lg bg-surface-container-lowest border border-surface-container text-xs font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
+                    Additional Notes for Concierge Desk
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={cancellationNotes}
+                    onChange={(e) => setCancellationNotes(e.target.value)}
+                    placeholder="Provide additional details regarding schedule changes..."
+                    className="w-full p-3 rounded-lg bg-surface-container-low border border-surface-container text-xs focus:outline-none focus:border-secondary"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSubmittingCancellation}
+                    className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs uppercase tracking-wider font-semibold transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isSubmittingCancellation ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Transmitting to Concierge...
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-base">
+                          send
+                        </span>
+                        Submit Cancellation Request
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsCancellationModalOpen(false)}
+                    className="px-5 h-11 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* EXTENSION REQUEST MODAL */}
+      {isExtensionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div
+            className="fixed inset-0 bg-primary/75 backdrop-blur-sm"
+            onClick={() => setIsExtensionModalOpen(false)}
+          />
+          <div className="relative w-full max-w-lg bg-surface-container-lowest rounded-2xl shadow-2xl border border-black/[0.08] overflow-hidden z-10 p-6 sm:p-8 flex flex-col gap-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-secondary-container/60 text-on-secondary-container flex items-center justify-center">
+                  <span className="material-symbols-outlined text-xl">
+                    update
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg text-primary font-bold">
+                    Request Itinerary Extension
+                  </h3>
+                  <span className="text-[11px] text-on-surface-variant font-mono">
+                    Booking #LP-8842 • Current End: Nov 17, 2024
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsExtensionModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {extensionSuccessMsg ? (
+              <div className="p-5 rounded-xl bg-blue-50 border border-blue-200 text-blue-950 text-xs flex flex-col gap-2.5 animate-in fade-in">
+                <div className="flex items-center gap-2 font-bold text-sm text-blue-800">
+                  <span className="material-symbols-outlined text-blue-600 text-xl">
+                    check_circle
+                  </span>
+                  Extension Request Dispatched!
+                </div>
+                <p className="leading-relaxed">
+                  {extensionSuccessMsg}
+                </p>
+                <div className="p-3 bg-white/80 rounded-lg border border-blue-100 flex items-center justify-between font-mono text-[11px]">
+                  <span>Requested Extension:</span>
+                  <strong className="text-blue-800 text-sm">+{extensionDays} Extra Day(s)</strong>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitExtension} className="flex flex-col gap-4 text-xs">
+                <p className="text-on-surface-variant leading-relaxed">
+                  Extend your Range Rover Autobiography charter. Your assigned chauffeur Emmanuel Okafor will be retained on continuous protocol.
+                </p>
+
+                {/* Additional Days Selection */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
+                    Select Additional Rental Days
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[1, 2, 3, 5].map((days) => (
+                      <button
+                        key={days}
+                        type="button"
+                        onClick={() => {
+                          setExtensionDays(days);
+                          const d = 17 + days;
+                          setNewReturnDate(`Nov ${d}, 2024 (18:00 WAT)`);
+                        }}
+                        className={`py-2.5 px-3 rounded-xl border text-center transition-all ${
+                          extensionDays === days
+                            ? "bg-primary text-white border-primary shadow-sm font-bold"
+                            : "bg-surface-container-low text-on-surface border-surface-container hover:bg-surface-container"
+                        }`}
+                      >
+                        <div className="text-sm font-bold">+{days} {days === 1 ? "Day" : "Days"}</div>
+                        <div className="text-[10px] opacity-80 mt-0.5">
+                          ₦{(days * 450000).toLocaleString()}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
+                      New Return Date &amp; Time
+                    </label>
+                    <input
+                      type="text"
+                      value={newReturnDate}
+                      onChange={(e) => setNewReturnDate(e.target.value)}
+                      required
+                      className="w-full h-10 px-3 rounded-lg bg-surface-container-low border border-surface-container font-mono text-xs font-semibold text-primary"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
+                      Chauffeur Protocol
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      value="Retain Emmanuel Okafor"
+                      className="w-full h-10 px-3 rounded-lg bg-surface-container-low border border-surface-container text-xs text-on-surface-variant"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
+                    Reason for Extension
+                  </label>
+                  <select
+                    value={extensionReason}
+                    onChange={(e) => setExtensionReason(e.target.value)}
+                    className="w-full h-10 px-3 rounded-lg bg-surface-container-low border border-surface-container font-medium text-xs focus:outline-none focus:border-secondary"
+                  >
+                    <option value="Executive meetings extended in Victoria Island">
+                      Executive meetings extended in Victoria Island
+                    </option>
+                    <option value="Flight delayed / International itinerary postponed">
+                      Flight delayed / International itinerary postponed
+                    </option>
+                    <option value="Interstate corridor transfer required (Lagos - Abuja)">
+                      Interstate corridor transfer required (Lagos - Abuja)
+                    </option>
+                    <option value="Private diplomatic escort engagement extended">
+                      Private diplomatic escort engagement extended
+                    </option>
                   </select>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
-                    Special Instructions
+                    Special Instructions or Corridor Changes
                   </label>
                   <textarea
-                    rows={3}
-                    placeholder="Provide updated flight details or destination notes..."
-                    className="w-full p-3 rounded-lg bg-surface-container-low border border-surface-container text-xs"
+                    rows={2}
+                    value={extensionNotes}
+                    onChange={(e) => setExtensionNotes(e.target.value)}
+                    placeholder="Provide any updated flight times or destination details..."
+                    className="w-full p-3 rounded-lg bg-surface-container-low border border-surface-container text-xs focus:outline-none focus:border-secondary"
                   />
                 </div>
 
-                <button
-                  onClick={() => setAmendSuccess(true)}
-                  className="w-full h-11 bg-primary hover:bg-secondary text-white rounded-xl text-xs uppercase tracking-wider font-semibold transition-all shadow-md mt-2"
-                >
-                  Submit Amendment to Operations Desk
-                </button>
-              </div>
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSubmittingExtension}
+                    className="flex-1 h-11 bg-primary hover:bg-secondary text-white rounded-xl text-xs uppercase tracking-wider font-semibold transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isSubmittingExtension ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Transmitting to Desk...
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-base">
+                          send
+                        </span>
+                        Submit Extension Request (+{extensionDays} Days)
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsExtensionModalOpen(false)}
+                    className="px-5 h-11 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
             )}
           </div>
         </div>

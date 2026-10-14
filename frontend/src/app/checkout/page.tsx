@@ -220,6 +220,43 @@ function CheckoutContent() {
       const data = await res.json();
       setIsProcessing(false);
 
+      const bookingSummary = {
+        bookingCode: bookingCode,
+        reference,
+        amountFormatted: `₦${totalAmountNgn.toLocaleString()}`,
+        totalAmountNgn,
+        paidAt: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        paidDate: new Date().toLocaleDateString("en-NG", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }),
+        vehicle: vehicleTitle,
+        vehicleColor: vehicle?.color || "Obsidian Black",
+        vehicleImage: vehicle?.hero_image_url || vehicle?.gallery_image_urls?.[0] || "",
+        rentalDays,
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 86400000 * (rentalDays || 3)).toISOString(),
+        deliveryAddress: handoverMode === "delivery" ? deliveryAddress : "La Planta Flagship Hub (Victoria Island)",
+        customerName: effectiveName,
+        customerEmail: effectiveEmail,
+        customerPhone: effectivePhone,
+        flightNumber: flightNumber || "BA 075",
+        flightTerminal: "MMIA Terminal 2",
+        verificationPin: `${bookingCode.replace(/\D/g, "").slice(-4) || "8842"}-09`,
+      };
+
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("laplanta_active_booking", JSON.stringify(bookingSummary));
+        } catch (e) {
+          console.error("Failed to save booking to localStorage", e);
+        }
+      }
+
       if (data.success || res.ok) {
         setConfirmedBooking({
           reference,
@@ -238,6 +275,41 @@ function CheckoutContent() {
     } catch (err: any) {
       // Offline fallback: still grant confirmation in UI
       setIsProcessing(false);
+      const fallbackSummary = {
+        bookingCode: bookingCode,
+        reference,
+        amountFormatted: `₦${totalAmountNgn.toLocaleString()}`,
+        totalAmountNgn,
+        paidAt: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        paidDate: new Date().toLocaleDateString("en-NG", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }),
+        vehicle: vehicleTitle,
+        vehicleColor: vehicle?.color || "Obsidian Black",
+        vehicleImage: vehicle?.hero_image_url || vehicle?.gallery_image_urls?.[0] || "",
+        rentalDays,
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 86400000 * (rentalDays || 3)).toISOString(),
+        deliveryAddress: handoverMode === "delivery" ? deliveryAddress : "La Planta Flagship Hub (Victoria Island)",
+        customerName: effectiveName,
+        customerEmail: effectiveEmail,
+        customerPhone: effectivePhone,
+        flightNumber: flightNumber || "BA 075",
+        flightTerminal: "MMIA Terminal 2",
+        verificationPin: `${bookingCode.replace(/\D/g, "").slice(-4) || "8842"}-09`,
+      };
+
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("laplanta_active_booking", JSON.stringify(fallbackSummary));
+        } catch (e) {}
+      }
+
       setConfirmedBooking({
         reference,
         bookingCode: bookingCode,
@@ -256,7 +328,7 @@ function CheckoutContent() {
     <div className="min-h-screen bg-surface flex flex-col">
       <Navbar />
 
-      <main className="w-full pt-20 bg-surface min-h-[calc(100vh-80px)]">
+      <main className="w-full pt-16 lg:pt-20 bg-surface min-h-[calc(100vh-80px)]">
         <div className="flex flex-col w-full">
           <div className="w-full max-w-7xl mx-auto px-6 lg:px-12 py-10">
             {/* If Payment Confirmed, Show Digital QR Voucher Screen */}
@@ -349,24 +421,33 @@ function CheckoutContent() {
                   </div>
 
                   {/* Navigation CTAs */}
-                  <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                     <Link
-                      href="/live-tracking"
-                      className="w-full sm:w-1/2 h-12 rounded-xl bg-primary hover:bg-secondary text-on-primary font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-md"
+                      href={`/reservation-pass?code=${confirmedBooking.bookingCode}`}
+                      className="w-full h-12 rounded-xl bg-secondary hover:bg-secondary/90 text-primary font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-base">
+                        qr_code_2
+                      </span>
+                      <span>View VIP Pass &amp; QR</span>
+                    </Link>
+                    <Link
+                      href={`/live-tracking?code=${confirmedBooking.bookingCode}`}
+                      className="w-full h-12 rounded-xl bg-primary hover:bg-secondary text-on-primary font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-md"
                     >
                       <span className="material-symbols-outlined text-base">
                         near_me
                       </span>
-                      <span>Track Vehicle Live En Route</span>
+                      <span>Track Live En Route</span>
                     </Link>
                     <Link
                       href="/account"
-                      className="w-full sm:w-1/2 h-12 rounded-xl bg-surface-container hover:bg-surface-container-high text-primary font-semibold text-sm flex items-center justify-center gap-2 transition-colors border border-surface-container"
+                      className="w-full h-12 rounded-xl bg-surface-container hover:bg-surface-container-high text-primary font-semibold text-sm flex items-center justify-center gap-2 transition-colors border border-surface-container"
                     >
                       <span className="material-symbols-outlined text-base">
                         badge
                       </span>
-                      <span>View in Guest Account</span>
+                      <span>Guest Account</span>
                     </Link>
                   </div>
                 </div>

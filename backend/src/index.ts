@@ -7,7 +7,9 @@ import { webhooksRouter } from "./routes/webhooks";
 import { authRouter } from "./routes/auth";
 import { adminRouter } from "./routes/admin";
 import { paymentsRouter } from "./routes/payments";
+import { emailRouter } from "./routes/email";
 import { startTcpTelematicsListener } from "./parsers/tcpListener";
+import { startTelematicsScheduler } from "./services/telematicsScheduler";
 
 const app = express();
 
@@ -44,6 +46,7 @@ app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/payments", paymentsRouter);
+app.use("/api/email", emailRouter);
 app.use("/api/telematics", telematicsRouter);
 app.use("/api/webhooks", webhooksRouter);
 
@@ -74,6 +77,13 @@ try {
   startTcpTelematicsListener(config.telematicsPort);
 } catch (err: any) {
   console.error("Failed to start TCP Telematics listener:", err.message);
+}
+
+// 3. Start Automated Periodic Telematics Scheduler for Active Trips (every 60s)
+try {
+  startTelematicsScheduler(60);
+} catch (err: any) {
+  console.error("Failed to start Telematics Scheduler:", err.message);
 }
 
 // Graceful shutdown

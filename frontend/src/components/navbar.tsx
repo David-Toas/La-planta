@@ -47,28 +47,31 @@ export function Navbar() {
 
   return (
     <header className="fixed top-0 w-full z-50 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-black/[0.03]">
-      <div className="h-20 max-w-7xl mx-auto px-6 lg:px-12 flex items-center justify-between gap-6">
+      <div className="h-16 lg:h-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 flex items-center justify-between gap-3">
         {/* Brand Logo - LA PLANTA PRIME */}
-        <div className="flex items-center gap-8 shrink-0">
-          <Link href="/" className="flex items-center gap-3.5 group">
-            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-secondary-fixed shadow-sm">
-              <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+        <div className="flex items-center gap-4 shrink-0">
+          <Link href="/" className="flex items-center gap-2.5 sm:gap-3.5 group">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-primary flex items-center justify-center text-secondary-fixed shadow-sm">
+              <svg
+                className="w-5 h-5 sm:w-6 sm:h-6 fill-current"
+                viewBox="0 0 24 24"
+              >
                 <path d="M12 2L9.5 7.5L4 8.5L8 12.5L7 18L12 15L17 18L16 12.5L20 8.5L14.5 7.5L12 2Z" />
               </svg>
             </div>
             <div className="flex flex-col">
-              <span className="font-serif text-xl text-primary tracking-tight uppercase font-semibold">
+              <span className="font-serif text-base sm:text-xl text-primary tracking-tight uppercase font-semibold">
                 LA PLANTA PRIME
               </span>
-              <span className="text-[10px] uppercase tracking-widest text-secondary -mt-1 font-semibold">
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-secondary -mt-1 font-semibold">
                 Executive Mobility
               </span>
             </div>
           </Link>
         </div>
 
-        {/* Navigation Links: Only Home and Fleet Catalog */}
-        <nav className="flex items-center gap-2">
+        {/* Navigation Links: Only Home and Fleet Catalog on Desktop (Mobile uses Bottom Dock) */}
+        <nav className="hidden lg:flex items-center gap-2">
           {navLinks.map((link) => {
             const active = isLinkActive(link.href);
             return (
@@ -201,11 +204,16 @@ export function Navbar() {
           ) : (
             /* Logged Out: Sign In / Sign Up button */
             <button
-              onClick={openAuthModal}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openAuthModal();
+              }}
               type="button"
-              className="inline-flex items-center px-4 py-2.5 rounded-lg bg-surface-container text-on-surface hover:bg-secondary-fixed hover:text-on-secondary-fixed text-xs uppercase tracking-wider font-semibold transition-colors shadow-sm"
+              className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-lg bg-surface-container text-on-surface hover:bg-secondary-fixed hover:text-on-secondary-fixed text-xs uppercase tracking-wider font-semibold transition-colors shadow-sm cursor-pointer select-none"
             >
-              Sign In / Sign Up
+              <span className="hidden sm:inline">Sign In / Sign Up</span>
+              <span className="sm:hidden">Sign In</span>
             </button>
           )}
         </div>

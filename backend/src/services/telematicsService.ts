@@ -49,29 +49,94 @@ export async function recordTelematicsPing(input: RecordPingInput) {
       }
     }
 
-    // 3. Insert ping into public.telematics_pings
-    const { data: pingRecord, error: pingErr } = await supabase
-      .from("telematics_pings")
-      .insert({
-        tracker_id: tracker.id,
-        vehicle_id: vehicleId,
-        booking_id: bookingId,
-        latitude: parsedLocation.latitude,
-        longitude: parsedLocation.longitude,
-        speed_kmh: parsedLocation.speedKmh,
-        heading_deg: parsedLocation.headingDeg,
-        battery_percentage: parsedLocation.batteryPercentage ?? 98,
-        ignition_status: parsedLocation.ignitionStatus ?? true,
-        trigger_type: triggerType,
-        raw_sms_payload: parsedLocation.rawPayload,
-        geocoded_address: geocodedAddress || "Lagos En Route Corridor",
-      })
-      .select()
-      .single();
+    // 3. Upsert / update ping in public.telematics_pings (strictly one single entry per tracker)
+    const pingPayload = {
+      tracker_id: tracker.id,
+      vehicle_id: vehicleId,
+      booking_id: bookingId,
+      latitude: parsedLocation.latitude,
+      longitude: parsedLocation.longitude,
+      speed_kmh: parsedLocation.speedKmh,
+      heading_deg: parsedLocation.headingDeg,
+      battery_percentage: parsedLocation.batteryPercentage ?? 98,
+      ignition_status: parsedLocation.ignitionStatus ?? true,
+      trigger_type: triggerType,
+      raw_sms_payload: parsedLocation.rawPayload,
+      geocoded_address: geocodedAddress || "Lagos En Route Corridor",
+      timestamp: new Date().toISOString(),
+    };
 
-    if (pingErr) {
-      console.error("[Telematics] Failed to insert telematics ping:", pingErr);
-      return { success: false, error: pingErr.message };
+    const { data: existingPings } = await supabase
+      .from("telematics_pings")
+      .select("id")
+      .eq("tracker_id", tracker.id)
+      .order("created_at", { ascending: false });
+
+    let pingRecord: any = null;
+
+    if (existingPings && existingPings.length > 0) {
+      // Update existing single row for this tracker
+      const primaryPingId = existingPings[0].id;
+      const { data: updatedPing, error: updateErr } = await supabase
+        .from("telematics_pings")
+        .update(pingPayload)
+        .eq("id", primaryPingId)
+        .select()
+        .single();
+
+      if (updateErr) {
+        console.error("[Telematics] Failed to update telematics ping:", updateErr);
+        return { success: false, error: updateErr.message };
+      }
+      pingRecord = updatedPing;
+
+      // Clean up any extraneous duplicate rows for this tracker if present
+      if (existingPings.length > 1) {
+        const surplusIds = existingPings.slice(1).map((p) => p.id);
+        await supabase.from("telematics_pings").delete().in("id", surplusIds);
+      }
+    } else {
+      // Insert initial row for this tracker
+      const { data: newPing, error: insertErr } = await supabase
+        .from("telematics_pings")
+        .insert(pingPayload)
+        .select()
+        .single();
+
+      if (insertErr) {
+        console.error("[Telematics] Failed to insert initial telematics ping:", insertErr);
+        return { success: false, error: insertErr.message };
+      }
+      pingRecord = newPing;
+    }
+
+    // 4. Update tracker_devices & vehicles tables with latest live telemetry
+    try {
+      await Promise.all([
+        supabase
+          .from("tracker_devices")
+          .update({
+            last_latitude: parsedLocation.latitude,
+            last_longitude: parsedLocation.longitude,
+            last_speed_kmh: parsedLocation.speedKmh,
+            battery_percentage: parsedLocation.batteryPercentage ?? 98,
+            last_heartbeat: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", tracker.id),
+        vehicleId
+          ? supabase
+              .from("vehicles")
+              .update({
+                current_latitude: parsedLocation.latitude,
+                current_longitude: parsedLocation.longitude,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", vehicleId)
+          : Promise.resolve(),
+      ]);
+    } catch (updateErr) {
+      console.warn("[Telematics] Notice updating tracker/vehicle coordinates:", updateErr);
     }
 
     console.log(

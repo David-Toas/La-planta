@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { supabase } from "../supabase";
 import { sendSmsToTracker } from "../services/smsGatewayService";
+import { sendCancellationNoticeEmail } from "../services/emailService";
 
 export const adminRouter = Router();
 
@@ -445,6 +446,211 @@ adminRouter.post("/upload", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[Admin Upload Error]:", err);
     return res.status(500).json({ error: err.message || "Failed to upload file" });
+  }
+});
+
+// ==============================================================================
+// GUEST CONCIERGE REQUESTS QUEUE (CANCELLATION & EXTENSION MANAGEMENT)
+// ==============================================================================
+
+export interface BookingRequest {
+  id: string;
+  bookingCode: string;
+  vehicleName: string;
+  guestName: string;
+  guestEmail: string;
+  guestPhone: string;
+  vipTier: string;
+  type: "cancellation" | "extension";
+  status: "pending" | "approved" | "refunded_and_cancelled" | "rejected";
+  reason?: string;
+  refundBank?: string;
+  refundAccount?: string;
+  refundAccountName?: string;
+  refundAmount?: number;
+  refundAmountFormatted?: string;
+  extraDays?: number;
+  newReturnDate?: string;
+  notes?: string;
+  createdAt: string;
+  resolvedAt?: string;
+  adminNotes?: string;
+}
+
+const memoryBookingRequests: BookingRequest[] = [
+  {
+    id: "req-cxl-8842",
+    bookingCode: "#LP-8842",
+    vehicleName: "Range Rover Autobiography LWB",
+    guestName: "Dr. Adekunle Balogun",
+    guestEmail: "a.balogun@executivecorp.ng",
+    guestPhone: "+234 802 345 6789",
+    vipTier: "VIP Executive",
+    type: "cancellation",
+    status: "pending",
+    reason: "Executive board meeting rescheduled to London headquarters",
+    refundBank: "Zenith Bank Plc",
+    refundAccount: "1029384756",
+    refundAccountName: "Dr. Adekunle Balogun",
+    refundAmount: 1350000,
+    refundAmountFormatted: "₦1,350,000",
+    notes: "Client requests manual wire refund to primary account. Chauffeur not yet dispatched from Ikoyi staging.",
+    createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "req-ext-8850",
+    bookingCode: "#LP-8850",
+    vehicleName: "Toyota Land Cruiser 300 VXR",
+    guestName: "Chief O. Fernandez",
+    guestEmail: "o.fernandez@diplomaticgroup.org",
+    guestPhone: "+234 803 912 3456",
+    vipTier: "VIP Diplomatic",
+    type: "extension",
+    status: "pending",
+    extraDays: 2,
+    newReturnDate: "Nov 20, 2024 (18:00 WAT)",
+    reason: "FCT Presidential Villa hearings extended by 48 hours",
+    notes: "Requires assigned chauffeur Segun Alabi to remain on active airside protocol.",
+    createdAt: new Date(Date.now() - 55 * 60 * 1000).toISOString(),
+  },
+];
+
+/**
+ * GET /api/admin/requests
+ * Returns all active and resolved concierge requests
+ */
+adminRouter.get("/requests", (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    count: memoryBookingRequests.length,
+    pendingCount: memoryBookingRequests.filter((r) => r.status === "pending").length,
+    requests: memoryBookingRequests,
+  });
+});
+
+/**
+ * POST /api/admin/requests
+ * Submit a cancellation or extension request from Guest Account page
+ */
+adminRouter.post("/requests", async (req: Request, res: Response) => {
+  try {
+    const {
+      bookingCode,
+      vehicleName,
+      guestName,
+      guestEmail,
+      guestPhone,
+      vipTier,
+      type,
+      reason,
+      refundBank,
+      refundAccount,
+      refundAccountName,
+      refundAmount,
+      refundAmountFormatted,
+      extraDays,
+      newReturnDate,
+      notes,
+    } = req.body;
+
+    if (!bookingCode || !type) {
+      return res.status(400).json({ error: "Booking code and request type are required" });
+    }
+
+    const newReq: BookingRequest = {
+      id: `req-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+      bookingCode: bookingCode.startsWith("#") ? bookingCode : `#${bookingCode}`,
+      vehicleName: vehicleName || "Executive Fleet Vehicle",
+      guestName: guestName || "Executive Guest",
+      guestEmail: guestEmail || "guest@laplanta.ng",
+      guestPhone: guestPhone || "+234 800 000 0000",
+      vipTier: vipTier || "Member",
+      type,
+      status: "pending",
+      reason: reason || (type === "cancellation" ? "Client requested cancellation" : "Itinerary extension"),
+      refundBank,
+      refundAccount,
+      refundAccountName,
+      refundAmount: Number(refundAmount) || 1350000,
+      refundAmountFormatted: refundAmountFormatted || "₦1,350,000",
+      extraDays: Number(extraDays) || 1,
+      newReturnDate,
+      notes,
+      createdAt: new Date().toISOString(),
+    };
+
+    memoryBookingRequests.unshift(newReq);
+    console.log(`\x1b[35m[New Concierge Request]\x1b[0m ${newReq.type.toUpperCase()} for ${newReq.bookingCode} by ${newReq.guestName}`);
+
+    return res.status(201).json({
+      success: true,
+      message: `${type === "cancellation" ? "Cancellation" : "Extension"} request logged for Concierge review.`,
+      request: newReq,
+    });
+  } catch (err: any) {
+    console.error("[Create Request Error]:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/admin/requests/:id
+ * Process request (Approve, Confirm Refund & Cancel, or Reject)
+ */
+adminRouter.patch("/requests/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status, adminNotes } = req.body;
+
+    const reqIndex = memoryBookingRequests.findIndex((r) => r.id === id);
+    if (reqIndex === -1) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    const currentReq = memoryBookingRequests[reqIndex];
+    currentReq.status = status;
+    currentReq.resolvedAt = new Date().toISOString();
+    if (adminNotes) currentReq.adminNotes = adminNotes;
+
+    // 1. If Cancellation confirmed & refunded:
+    if (status === "refunded_and_cancelled") {
+      // Free up vehicle back to "available" in database
+      try {
+        await supabase
+          .from("bookings")
+          .update({ status: "cancelled", payment_status: "refunded" })
+          .eq("id", currentReq.bookingCode.replace("#", ""));
+      } catch (dbErr: any) {
+        console.warn("[DB Warning] Booking cancellation update bypassed:", dbErr.message);
+      }
+
+      // Automatically dispatch VIP Cancellation & Refund Email
+      try {
+        await sendCancellationNoticeEmail({
+          clientName: currentReq.guestName,
+          email: currentReq.guestEmail,
+          bookingCode: currentReq.bookingCode,
+          vehicleName: currentReq.vehicleName,
+          refundAmountFormatted: currentReq.refundAmountFormatted || "₦1,350,000",
+          refundBank: currentReq.refundBank,
+          refundAccount: currentReq.refundAccount,
+          statusNote: adminNotes || `Your cancellation has been authorized by the operations director. Wire transfer of ${currentReq.refundAmountFormatted} has been executed to ${currentReq.refundBank || "your bank"}.`,
+        });
+      } catch (mailErr: any) {
+        console.warn("[Email Warning] Cancellation email failed:", mailErr.message);
+      }
+    }
+
+    console.log(`\x1b[32m[Request Resolved]\x1b[0m ${currentReq.id} marked as ${status}`);
+
+    return res.json({
+      success: true,
+      message: `Request successfully updated to ${status}`,
+      request: currentReq,
+    });
+  } catch (err: any) {
+    console.error("[Update Request Error]:", err);
+    return res.status(500).json({ error: err.message });
   }
 });
 

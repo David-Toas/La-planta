@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import crypto from "crypto";
 import { config } from "../config";
 import { supabase } from "../supabase";
+import { sendBookingConfirmationEmail } from "../services/emailService";
 
 export const paymentsRouter = Router();
 
@@ -178,6 +179,25 @@ paymentsRouter.post("/verify", async (req: Request, res: Response) => {
 
       console.log(`\x1b[32m[Paystack Verified]\x1b[0m ₦${Number(paidAmount).toLocaleString()} for ${customerName || email} (Ref: ${reference})`);
 
+      // 4. Trigger Luxury Transactional Email Dispatch (Resend / SMTP / Simulation)
+      try {
+        await sendBookingConfirmationEmail({
+          clientName: customerName || "Executive Guest",
+          email: email || "client@laplanta.ng",
+          bookingCode: bookingCode || reference,
+          vehicleName: vehicleName || "Reserved Fleet Unit",
+          dates: "Nov 14 – Nov 17, 2024",
+          rentalDays: 3,
+          amountFormatted: `₦${Number(paidAmount).toLocaleString()}`,
+          chauffeurProtocol: "Dedicated Professional Driver Included",
+          corridor: "Lagos & Abuja Executive Corridors",
+          passUrl: `http://localhost:3000/reservation-pass`,
+          trackingUrl: `http://localhost:3000/live-tracking`,
+        });
+      } catch (mailErr: any) {
+        console.warn("[Payments Warning] Email dispatch failed:", mailErr.message);
+      }
+
       return res.json({
         success: true,
         message: "Payment successfully verified and settled",
@@ -250,6 +270,27 @@ paymentsRouter.post("/webhook", async (req: Request, res: Response) => {
           total_amount: amountNgn,
         })
         .or(`id.eq.${ref},id.eq.${data.metadata?.booking_code}`);
+
+      // Dispatch confirmation email in background
+      if (data.customer?.email) {
+        sendBookingConfirmationEmail({
+          clientName: data.customer?.first_name
+            ? `${data.customer.first_name} ${data.customer.last_name || ""}`
+            : "Verified Guest",
+          email: data.customer.email,
+          bookingCode: data.metadata?.booking_code || ref,
+          vehicleName: data.metadata?.vehicle || "Reserved Fleet Unit",
+          dates: "Nov 14 – Nov 17, 2024",
+          rentalDays: Number(data.metadata?.rental_days) || 3,
+          amountFormatted: `₦${amountNgn.toLocaleString()}`,
+          chauffeurProtocol: "Dedicated Professional Driver Included",
+          corridor: "Lagos & Abuja Executive Corridors",
+          passUrl: `http://localhost:3000/reservation-pass`,
+          trackingUrl: `http://localhost:3000/live-tracking`,
+        }).catch((err) =>
+          console.warn("[Webhook Email Warning]:", err.message)
+        );
+      }
     }
 
     return res.sendStatus(200);

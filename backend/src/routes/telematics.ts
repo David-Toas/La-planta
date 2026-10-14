@@ -37,16 +37,21 @@ telematicsRouter.post("/ping-request", async (req: Request, res: Response) => {
       console.log(`[Telematics Notice] Tracker not in DB yet; using designated fleet fallback: ${trackerData.device_code}`);
     }
 
+    const targetSimPhone =
+      req.body.simPhoneNumber ||
+      process.env.TRACKER_SIM_PHONE ||
+      trackerData.sim_phone_number;
+
     // 2. Dispatch SMS command to tracker SIM (Standard command: "WHERE#" or "STATUS#")
     const commandText = "WHERE#";
-    console.log(`\x1b[35m[GSM DISPATCH]\x1b[0m Sending "${commandText}" to SIM \x1b[33m${trackerData.sim_phone_number}\x1b[0m for Unit \x1b[32m${trackerData.device_code}\x1b[0m`);
-    const dispatchResult = await sendSmsToTracker(trackerData.sim_phone_number, commandText);
+    console.log(`\x1b[35m[GSM DISPATCH]\x1b[0m Sending "${commandText}" to SIM \x1b[33m${targetSimPhone}\x1b[0m for Unit \x1b[32m${trackerData.device_code}\x1b[0m`);
+    const dispatchResult = await sendSmsToTracker(targetSimPhone, commandText);
 
     return res.json({
       success: true,
-      message: `Encrypted ping command "${commandText}" dispatched to SIM ${trackerData.sim_phone_number}`,
+      message: `Encrypted ping command "${commandText}" dispatched to SIM ${targetSimPhone}`,
       deviceCode: trackerData.device_code,
-      simPhone: trackerData.sim_phone_number,
+      simPhone: targetSimPhone,
       dispatch: dispatchResult,
     });
   } catch (err: any) {
@@ -96,7 +101,7 @@ telematicsRouter.get("/status/:deviceCode", async (req: Request, res: Response) 
 
     const { data: tracker, error } = await supabase
       .from("tracker_devices")
-      .select("*, vehicles(*)")
+      .select("*, vehicles:vehicles!tracker_devices_assigned_vehicle_id_fkey(*)")
       .eq("device_code", deviceCode)
       .maybeSingle();
 
@@ -104,7 +109,32 @@ telematicsRouter.get("/status/:deviceCode", async (req: Request, res: Response) 
       return res.status(404).json({ error: "Device not found" });
     }
 
-    return res.json({ success: true, tracker });
+    // 2. Query telematics_pings to ensure latest location updates directly from Supabase are captured
+    const { data: latestPing } = await supabase
+      .from("telematics_pings")
+      .select("*")
+      .eq("tracker_id", tracker.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // 2. Query telematics_pings to ensure latest location updates directly from Supabase are captured
+    if (latestPing && latestPing.latitude && latestPing.longitude) {
+      tracker.last_latitude = Number(latestPing.latitude);
+      tracker.last_longitude = Number(latestPing.longitude);
+      if (latestPing.speed_kmh !== null && latestPing.speed_kmh !== undefined) {
+        tracker.last_speed_kmh = Number(latestPing.speed_kmh);
+      }
+      if (latestPing.battery_percentage !== null && latestPing.battery_percentage !== undefined) {
+        tracker.battery_percentage = Number(latestPing.battery_percentage);
+      }
+      tracker.updated_at = latestPing.timestamp || latestPing.created_at || tracker.updated_at;
+    } else if (tracker.vehicles && tracker.vehicles.current_latitude && tracker.vehicles.current_longitude) {
+      tracker.last_latitude = Number(tracker.vehicles.current_latitude);
+      tracker.last_longitude = Number(tracker.vehicles.current_longitude);
+    }
+
+    return res.json({ success: true, tracker, latestPing });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

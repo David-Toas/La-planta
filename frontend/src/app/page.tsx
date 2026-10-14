@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/navbar";
@@ -18,6 +18,23 @@ export default function HomePage() {
     "Lagos (VI, Ikoyi, Lekki & Airport)",
   );
 
+  const consoleRef = useRef<HTMLDivElement>(null);
+  const [isScrolledPast, setIsScrolledPast] = useState(false);
+  const [isFloatingMinimized, setIsFloatingMinimized] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (consoleRef.current) {
+        const rect = consoleRef.current.getBoundingClientRect();
+        // Visible when user scrolls past the hero console card
+        setIsScrolledPast(rect.bottom < 100);
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const handleReserve = (destination = "/checkout") => {
     if (user) {
       router.push(destination);
@@ -33,9 +50,9 @@ export default function HomePage() {
     <div className="min-h-screen bg-surface flex flex-col">
       <Navbar />
 
-      <main className="flex-1 w-full pt-20">
+      <main className="flex-1 w-full pt-16 lg:pt-20">
         {/* HERO SECTION WITH EDITORIAL BLEED */}
-        <section className="relative w-full -mt-20 pt-28 pb-20 lg:pb-32 bg-primary overflow-hidden">
+        <section className="relative w-full -mt-16 lg:-mt-20 pt-24 lg:pt-28 pb-20 lg:pb-32 bg-primary overflow-hidden">
           {/* Background Image Scrim */}
           <div
             className="absolute inset-0 w-full h-full bg-cover bg-center mix-blend-luminosity opacity-40 scale-105 transition-transform duration-1000 ease-out"
@@ -61,7 +78,10 @@ export default function HomePage() {
             </div>
 
             {/* Floating Booking Console Card */}
-            <div className="w-full mt-6 bg-surface-container-lowest rounded-xl shadow-2xl p-6 lg:p-8 flex flex-col gap-6">
+            <div
+              ref={consoleRef}
+              className="w-full mt-6 bg-surface-container-lowest rounded-xl shadow-2xl p-6 lg:p-8 flex flex-col gap-6"
+            >
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-black/[0.04]">
                 {/* Segmented Handover Tabs */}
                 <div className="inline-flex p-1 bg-surface-container-low rounded-lg">
@@ -119,13 +139,10 @@ export default function HomePage() {
                     onChange={(e) => setSelectedCity(e.target.value)}
                     className="w-full bg-transparent text-sm font-semibold text-on-surface outline-none cursor-pointer"
                   >
-                    <option>Lagos (VI, Ikoyi, Lekki &amp; Airport)</option>
-                    <option>Abuja (Maitama, Asokoro &amp; Airport)</option>
-                    <option>Inter-State Chauffeur Service</option>
+                    <option>Lagos </option>
+                    <option>Abuja</option>
+                    <option>Inter-State </option>
                   </select>
-                  <span className="text-[11px] text-secondary truncate font-medium">
-                    Dedicated Professional Driver Included
-                  </span>
                 </div>
 
                 <div className="flex flex-col gap-1.5 bg-surface-container-low p-3.5 rounded-lg">
@@ -604,6 +621,121 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* Floating Persistent Handover Card (Appears when scrolled past Hero Console) */}
+        {isScrolledPast && (
+          <div className="fixed right-4 sm:right-6 bottom-20 lg:bottom-8 z-40 animate-in fade-in slide-in-from-bottom-3 duration-300">
+            {isFloatingMinimized ? (
+              <button
+                type="button"
+                onClick={() => setIsFloatingMinimized(false)}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#0c1017]/95 border border-[#d4af37]/50 text-white shadow-2xl backdrop-blur-xl text-xs font-semibold hover:border-[#d4af37] transition-all group active:scale-95"
+              >
+                <span className="w-2 h-2 rounded-full bg-[#d4af37] animate-pulse"></span>
+                <span className="text-[#fedeb2] font-mono uppercase text-[10px] tracking-wider">
+                  {pickupType === "office"
+                    ? "Office Pickup"
+                    : "Direct Delivery"}
+                </span>
+                <span className="material-symbols-outlined text-sm text-[#d4af37] group-hover:rotate-180 transition-transform">
+                  expand_less
+                </span>
+              </button>
+            ) : (
+              <div className="w-[280px] sm:w-[320px] rounded-2xl bg-[#0c1017]/95 border border-[#d4af37]/40 p-4 shadow-[0_16px_36px_rgba(0,0,0,0.7)] backdrop-blur-2xl flex flex-col gap-3 text-stone-200">
+                {/* Header with Minimize button */}
+                <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[#d4af37] text-base">
+                      {pickupType === "office"
+                        ? "storefront"
+                        : "local_shipping"}
+                    </span>
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-[#d4af37]">
+                      Make A Reservation
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsFloatingMinimized(true)}
+                    className="p-1 rounded-md text-stone-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+                    title="Minimize"
+                  >
+                    <span className="material-symbols-outlined text-sm">
+                      minimize
+                    </span>
+                  </button>
+                </div>
+
+                {/* Mini Segmented Handover Switcher */}
+                <div className="grid grid-cols-2 p-1 bg-black/60 rounded-xl border border-white/[0.08]">
+                  <button
+                    type="button"
+                    onClick={() => setPickupType("office")}
+                    className={`py-1.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all ${
+                      pickupType === "office"
+                        ? "bg-[#d4af37] text-black font-bold shadow-md"
+                        : "text-stone-400 hover:text-white"
+                    }`}
+                  >
+                    Office Pickup
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPickupType("delivery")}
+                    className={`py-1.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all ${
+                      pickupType === "delivery"
+                        ? "bg-[#d4af37] text-black font-bold shadow-md"
+                        : "text-stone-400 hover:text-white"
+                    }`}
+                  >
+                    Direct Delivery
+                  </button>
+                </div>
+
+                {/* Operational Details Strip */}
+                <div className="flex items-center justify-between text-[11px] text-stone-300 px-1">
+                  <span className="flex items-center gap-1 truncate">
+                    <span className="text-[#d4af37]">📍</span>
+                    <span className="truncate">
+                      {selectedCity.split("(")[0].trim()}
+                    </span>
+                  </span>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 pt-1 border-t border-white/[0.06]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (consoleRef.current) {
+                        consoleRef.current.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center",
+                        });
+                      }
+                    }}
+                    className="flex-1 py-2 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-sm">
+                      calendar_month
+                    </span>
+                    <span>Edit Dates</span>
+                  </button>
+                  <Link
+                    href={`/fleet?handover=${pickupType}`}
+                    className="flex-1 py-2 px-3 rounded-xl bg-[#d4af37] hover:bg-[#fedeb2] text-black font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1 transition-all shadow-md active:scale-95"
+                  >
+                    <span>View Cars</span>
+                    <span className="material-symbols-outlined text-sm">
+                      arrow_forward
+                    </span>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       <Footer />

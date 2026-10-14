@@ -134,8 +134,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [syncUserProfile]);
 
-  const openAuthModal = () => setIsAuthModalOpen(true);
-  const closeAuthModal = () => setIsAuthModalOpen(false);
+  const openAuthModal = useCallback(() => {
+    console.log("[AuthContext] openAuthModal triggered");
+    setIsAuthModalOpen(true);
+  }, []);
+
+  const closeAuthModal = useCallback(() => {
+    console.log("[AuthContext] closeAuthModal triggered");
+    setIsAuthModalOpen(false);
+  }, []);
 
   // Manual / Demo login
   const login = (userData: GuestUser) => {
@@ -205,6 +212,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.user) {
         await syncUserProfile(data.user, data.session ?? undefined);
+
+        // Dispatch VIP Welcome Transactional Email
+        const backendUrl =
+          process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+        fetch(`${backendUrl}/api/email/welcome`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clientName: name,
+            email,
+            vipTier: "Member",
+            bookingPin: "#LP-8910",
+          }),
+        }).catch((e) =>
+          console.warn("[Auth Email Warning] Welcome email trigger bypassed:", e.message)
+        );
       }
       return { success: true };
     } catch (err: any) {

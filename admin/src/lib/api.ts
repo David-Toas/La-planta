@@ -1,5 +1,5 @@
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+  (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000").trim();
 
 export const adminApi = {
   /**
@@ -238,6 +238,50 @@ export const adminApi = {
   async getPaymentLogs() {
     try {
       const res = await fetch(`${BACKEND_URL}/api/payments/logs`, {
+        cache: "no-store",
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Retrieve concierge requests (cancellations and extensions)
+   */
+  async getBookingRequests() {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/requests`, {
+        cache: "no-store",
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Update concierge request status (approve, refund & cancel, reject)
+   */
+  async updateBookingRequest(id: string, status: string, adminNotes?: string) {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/requests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, adminNotes }),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Retrieve transactional email audit logs
+   */
+  async getEmailLogs() {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/email/logs`, {
         cache: "no-store",
       });
       return await res.json();

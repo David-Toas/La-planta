@@ -42,16 +42,22 @@ export async function sendSmsToTracker(toPhoneNumber: string, commandText: strin
   // 2. Africa's Talking (Alternative Pan-African Gateway)
   if (provider === "africastalking" && config.africasTalking.apiKey) {
     try {
+      const isSandbox = config.africasTalking.username.toLowerCase() === "sandbox";
+      const endpoint = isSandbox
+        ? "https://api.sandbox.africastalking.com/version1/messaging"
+        : "https://api.africastalking.com/version1/messaging";
+
       const params = new URLSearchParams({
         username: config.africasTalking.username,
         to: toPhoneNumber,
         message: commandText,
       });
 
-      const response = await fetch("https://api.africastalking.com/version1/messaging", {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           apiKey: config.africasTalking.apiKey,
+          Accept: "application/json",
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: params.toString(),

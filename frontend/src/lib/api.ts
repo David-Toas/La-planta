@@ -2,7 +2,11 @@
  * API Client for Standalone La Planta Prime Telematics & Dispatch Backend
  */
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000").trim();
+
+const BASE_HEADERS: Record<string, string> = {
+  "ngrok-skip-browser-warning": "true",
+};
 
 export const backendApi = {
   /**
@@ -10,7 +14,9 @@ export const backendApi = {
    */
   async getHealth() {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/health`);
+      const res = await fetch(`${BACKEND_URL}/api/health`, {
+        headers: BASE_HEADERS,
+      });
       return await res.json();
     } catch (err: any) {
       return { status: "offline", error: err.message };
@@ -26,6 +32,7 @@ export const backendApi = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...BASE_HEADERS,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ deviceCode }),
@@ -41,7 +48,16 @@ export const backendApi = {
    */
   async getTrackerStatus(deviceCode: string) {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/telematics/status/${encodeURIComponent(deviceCode)}`);
+      const res = await fetch(
+        `${BACKEND_URL}/api/telematics/status/${encodeURIComponent(deviceCode)}?_t=${Date.now()}`,
+        {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            ...BASE_HEADERS,
+          },
+        }
+      );
       return await res.json();
     } catch (err: any) {
       return { success: false, error: err.message };
@@ -53,7 +69,10 @@ export const backendApi = {
    */
   async getFleet() {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/admin/fleet`, { cache: "no-store" });
+      const res = await fetch(`${BACKEND_URL}/api/admin/fleet`, {
+        cache: "no-store",
+        headers: BASE_HEADERS,
+      });
       return await res.json();
     } catch (err: any) {
       return { success: false, error: err.message };
@@ -67,8 +86,43 @@ export const backendApi = {
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/me`, {
         headers: {
+          ...BASE_HEADERS,
           Authorization: `Bearer ${token}`,
         },
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Submit a guest cancellation or extension request
+   */
+  async submitBookingRequest(data: any) {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/requests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...BASE_HEADERS,
+        },
+        body: JSON.stringify(data),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Fetch active requests for current client/booking
+   */
+  async getBookingRequests() {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/admin/requests`, {
+        cache: "no-store",
+        headers: BASE_HEADERS,
       });
       return await res.json();
     } catch (err: any) {

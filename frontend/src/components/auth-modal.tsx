@@ -48,6 +48,18 @@ export function AuthModal() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isAuthModalOpen, closeAuthModal]);
 
+  // Lock background scrolling when modal is open
+  useEffect(() => {
+    if (isAuthModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [isAuthModalOpen]);
+
   if (!isAuthModalOpen) return null;
 
   // Google OAuth Login
@@ -171,15 +183,19 @@ export function AuthModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-      {/* Blurred Backdrop */}
-      <div
-        className="fixed inset-0 bg-primary/75 backdrop-blur-md transition-opacity animate-in fade-in duration-200"
-        onClick={closeAuthModal}
-      />
-
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-black/80 backdrop-blur-md"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          closeAuthModal();
+        }
+      }}
+    >
       {/* Modal Dialog Card */}
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-border overflow-hidden z-10 animate-in zoom-in-95 duration-200 my-auto">
+      <div
+        className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-border overflow-hidden z-10 my-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header Ribbon */}
         <div className="relative bg-primary px-6 py-5 text-white">
           <div className="flex items-center justify-between">

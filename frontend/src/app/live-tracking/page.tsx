@@ -1,20 +1,29 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { backendApi } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/auth-context";
+import { GoogleTrackingMap } from "@/components/google-tracking-map";
 
 export default function LiveTrackingPage() {
   const { session } = useAuth();
-  const [backendHealth, setBackendHealth] = useState<{ status: string; uptime?: number } | null>(null);
+  const [backendHealth, setBackendHealth] = useState<{
+    status: string;
+    uptime?: number;
+  } | null>(null);
   // Live telematics simulation state
   const [speed, setSpeed] = useState(42);
   const [etaMinutes, setEtaMinutes] = useState(17);
   const [etaSeconds, setEtaSeconds] = useState(48);
-  const [simPingCountdown, setSimPingCountdown] = useState(24);
+  const [realEtaMinutes, setRealEtaMinutes] = useState<number | null>(null);
+  const [realDistanceKm, setRealDistanceKm] = useState<number | null>(null);
+  const [estimatedArrivalTime, setEstimatedArrivalTime] =
+    useState<string>("17:28 WAT");
+  const [simPingCountdown, setSimPingCountdown] = useState(60);
   const [isPingingSim, setIsPingingSim] = useState(false);
   const [lastPingTime, setLastPingTime] = useState("Just now (17:11:04 WAT)");
   const [gpsCoordinates, setGpsCoordinates] = useState({
@@ -24,6 +33,15 @@ export default function LiveTrackingPage() {
   const [pingSuccessNotice, setPingSuccessNotice] = useState<string | null>(
     null,
   );
+
+  const handleEtaUpdate = useCallback((mins: number, distance: number) => {
+    setRealEtaMinutes(mins);
+    setRealDistanceKm(distance);
+    setEtaMinutes(mins);
+    const arrivalDate = new Date(Date.now() + mins * 60 * 1000);
+    const timeStr = `${arrivalDate.getHours().toString().padStart(2, "0")}:${arrivalDate.getMinutes().toString().padStart(2, "0")} WAT`;
+    setEstimatedArrivalTime(timeStr);
+  }, []);
 
   // Map view & interactive states
   const [mapMode, setMapMode] = useState<"vector" | "satellite" | "traffic">(
@@ -45,6 +63,89 @@ export default function LiveTrackingPage() {
   // Vehicle progress simulation along trajectory (0 = Wings Towers, 0.5 = Falomo, 1.0 = Wheatbaker)
   const [progress, setProgress] = useState(0.48);
 
+  // Live hardware coordinates from Supabase & Telematics Backend
+  const [driverCoords, setDriverCoords] = useState<{
+    lat: number;
+    lng: number;
+  }>({
+    lat: 7.433688,
+    lng: 4.183283,
+  });
+
+  // Fetch live hardware coordinates from Telematics Backend & Supabase
+  const fetchLiveTelemetry = useCallback(async () => {
+    try {
+      // 1. Fetch from backend API (uses service role and includes ngrok-skip-browser-warning)
+      const res = await backendApi.getTrackerStatus("TRK-892-SIM");
+      if (res && res.success && res.tracker) {
+        const t = res.tracker;
+        if (t.last_latitude && t.last_longitude) {
+          const latNum = Number(t.last_latitude);
+          const lngNum = Number(t.last_longitude);
+          setDriverCoords({ lat: latNum, lng: lngNum });
+          setGpsCoordinates({
+            lat: `${latNum.toFixed(4)}° N`,
+            lng: `${lngNum.toFixed(4)}° E`,
+          });
+          if (t.last_speed_kmh !== null && t.last_speed_kmh !== undefined) {
+            setSpeed(Number(t.last_speed_kmh));
+          }
+          if (t.updated_at) {
+            const time = new Date(t.updated_at).toLocaleTimeString("en-NG", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            });
+            setLastPingTime(`Live GSM Sync at ${time} WAT`);
+          }
+        }
+      }
+
+      // 2. Direct Supabase query to public.vehicles (publicly readable by anon)
+      const { data: vehicleData } = await supabase
+        .from("vehicles")
+        .select("current_latitude, current_longitude, updated_at")
+        .eq("id", "a1b2c3d4-e5f6-7890-abcd-111111111111")
+        .maybeSingle();
+
+      if (
+        vehicleData &&
+        vehicleData.current_latitude &&
+        vehicleData.current_longitude
+      ) {
+        const latNum = Number(vehicleData.current_latitude);
+        const lngNum = Number(vehicleData.current_longitude);
+        setDriverCoords({ lat: latNum, lng: lngNum });
+        setGpsCoordinates({
+          lat: `${latNum.toFixed(4)}° N`,
+          lng: `${lngNum.toFixed(4)}° E`,
+        });
+      }
+    } catch (err) {
+      console.warn("[LiveTracking] Tracker fetch notice:", err);
+    }
+  }, []);
+
+  // Dispatch real SMS ping command ("WHERE#") to SIM tracker every 30 seconds
+  const triggerAutoPing = useCallback(async () => {
+    try {
+      const response = await backendApi.pingTracker("TRK-892-SIM");
+      const now = new Date();
+      const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} WAT`;
+      if (response && response.success) {
+        setLastPingTime(`Auto-ping dispatched at ${timeStr}`);
+        fetchLiveTelemetry();
+      }
+    } catch (e) {
+      console.warn("Auto-ping dispatch error:", e);
+    }
+  }, [fetchLiveTelemetry]);
+
+  const triggerAutoPingRef = useRef(triggerAutoPing);
+  useEffect(() => {
+    triggerAutoPingRef.current = triggerAutoPing;
+  }, [triggerAutoPing]);
+
   // Live countdown timer for ETA & auto-ping
   useEffect(() => {
     const timer = setInterval(() => {
@@ -61,14 +162,11 @@ export default function LiveTrackingPage() {
         return Math.min(Math.max(newSpeed, 36), 49);
       });
 
-      // Decrement SIM ping countdown
+      // Decrement SIM ping countdown & dispatch real GSM ping when cycle reaches zero
       setSimPingCountdown((prev) => {
         if (prev <= 1) {
-          // Simulated auto-ping response received from SIM tracker
-          const now = new Date();
-          const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} WAT`;
-          setLastPingTime(`Auto-synced at ${timeStr}`);
-          return 30; // reset 30s demo cycle
+          triggerAutoPingRef.current();
+          return 60; // reset 60s cycle
         }
         return prev - 1;
       });
@@ -112,25 +210,110 @@ export default function LiveTrackingPage() {
 
   const vehiclePos = getVehicleCoordinates(progress);
 
-  // Check Telematics Backend health on mount
+  // Check Telematics Backend health, start 4s auto-poller, and subscribe to Supabase Realtime
   useEffect(() => {
     backendApi.getHealth().then((health) => {
       setBackendHealth(health);
     });
-  }, []);
+
+    // 1. Initial fetch & 4-second periodic auto-sync
+    fetchLiveTelemetry();
+    const poller = setInterval(() => {
+      fetchLiveTelemetry();
+    }, 4000);
+
+    // 2. Realtime WebSocket listener for immediate coordinate updates
+    const channel = supabase
+      .channel("live_telematics_sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "telematics_pings" },
+        (payload) => {
+          const newPing = (payload.new as any) || (payload.old as any);
+          if (newPing && newPing.latitude && newPing.longitude) {
+            setDriverCoords({
+              lat: Number(newPing.latitude),
+              lng: Number(newPing.longitude),
+            });
+            setGpsCoordinates({
+              lat: `${Number(newPing.latitude).toFixed(4)}° N`,
+              lng: `${Number(newPing.longitude).toFixed(4)}° E`,
+            });
+            if (newPing.speed_kmh !== null && newPing.speed_kmh !== undefined) {
+              setSpeed(Number(newPing.speed_kmh));
+            }
+            const time = new Date(
+              newPing.timestamp || newPing.created_at || Date.now(),
+            ).toLocaleTimeString("en-NG", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            });
+            setLastPingTime(`Real-Time Sync at ${time} WAT`);
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tracker_devices" },
+        (payload) => {
+          const device = (payload.new as any) || (payload.old as any);
+          if (device && device.last_latitude && device.last_longitude) {
+            setDriverCoords({
+              lat: Number(device.last_latitude),
+              lng: Number(device.last_longitude),
+            });
+            setGpsCoordinates({
+              lat: `${Number(device.last_latitude).toFixed(4)}° N`,
+              lng: `${Number(device.last_longitude).toFixed(4)}° E`,
+            });
+            if (device.last_speed_kmh) setSpeed(Number(device.last_speed_kmh));
+            setLastPingTime(`Real-Time Sync at Just Now`);
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vehicles" },
+        (payload) => {
+          const vehicle = (payload.new as any) || (payload.old as any);
+          if (
+            vehicle &&
+            vehicle.current_latitude &&
+            vehicle.current_longitude
+          ) {
+            setDriverCoords({
+              lat: Number(vehicle.current_latitude),
+              lng: Number(vehicle.current_longitude),
+            });
+            setGpsCoordinates({
+              lat: `${Number(vehicle.current_latitude).toFixed(4)}° N`,
+              lng: `${Number(vehicle.current_longitude).toFixed(4)}° E`,
+            });
+            setLastPingTime(`Real-Time Sync at Just Now`);
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(poller);
+      supabase.removeChannel(channel);
+    };
+  }, [fetchLiveTelemetry]);
 
   // Manual trigger to ping SIM card tracker via Standalone Backend API
   const handlePingSimTracker = async () => {
     if (isPingingSim) return;
     setIsPingingSim(true);
     setPingSuccessNotice(
-      "Dispatching encrypted GSM ping to Telematics Backend (Port 4000)..."
+      "Dispatching encrypted GSM ping to Telematics Backend (Port 4000)...",
     );
 
     try {
       const response = await backendApi.pingTracker(
         "TRK-892-SIM",
-        session?.access_token
+        session?.access_token,
       );
 
       const now = new Date();
@@ -138,24 +321,23 @@ export default function LiveTrackingPage() {
 
       if (response && response.success) {
         setLastPingTime(`Manual ping ACK at ${timeStr}`);
-        setSimPingCountdown(30);
+        setSimPingCountdown(60);
 
-        // Micro update GPS coordinates to reflect live movement
-        setGpsCoordinates({
-          lat: `6.44${75 + Math.floor(Math.random() * 5)}° N`,
-          lng: `3.42${43 + Math.floor(Math.random() * 5)}° E`,
-        });
+        // Fetch latest telemetry record
+        fetchLiveTelemetry();
 
         setPingSuccessNotice(
-          `✓ Backend ACK: ${response.message} • Provider: ${response.dispatch?.provider || "GSM SMS Gateway"}`
+          `✓ Backend ACK: ${response.message} • Provider: ${response.dispatch?.provider || "GSM SMS Gateway"}`,
         );
       } else {
         setPingSuccessNotice(
-          `Notice: ${response?.error || "Backend reached but response pending"}`
+          `Notice: ${response?.error || "Backend reached but response pending"}`,
         );
       }
     } catch (err: any) {
-      setPingSuccessNotice(`Backend communication notice: ${err.message || "Failed to reach Port 4000"}`);
+      setPingSuccessNotice(
+        `Backend communication notice: ${err.message || "Failed to reach Port 4000"}`,
+      );
     } finally {
       setIsPingingSim(false);
       setTimeout(() => setPingSuccessNotice(null), 6000);
@@ -177,7 +359,7 @@ export default function LiveTrackingPage() {
     <div className="min-h-screen bg-surface flex flex-col font-sans">
       <Navbar />
 
-      <main className="w-full pt-20 bg-surface min-h-[calc(100vh-20rem)]">
+      <main className="w-full pt-16 lg:pt-20 bg-surface min-h-[calc(100vh-20rem)]">
         <div className="flex flex-col w-full">
           {/* Live Journey Status Ribbon */}
           <div className="w-full bg-surface-container-low/90 border-b border-border backdrop-blur-md px-4 sm:px-6 lg:px-8 py-3.5 shadow-sm">
@@ -221,53 +403,14 @@ export default function LiveTrackingPage() {
                       ESTIMATED ARRIVAL
                     </span>
                     <span className="text-sm font-bold text-primary">
-                      {etaMinutes}m{" "}
-                      {etaSeconds < 10 ? `0${etaSeconds}` : etaSeconds}s away{" "}
+                      {realEtaMinutes !== null
+                        ? realEtaMinutes >= 60
+                          ? `${Math.floor(realEtaMinutes / 60)}h ${realEtaMinutes % 60}m away`
+                          : `${realEtaMinutes}m away`
+                        : `${etaMinutes}m ${etaSeconds < 10 ? `0${etaSeconds}` : etaSeconds}s away`}{" "}
                       <span className="text-secondary font-normal text-xs">
-                        (17:28 WAT)
+                        ({estimatedArrivalTime})
                       </span>
-                    </span>
-                  </div>
-                </div>
-
-                {/* SIM Poller Control */}
-                <div className="hidden md:flex items-center gap-2 pl-4 border-l border-border">
-                  <button
-                    onClick={handlePingSimTracker}
-                    disabled={isPingingSim}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:bg-secondary text-white font-medium text-xs transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                  >
-                    <span
-                      className={`material-symbols-outlined text-sm ${isPingingSim ? "animate-spin" : ""}`}
-                    >
-                      {isPingingSim ? "sync" : "satellite_alt"}
-                    </span>
-                    <span>
-                      {isPingingSim ? "Dispatching..." : "Ping Tracker"}
-                    </span>
-                  </button>
-                  <div className="flex flex-col text-left">
-                    <span className="text-[11px] text-on-surface-variant font-mono">
-                      Auto-ping in {simPingCountdown}s
-                    </span>
-                    <span className="text-[9px] font-mono text-emerald-600 font-semibold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      API: {backendHealth?.status === "ok" ? "Port 4000 Live" : "Standalone :4000"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Starlink Wi-Fi */}
-                <div className="hidden lg:flex items-center gap-2 pl-4 border-l border-border">
-                  <span className="material-symbols-outlined text-secondary text-base">
-                    wifi
-                  </span>
-                  <div className="flex flex-col text-left">
-                    <span className="text-on-surface-variant text-[10px] uppercase font-semibold">
-                      AMENITIES
-                    </span>
-                    <span className="text-xs font-semibold text-primary">
-                      Starlink Wi-Fi 240 Mbps
                     </span>
                   </div>
                 </div>
@@ -304,11 +447,15 @@ export default function LiveTrackingPage() {
                         Trip Progress
                       </span>
                       <h2 className="text-lg font-serif font-bold text-primary">
-                        Falomo Passage
+                        {realDistanceKm && realDistanceKm > 50
+                          ? "Inter-State Corridor"
+                          : "Falomo Passage"}
                       </h2>
                     </div>
                     <span className="px-2.5 py-1 rounded-full bg-secondary-container text-secondary font-bold text-xs">
-                      STAGE 2 / 3
+                      {realDistanceKm && realDistanceKm > 50
+                        ? "LONG-RANGE"
+                        : "STAGE 2 / 3"}
                     </span>
                   </div>
 
@@ -359,7 +506,9 @@ export default function LiveTrackingPage() {
                             17:11 WAT
                           </span>
                           <span className="text-xs font-bold text-primary group-hover:text-secondary transition-colors">
-                            Falomo Bridge Crossing
+                            {realDistanceKm && realDistanceKm > 50
+                              ? `En Route • ${realDistanceKm} km to Destination`
+                              : "Falomo Bridge Crossing"}
                           </span>
                         </div>
                         <span className="text-xs text-on-surface font-medium">
@@ -367,7 +516,7 @@ export default function LiveTrackingPage() {
                           <span className="font-bold text-primary">
                             {speed} km/h
                           </span>{" "}
-                          • Cruising towards Alfred Rewane Rd.
+                          • Cruising towards Destination
                         </span>
                       </div>
                     </div>
@@ -385,7 +534,7 @@ export default function LiveTrackingPage() {
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-on-surface">
-                            17:28 WAT (Est.)
+                            {estimatedArrivalTime} (Est.)
                           </span>
                           <span className="text-on-surface-variant text-xs group-hover:text-secondary transition-colors">
                             • The Wheatbaker Ikoyi
@@ -532,597 +681,26 @@ export default function LiveTrackingPage() {
                       <span>WhatsApp VIP</span>
                     </a>
                   </div>
-
-                  {/* Action Triggers */}
-                  <div className="flex flex-col gap-2 pt-2 border-t border-border">
-                    <button
-                      onClick={() => setIsShareModalOpen(true)}
-                      className="w-full inline-flex items-center justify-between px-3 py-2 rounded-xl bg-surface hover:bg-surface-container-high transition-colors text-left text-xs font-medium text-on-surface border border-border"
-                      type="button"
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <span className="material-symbols-outlined text-secondary text-base">
-                          share_location
-                        </span>
-                        Share Live Trip Tracking Link
-                      </span>
-                      <span className="material-symbols-outlined text-sm text-on-surface-variant">
-                        chevron_right
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => setIsProtocolModalOpen(true)}
-                      className="w-full inline-flex items-center justify-between px-3 py-2 rounded-xl bg-surface hover:bg-surface-container-high transition-colors text-left text-xs font-medium text-on-surface border border-border"
-                      type="button"
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <span className="material-symbols-outlined text-secondary text-base">
-                          security
-                        </span>
-                        VIP Airport &amp; Hotel Protocols
-                      </span>
-                      <span className="material-symbols-outlined text-sm text-on-surface-variant">
-                        chevron_right
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => setIsSimDiagnosticOpen(true)}
-                      className="w-full inline-flex items-center justify-between px-3 py-2 rounded-xl bg-surface hover:bg-surface-container-high transition-colors text-left text-xs font-medium text-on-surface border border-border"
-                      type="button"
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <span className="material-symbols-outlined text-amber-700 text-base">
-                          settings_input_antenna
-                        </span>
-                        SIM Hardware Telematics &amp; Logs
-                      </span>
-                      <span className="material-symbols-outlined text-sm text-on-surface-variant">
-                        chevron_right
-                      </span>
-                    </button>
-                  </div>
                 </div>
 
-                {/* Flight Arrival Linkage Context */}
-                <div className="bg-white rounded-2xl p-4 shadow-sm border border-border flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-secondary border border-border shrink-0">
-                      <span className="material-symbols-outlined text-xl">
-                        flight_land
-                      </span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] uppercase tracking-wider text-secondary font-bold">
-                        Linked Flight Connection
-                      </span>
-                      <span className="text-xs font-bold text-primary">
-                        LOS MMA VIP Terminal • Flight 9H-VTA
-                      </span>
-                    </div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                    Landed On-Time
-                  </span>
-                </div>
+                
               </div>
 
               {/* RIGHT GPS TELEMETRY MAP (lg:col-span-8) */}
               <div className="lg:col-span-8 flex flex-col gap-5">
-                {/* Interactive Live Map Container */}
-                <div className="relative w-full h-[640px] rounded-2xl overflow-hidden shadow-2xl bg-[#0b101b] border border-stone-800">
-                  {/* Layer Background Simulation */}
-                  <div
-                    className="absolute inset-0 transition-transform duration-500 origin-center"
-                    style={{ transform: `scale(${zoomLevel})` }}
-                  >
-                    {/* SVG Map Graphic */}
-                    <svg
-                      className="w-full h-full"
-                      viewBox="0 0 1000 700"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <defs>
-                        <pattern
-                          id="lux-grid"
-                          width="40"
-                          height="40"
-                          patternUnits="userSpaceOnUse"
-                        >
-                          <path
-                            d="M 40 0 L 0 0 0 40"
-                            fill="none"
-                            stroke="#fedeb2"
-                            strokeOpacity={
-                              mapMode === "vector" ? "0.08" : "0.03"
-                            }
-                            strokeWidth="0.5"
-                          />
-                        </pattern>
-
-                        <linearGradient
-                          id="routeGlowGrad"
-                          x1="0%"
-                          y1="100%"
-                          x2="100%"
-                          y2="0%"
-                        >
-                          <stop
-                            offset="0%"
-                            stopColor="#725b38"
-                            stopOpacity="0.4"
-                          />
-                          <stop
-                            offset="50%"
-                            stopColor="#fedeb2"
-                            stopOpacity="0.95"
-                          />
-                          <stop
-                            offset="100%"
-                            stopColor="#ffffff"
-                            stopOpacity="1"
-                          />
-                        </linearGradient>
-
-                        <radialGradient
-                          id="vehiclePulseGrad"
-                          cx="50%"
-                          cy="50%"
-                          r="50%"
-                        >
-                          <stop
-                            offset="0%"
-                            stopColor="#fedeb2"
-                            stopOpacity="0.9"
-                          />
-                          <stop
-                            offset="70%"
-                            stopColor="#725b38"
-                            stopOpacity="0.6"
-                          />
-                          <stop
-                            offset="100%"
-                            stopColor="#725b38"
-                            stopOpacity="0"
-                          />
-                        </radialGradient>
-                      </defs>
-
-                      {/* Map Base color depending on mode */}
-                      <rect
-                        width="100%"
-                        height="100%"
-                        fill={
-                          mapMode === "vector"
-                            ? "#0c111c"
-                            : mapMode === "satellite"
-                              ? "#071216"
-                              : "#0e1520"
-                        }
-                      />
-
-                      {/* Lagos Lagoon & Five Cowrie Creek Waterways */}
-                      <path
-                        d="M -50,420 C 180,390 380,450 540,420 C 700,390 900,460 1100,430 L 1100,620 L -50,620 Z"
-                        fill={mapMode === "satellite" ? "#061826" : "#111c2e"}
-                        opacity="0.85"
-                      />
-
-                      {/* Grid Pattern */}
-                      <rect width="100%" height="100%" fill="url(#lux-grid)" />
-
-                      {/* Victoria Island City Streets Background */}
-                      <path
-                        d="M 120,680 L 260,520 L 380,460 L 520,440"
-                        fill="none"
-                        stroke="#252d3d"
-                        strokeWidth="3"
-                        strokeDasharray="4 4"
-                      />
-                      <path
-                        d="M 260,520 L 480,560 L 760,580"
-                        fill="none"
-                        stroke="#252d3d"
-                        strokeWidth="2"
-                      />
-                      <path
-                        d="M 460,340 L 700,380 L 940,420"
-                        fill="none"
-                        stroke="#252d3d"
-                        strokeWidth="2.5"
-                      />
-                      <path
-                        d="M 520,260 L 720,280 L 880,240"
-                        fill="none"
-                        stroke="#252d3d"
-                        strokeWidth="2"
-                      />
-
-                      {/* Traffic Mode Congestion Highlights */}
-                      {mapMode === "traffic" && (
-                        <>
-                          {/* Green flowing corridor along Ozumba Mbadiwe */}
-                          <path
-                            d="M 120,680 L 260,520"
-                            fill="none"
-                            stroke="#10b981"
-                            strokeWidth="5"
-                            opacity="0.75"
-                          />
-                          {/* Green clear crossing over Falomo */}
-                          <path
-                            d="M 260,520 Q 340,430 460,340"
-                            fill="none"
-                            stroke="#10b981"
-                            strokeWidth="5"
-                            opacity="0.85"
-                          />
-                          {/* Slight amber delay approaching Alfred Rewane */}
-                          <path
-                            d="M 460,340 T 680,160"
-                            fill="none"
-                            stroke="#f59e0b"
-                            strokeWidth="5"
-                            opacity="0.8"
-                          />
-                        </>
-                      )}
-
-                      {/* Active Route Trajectory Corridor */}
-                      {/* Origin: The Wings Towers (260, 520) -> Falomo Bridge (460, 340) -> The Wheatbaker (680, 160) */}
-                      <path
-                        d="M 260,520 Q 340,430 460,340 T 680,160"
-                        fill="none"
-                        id="activeTrajectoryPath"
-                        stroke="url(#routeGlowGrad)"
-                        strokeLinecap="round"
-                        strokeWidth="5.5"
-                      />
-
-                      {/* Completed Segment High-intensity Halo */}
-                      <path
-                        d="M 260,520 Q 340,430 460,340"
-                        fill="none"
-                        stroke="#fedeb2"
-                        strokeOpacity="0.3"
-                        strokeLinecap="round"
-                        strokeWidth="8"
-                      />
-
-                      {/* Route Dots (Past & Future) */}
-                      <circle cx="260" cy="520" r="5" fill="#725b38" />
-                      <circle
-                        cx="310"
-                        cy="470"
-                        r="3.5"
-                        fill="#fedeb2"
-                        opacity="0.8"
-                      />
-                      <circle
-                        cx="370"
-                        cy="415"
-                        r="3.5"
-                        fill="#fedeb2"
-                        opacity="0.8"
-                      />
-                      <circle
-                        cx="410"
-                        cy="380"
-                        r="3.5"
-                        fill="#fedeb2"
-                        opacity="0.8"
-                      />
-                      <circle
-                        cx="510"
-                        cy="290"
-                        r="3"
-                        fill="#ffffff"
-                        opacity="0.5"
-                        stroke="#fedeb2"
-                        strokeDasharray="2 2"
-                      />
-                      <circle
-                        cx="570"
-                        cy="240"
-                        r="3"
-                        fill="#ffffff"
-                        opacity="0.5"
-                        stroke="#fedeb2"
-                        strokeDasharray="2 2"
-                      />
-                      <circle
-                        cx="630"
-                        cy="195"
-                        r="3"
-                        fill="#ffffff"
-                        opacity="0.5"
-                        stroke="#fedeb2"
-                        strokeDasharray="2 2"
-                      />
-
-                      {/* Dynamic Vehicle Marker with Real-time Coordinates */}
-                      <g
-                        transform={`translate(${vehiclePos.x}, ${vehiclePos.y})`}
-                      >
-                        {/* Animated Radar Pulse Rings */}
-                        <circle
-                          cx="0"
-                          cy="0"
-                          r="32"
-                          fill="url(#vehiclePulseGrad)"
-                        >
-                          <animate
-                            attributeName="r"
-                            values="16;42;16"
-                            dur="2.4s"
-                            repeatCount="indefinite"
-                          />
-                          <animate
-                            attributeName="opacity"
-                            values="0.8;0.1;0.8"
-                            dur="2.4s"
-                            repeatCount="indefinite"
-                          />
-                        </circle>
-
-                        {/* Outer Precision Ring */}
-                        <circle
-                          cx="0"
-                          cy="0"
-                          r="14"
-                          fill="#040505"
-                          stroke="#fedeb2"
-                          strokeWidth="2.5"
-                        />
-
-                        {/* Inner Directional Compass Arrow */}
-                        <polygon points="0,-7 5,6 0,3 -5,6" fill="#fedeb2" />
-                      </g>
-                    </svg>
-
-                    {/* WAYPOINT PIN 1: The Wings Towers (Origin) */}
-                    <div
-                      onClick={() => setSelectedWaypoint("wings")}
-                      className="absolute left-[200px] top-[500px] flex items-center gap-2 bg-primary/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-stone-700 shadow-xl cursor-pointer hover:scale-105 transition-transform"
-                    >
-                      <span className="w-2.5 h-2.5 rounded-full bg-stone-400"></span>
-                      <div className="flex flex-col">
-                        <span className="text-[11px] font-bold text-white leading-tight">
-                          The Wings Towers
-                        </span>
-                        <span className="text-[9px] text-stone-400 leading-none">
-                          VI • Dep. 16:45 WAT
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* WAYPOINT PIN 2: Falomo Bridge (Current Live Location) */}
-                    <div
-                      onClick={() => setSelectedWaypoint("falomo")}
-                      className="absolute left-[380px] top-[260px] flex flex-col items-center cursor-pointer hover:scale-105 transition-transform"
-                    >
-                      {/* Live Telemetry Floating HUD Card */}
-                      <div className="bg-primary/95 border border-amber-300/40 backdrop-blur-md rounded-xl p-3 shadow-2xl text-white min-w-[240px]">
-                        <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-stone-800">
-                          <span className="text-[10px] uppercase tracking-wider text-amber-200 font-bold">
-                            LA PLANTA PRIME 01
-                          </span>
-                          <span className="flex items-center gap-1 text-[11px] font-mono font-bold text-white bg-amber-900/60 border border-amber-600/50 px-1.5 py-0.5 rounded">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            {speed} KM/H
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 pt-2 text-left">
-                          <div>
-                            <span className="text-stone-400 text-[9px] block uppercase font-medium">
-                              Heading
-                            </span>
-                            <span className="text-[11px] font-semibold text-white">
-                              024° NNE
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-stone-400 text-[9px] block uppercase font-medium">
-                              GPS Fix
-                            </span>
-                            <span className="text-[11px] font-semibold text-emerald-400">
-                              12 Sats Lock
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-stone-400 text-[9px] block uppercase font-medium">
-                              Coordinates
-                            </span>
-                            <span className="text-[10px] font-mono text-amber-200 font-semibold">
-                              {gpsCoordinates.lat}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="mt-2 pt-1.5 border-t border-stone-800/80 flex items-center justify-between text-[10px] text-stone-400">
-                          <span>Falomo Corridor</span>
-                          <span className="text-amber-300/90 font-mono text-[9px]">
-                            {lastPingTime}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Triangle Pointer down to vehicle */}
-                      <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-primary/95"></div>
-                    </div>
-
-                    {/* WAYPOINT PIN 3: The Wheatbaker Hotel (Destination) */}
-                    <div
-                      onClick={() => setSelectedWaypoint("wheatbaker")}
-                      className="absolute left-[620px] top-[95px] flex items-center gap-2.5 bg-primary/95 border border-amber-400/60 backdrop-blur-md px-3.5 py-2 rounded-xl shadow-2xl cursor-pointer hover:scale-105 transition-transform"
-                    >
-                      <span className="material-symbols-outlined text-amber-300 text-lg">
-                        location_on
-                      </span>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold text-white leading-tight">
-                          The Wheatbaker Hotel
-                        </span>
-                        <span className="text-[10px] text-amber-200 leading-none">
-                          Destination Forecourt • 17:28 WAT
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Lagos Landmarks subtle ambient tags */}
-                    <div className="absolute left-[330px] top-[470px] opacity-60 flex items-center gap-1 text-[11px] text-stone-300 pointer-events-none">
-                      <span className="material-symbols-outlined text-xs">
-                        water
-                      </span>
-                      Five Cowrie Creek
-                    </div>
-                    <div className="absolute left-[540px] top-[300px] opacity-70 flex items-center gap-1 text-[11px] text-amber-200/80 pointer-events-none">
-                      <span className="material-symbols-outlined text-xs">
-                        account_balance
-                      </span>
-                      Falomo Interchange
-                    </div>
-                    <div className="absolute left-[730px] top-[240px] opacity-60 flex items-center gap-1 text-[11px] text-stone-300 pointer-events-none">
-                      <span className="material-symbols-outlined text-xs">
-                        business
-                      </span>
-                      Alfred Rewane Commercial Corridor
-                    </div>
-                  </div>
-
-                  {/* Top-Right Floating Map Layer & Zoom Controls */}
-                  <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
-                    {/* Zoom in / out */}
-                    <div className="bg-white/95 backdrop-blur-md rounded-xl p-1 shadow-xl flex flex-col items-center border border-border">
-                      <button
-                        onClick={() =>
-                          setZoomLevel((prev) => Math.min(prev + 0.15, 1.6))
-                        }
-                        aria-label="Zoom in"
-                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface transition-colors"
-                        type="button"
-                      >
-                        <span className="material-symbols-outlined text-lg">
-                          add
-                        </span>
-                      </button>
-                      <div className="w-5 h-px bg-border my-0.5"></div>
-                      <button
-                        onClick={() =>
-                          setZoomLevel((prev) => Math.max(prev - 0.15, 0.75))
-                        }
-                        aria-label="Zoom out"
-                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface transition-colors"
-                        type="button"
-                      >
-                        <span className="material-symbols-outlined text-lg">
-                          remove
-                        </span>
-                      </button>
-                    </div>
-
-                    {/* Layer Switcher Buttons */}
-                    <button
-                      onClick={() => setMapMode("vector")}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold shadow-lg transition-all flex items-center gap-1.5 border ${
-                        mapMode === "vector"
-                          ? "bg-primary text-white border-secondary"
-                          : "bg-white/95 text-on-surface hover:bg-white border-border"
-                      }`}
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-sm">
-                        map
-                      </span>
-                      <span>Vector Dark</span>
-                    </button>
-
-                    <button
-                      onClick={() => setMapMode("satellite")}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold shadow-lg transition-all flex items-center gap-1.5 border ${
-                        mapMode === "satellite"
-                          ? "bg-primary text-white border-secondary"
-                          : "bg-white/95 text-on-surface hover:bg-white border-border"
-                      }`}
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-sm">
-                        layers
-                      </span>
-                      <span>Satellite</span>
-                    </button>
-
-                    <button
-                      onClick={() => setMapMode("traffic")}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold shadow-lg transition-all flex items-center gap-1.5 border ${
-                        mapMode === "traffic"
-                          ? "bg-primary text-white border-secondary"
-                          : "bg-white/95 text-on-surface hover:bg-white border-border"
-                      }`}
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-sm text-emerald-500">
-                        traffic
-                      </span>
-                      <span>Lagos Traffic HD</span>
-                    </button>
-                  </div>
-
-                  {/* Bottom-Left Map Metric Overlay: Driver quick card */}
-                  <div className="absolute bottom-4 left-4 z-10 bg-white/95 backdrop-blur-md p-3.5 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center gap-3 border border-border">
-                    <div className="flex items-center gap-3">
-                      <img
-                        className="w-11 h-11 rounded-xl object-cover shadow-sm border border-border"
-                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKbjhRjrCmhkNlNkML6SVprykttgquwqWvriXkbf51jsmHySi6yGrZW7ZJSluSjBFkdDZ8NJ2TismICR836d98noMAJJdUUZZjpt0JxtEM9FxNzWymZH9c00BiE4llpKb4bXYsZuCuoikHPm85V8b8o3PtMiKGswUciXjbf9vpKSFsjNerRJ0f54oAOGAH-IAOK5c1Z6j0A2AlKQ8TETBHFXSM3YMTFoUIS7sSk1WZ4TEyd_pRdrRQ"
-                        alt="Emmanuel Okafor"
-                      />
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-primary">
-                            Emmanuel Okafor
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full bg-secondary-container text-secondary text-[10px] font-bold">
-                            {etaMinutes}m away
-                          </span>
-                        </div>
-                        <span className="text-[11px] text-on-surface-variant font-medium">
-                          Range Rover Autobiography • LAG-892-XZ
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 pl-2 border-l border-border">
-                      <button
-                        onClick={() => setIsCallDriverModalOpen(true)}
-                        className="inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-primary text-white hover:bg-secondary text-xs font-semibold transition-all shadow-sm"
-                      >
-                        <span className="material-symbols-outlined text-sm">
-                          call
-                        </span>
-                        <span>Call</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Bottom-Right Recenter Trigger */}
-                  <div className="absolute bottom-4 right-4 z-10">
-                    <button
-                      onClick={() => {
-                        setZoomLevel(1);
-                        setIsCentered(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-primary hover:bg-secondary text-white text-xs font-semibold transition-all shadow-xl active:scale-95"
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined text-base">
-                        my_location
-                      </span>
-                      <span>Center on Vehicle</span>
-                    </button>
-                  </div>
-                </div>
+                {/* Real Google Tracking Map Engine with Turn-by-Turn Route & Traffic */}
+                <GoogleTrackingMap
+                  bookingCode="LP-8842"
+                  vehicleTitle="Range Rover Autobiography LWB"
+                  plateNumber="LAG-892-XZ"
+                  driverName="Emmanuel Okafor"
+                  driverPhone="+234 803 729 4810"
+                  originAddress="The Wings Towers, Ozumba Mbadiwe Ave, Victoria Island, Lagos"
+                  destinationAddress="The Wheatbaker Hotel, 4 Onitolo Rd, Ikoyi, Lagos"
+                  destinationCoords={{ lat: 6.4549, lng: 3.4326 }}
+                  initialDriverCoords={driverCoords}
+                  onEtaUpdate={handleEtaUpdate}
+                />
 
                 {/* Telemetry Data Strip Cards below Map */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1480,8 +1058,16 @@ export default function LiveTrackingPage() {
               </div>
               <div className="flex items-center justify-between text-stone-400 border-b border-slate-700 pb-1">
                 <span>Dispatch Backend:</span>
-                <span className={backendHealth?.status === "ok" ? "text-emerald-300 font-semibold" : "text-amber-400 font-semibold"}>
-                  {backendHealth?.status === "ok" ? "● Online (Port 4000)" : "○ Connecting :4000..."}
+                <span
+                  className={
+                    backendHealth?.status === "ok"
+                      ? "text-emerald-300 font-semibold"
+                      : "text-amber-400 font-semibold"
+                  }
+                >
+                  {backendHealth?.status === "ok"
+                    ? "● Online (Port 4000)"
+                    : "○ Connecting :4000..."}
                 </span>
               </div>
               <div className="flex items-center justify-between text-stone-400 border-b border-slate-700 pb-1">

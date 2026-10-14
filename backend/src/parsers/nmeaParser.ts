@@ -107,5 +107,27 @@ export function parseSmsOrNmeaPayload(rawText: string): ParsedLocation | null {
     }
   }
 
+  // Pattern 4: Raw comma/space separated coordinates (e.g. "7.1948475733240675, 3.450026012569789")
+  const rawCoordRegex = /(-?\d+\.\d{3,})\s*(?:,|\s+)\s*(-?\d+\.\d{3,})/;
+  const rawCoordMatch = text.match(rawCoordRegex);
+  if (rawCoordMatch) {
+    const lat = parseFloat(rawCoordMatch[1]);
+    const lng = parseFloat(rawCoordMatch[2]);
+    const speedMatch = text.match(/Speed:?\s*(\d+(?:\.\d+)?)/i);
+    const speed = speedMatch ? parseFloat(speedMatch[1]) : 42;
+    const batMatch = text.match(/Bat(?:tery)?:?\s*(\d+)%/i);
+    const battery = batMatch ? parseInt(batMatch[1], 10) : 98;
+
+    return {
+      latitude: Number(lat.toFixed(6)),
+      longitude: Number(lng.toFixed(6)),
+      speedKmh: speed,
+      headingDeg: 0,
+      batteryPercentage: battery,
+      ignitionStatus: true,
+      rawPayload: text,
+    };
+  }
+
   return null;
 }

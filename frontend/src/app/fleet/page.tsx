@@ -406,7 +406,7 @@ export default function FleetPage() {
     <div className="min-h-screen bg-surface flex flex-col font-sans">
       <Navbar />
 
-      <main className="w-full pt-20 bg-surface flex-1">
+      <main className="w-full pt-16 lg:pt-20 bg-surface flex-1">
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-10">
           {/* Header Title & Subtitle */}
           <div className="flex flex-col gap-3 mb-8">
@@ -466,6 +466,30 @@ export default function FleetPage() {
                   <span>Reset Filters</span>
                 </button>
               )}
+            </div>
+
+            {/* Mobile Category Quick Chips (Touch app feel) */}
+            <div className="flex sm:hidden items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none pt-1 -mx-1 px-1">
+              {[
+                { label: "All Fleet", value: "All" },
+                { label: "Sedans", value: "Sedans" },
+                { label: "SUVs", value: "SUVs" },
+                { label: "Armored", value: "Armored" },
+                { label: "Vans", value: "Executive Vans" },
+              ].map((chip) => (
+                <button
+                  key={chip.value}
+                  type="button"
+                  onClick={() => setSelectedCategory(chip.value)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                    selectedCategory === chip.value
+                      ? "bg-primary text-secondary-fixed shadow-sm"
+                      : "bg-surface-container-low text-on-surface-variant hover:text-on-surface border border-surface-container"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
             </div>
 
             {/* Filter Controls Row: Category Dropdown, Capacity Dropdown, Sort Dropdown, and Price Slider */}
