@@ -5,6 +5,15 @@ import { useAdminAuth } from "@/context/admin-auth-context";
 import { adminApi } from "@/lib/api";
 import { GoogleFleetMap } from "@/components/google-fleet-map";
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/components/ui/toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type TabType =
   | "overview"
@@ -55,6 +64,8 @@ interface DriverItem {
   badge_number?: string;
   rating?: number;
   status?: string;
+  current_status?: string;
+  is_available?: boolean;
   assigned_vehicle?: string;
   current_client?: string;
 }
@@ -72,16 +83,25 @@ interface UserProfile {
 
 export default function AdminDashboardPage() {
   const { adminUser, logout } = useAdminAuth();
+  const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [backendHealth, setBackendHealth] = useState<string>("connecting");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Client URL for public site deep links
+  const clientUrl =
+    process.env.NEXT_PUBLIC_CLIENT_URL ||
+    (typeof window !== "undefined"
+      ? window.location.origin.replace(":3001", ":3000")
+      : "http://localhost:3000");
 
   // Live Data States
   const [overviewKpis, setOverviewKpis] = useState<any>(null);
   const [fleetList, setFleetList] = useState<FleetVehicle[]>([]);
   const [driverList, setDriverList] = useState<DriverItem[]>([]);
   const [userList, setUserList] = useState<UserProfile[]>([]);
+  const [bookingList, setBookingList] = useState<any[]>([]);
   const [fleetFilter, setFleetFilter] = useState<"all" | "active" | "reserve">(
     "all",
   );
@@ -103,6 +123,18 @@ export default function AdminDashboardPage() {
   const [requestActionSuccess, setRequestActionSuccess] = useState<
     string | null
   >(null);
+
+  // Driver Assignment State
+  const [assigningBookingId, setAssigningBookingId] = useState<string | null>(null);
+
+  // Shadcn Delete Confirmation Dialog State
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    type: "driver" | "vehicle";
+    id: string;
+    name: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Transactional Email Logs State
   const [emailLogs, setEmailLogs] = useState<any[]>([]);
@@ -155,6 +187,13 @@ export default function AdminDashboardPage() {
       }
     });
 
+    // 4b. Bookings for Handover queue & Chauffeur assignment
+    adminApi.getBookings().then((res) => {
+      if (res?.success && res.bookings) {
+        setBookingList(res.bookings);
+      }
+    });
+
     // 5. Users for VIP management
     adminApi.getUsers().then((res) => {
       if (res?.success && res.users) {
@@ -199,6 +238,11 @@ export default function AdminDashboardPage() {
           setOverviewKpis(res.kpis);
         }
       });
+      adminApi.getBookings().then((res) => {
+        if (res?.success && res.bookings) {
+          setBookingList(res.bookings);
+        }
+      });
     }, 10000);
 
     // 10. Real-time PostgreSQL Change Listeners via Supabase Websockets
@@ -224,6 +268,7 @@ export default function AdminDashboardPage() {
         () => {
           reloadRequests();
           reloadFleetAndKpis();
+          reloadBookings();
         }
       )
       .subscribe();
@@ -233,6 +278,13 @@ export default function AdminDashboardPage() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  const reloadBookings = async () => {
+    const res = await adminApi.getBookings();
+    if (res?.success && res.bookings) {
+      setBookingList(res.bookings);
+    }
+  };
 
   const reloadRequests = async () => {
     const res = await adminApi.getBookingRequests();
@@ -363,7 +415,6 @@ export default function AdminDashboardPage() {
     email: "",
     license_number: "",
     badge_number: "",
-    security_clearance_level: "Airside VIP & Diplomatic Escort",
   };
   const [driverFormData, setDriverFormData] = useState(initialDriverForm);
 
@@ -583,22 +634,13 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleDeleteVehicle = async (id: string, name: string) => {
-    if (
-      !confirm(
-        `Are you sure you want to remove ${name} from the active fleet inventory?`,
-      )
-    ) {
-      return;
-    }
-    setDeletingVehicleId(id);
-    const res = await adminApi.deleteVehicle(id);
-    setDeletingVehicleId(null);
-    if (res?.success) {
-      await reloadFleetAndKpis();
-    } else {
-      alert(`Could not delete: ${res?.error || "Unknown error"}`);
-    }
+  const handleDeleteVehicle = (id: string, name: string) => {
+    setDeleteConfirm({
+      isOpen: true,
+      type: "vehicle",
+      id,
+      name,
+    });
   };
 
   const handleCreateDriver = async (e: React.FormEvent) => {
@@ -621,25 +663,135 @@ export default function AdminDashboardPage() {
       badge_number:
         driverFormData.badge_number.trim() ||
         `CH-${Math.floor(100 + Math.random() * 900)}`,
-      security_clearance_level: driverFormData.security_clearance_level,
+      current_status: "available",
+      is_available: true,
     });
     setIsSubmittingDriver(false);
     if (res?.success) {
       setIsAddDriverModalOpen(false);
       setDriverFormData(initialDriverForm);
+      toast({
+        title: "Driver Enrolled",
+        description: `${driverFormData.full_name} has been enrolled to the active roster.`,
+        variant: "success",
+      });
       await reloadDrivers();
     } else {
       setDriverFormError(res?.error || "Failed to add driver");
     }
   };
 
-  const handleDeleteDriver = async (id: string, name: string) => {
-    if (!confirm(`Remove chauffeur ${name} from active roster?`)) return;
-    const res = await adminApi.deleteDriver(id);
+  const handleDeleteDriver = (id: string, name: string) => {
+    setDeleteConfirm({
+      isOpen: true,
+      type: "driver",
+      id,
+      name,
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirm) return;
+    setIsDeleting(true);
+    try {
+      if (deleteConfirm.type === "driver") {
+        const res = await adminApi.deleteDriver(deleteConfirm.id);
+        if (res?.success) {
+          toast({
+            title: "Driver Removed",
+            description: `${deleteConfirm.name} has been removed from active roster.`,
+            variant: "success",
+          });
+          await reloadDrivers();
+        } else {
+          toast({
+            title: "Failed to Remove",
+            description: res?.error || "Could not delete driver",
+            variant: "destructive",
+          });
+        }
+      } else {
+        const res = await adminApi.deleteVehicle(deleteConfirm.id);
+        if (res?.success) {
+          toast({
+            title: "Vehicle Removed",
+            description: `${deleteConfirm.name} has been removed from fleet inventory.`,
+            variant: "success",
+          });
+          await reloadFleetAndKpis();
+        } else {
+          toast({
+            title: "Failed to Remove",
+            description: res?.error || "Could not delete vehicle",
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to delete",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirm(null);
+    }
+  };
+
+  const handleUpdateDriverStatus = async (
+    driverId: string,
+    status: string,
+    driverName: string,
+  ) => {
+    const res = await adminApi.updateDriver(driverId, { current_status: status });
     if (res?.success) {
+      const label =
+        status === "not_available"
+          ? "Not Available"
+          : status === "on_trip"
+            ? "On Trip"
+            : "Available";
+      toast({
+        title: "Driver Status Updated",
+        description: `${driverName} is now marked as ${label}.`,
+        variant: "success",
+      });
+      await reloadDrivers();
+      await reloadFleetAndKpis();
+    } else {
+      toast({
+        title: "Update Failed",
+        description: res?.error || "Failed to update driver status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAssignDriverToBooking = async (
+    bookingId: string,
+    driverId: string | null,
+  ) => {
+    setAssigningBookingId(bookingId);
+    const res = await adminApi.assignDriver(bookingId, driverId || null);
+    setAssigningBookingId(null);
+    if (res?.success) {
+      const assignedDriver = driverList.find((d) => d.id === driverId);
+      toast({
+        title: "Chauffeur Assignment Updated",
+        description: assignedDriver
+          ? `${assignedDriver.full_name} assigned to booking.`
+          : "Chauffeur unassigned from booking.",
+        variant: "success",
+      });
+      await reloadBookings();
       await reloadDrivers();
     } else {
-      alert(`Could not delete: ${res?.error || "Unknown error"}`);
+      toast({
+        title: "Assignment Failed",
+        description: res?.error || "Failed to assign driver",
+        variant: "destructive",
+      });
     }
   };
 
@@ -927,7 +1079,7 @@ export default function AdminDashboardPage() {
                   >
                     supervised_user_circle
                   </span>
-                  <span>Chauffeur Roster</span>
+                  <span>Driver Management</span>
                 </div>
               </button>
 
@@ -1808,164 +1960,212 @@ export default function AdminDashboardPage() {
                     Digital Handover &amp; Inspection Queue
                   </h3>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
-                  1 Inspection Ready for Sign-off
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Handover Card 1 */}
-                <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container flex flex-col justify-between gap-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-primary text-white flex items-center justify-center font-bold text-sm">
-                        LP
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-primary font-semibold">
-                            Booking #LP-8842
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-bold">
-                            READY AT VALET
-                          </span>
-                        </div>
-                        <span className="text-xs text-on-surface-variant">
-                          Guest: Dr. Adekunle Balogun • VIP Client
-                        </span>
-                      </div>
-                    </div>
-                    <span className="text-secondary font-mono font-semibold text-xs">
-                      17:25 WAT
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs bg-surface-container-lowest p-2.5 rounded-lg">
-                    <div>
-                      <span className="text-on-surface-variant block text-[10px] uppercase">
-                        Vehicle
-                      </span>
-                      <span className="font-semibold text-primary">
-                        Range Rover Autobiography
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-on-surface-variant block text-[10px] uppercase">
-                        Assigned Chauffeur
-                      </span>
-                      <span className="font-semibold text-primary">
-                        Emmanuel Okafor
-                      </span>
-                    </div>
-                    <div className="col-span-2 pt-1 border-t border-surface-container flex items-center justify-between text-[11px]">
-                      <span>Location: The Wheatbaker Hotel, Ikoyi</span>
-                      <span className="text-emerald-700 font-semibold">
-                        4/4 Photos Verified
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <a
-                      href="http://localhost:3000/reservation-pass"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-secondary hover:underline text-xs font-semibold flex items-center gap-1"
-                    >
-                      <span className="material-symbols-outlined text-sm">
-                        qr_code_2
-                      </span>
-                      View QR Pass
-                    </a>
-                    <a
-                      href="http://localhost:3000/handover-inspection"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-secondary transition-colors"
-                    >
-                      Launch Inspection Console →
-                    </a>
-                  </div>
-                </div>
-
-                {/* Handover Card 2 */}
-                <div className="p-4 rounded-xl bg-surface-container-lowest border border-surface-container flex flex-col justify-between gap-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-surface-container text-secondary flex items-center justify-center font-bold text-sm">
-                        ABV
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-primary font-semibold">
-                            Booking #LP-8850
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[10px] font-bold">
-                            AIRPORT PICKUP
-                          </span>
-                        </div>
-                        <span className="text-xs text-on-surface-variant">
-                          Guest: Chief O. Fernandez
-                        </span>
-                      </div>
-                    </div>
-                    <span className="text-secondary font-mono font-semibold text-xs">
-                      19:15 WAT
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs bg-surface-container-low p-2.5 rounded-lg">
-                    <div>
-                      <span className="text-on-surface-variant block text-[10px] uppercase">
-                        Vehicle
-                      </span>
-                      <span className="font-semibold text-primary">
-                        Toyota LC 300 VXR
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-on-surface-variant block text-[10px] uppercase">
-                        Assigned Chauffeur
-                      </span>
-                      <span className="font-semibold text-primary">
-                        Segun Alabi
-                      </span>
-                    </div>
-                    <div className="col-span-2 pt-1 border-t border-surface-container flex items-center justify-between text-[11px]">
-                      <span>Location: Nnamdi Azikiwe VIP Wing</span>
-                      <span className="text-secondary font-semibold">
-                        Flight: BA 083 (Tracked)
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-xs text-on-surface-variant">
-                      Chauffeur staged at terminal
-                    </span>
-                    <button
-                      onClick={() => handleAdminPing()}
-                      className="px-3 py-1.5 rounded-lg bg-surface-container text-primary text-xs font-semibold hover:bg-surface-container-high transition-colors"
-                    >
-                      Ping Tracker
-                    </button>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
+                    {bookingList.length} Active Bookings in Pipeline
+                  </span>
+                  <button
+                    onClick={reloadBookings}
+                    className="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary transition-colors flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-sm">sync</span>
+                    Refresh
+                  </button>
                 </div>
               </div>
+
+              {bookingList.length === 0 ? (
+                <div className="py-12 px-4 text-center rounded-xl bg-surface-container-low/40 border border-dashed border-surface-container flex flex-col items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-3xl text-secondary">
+                    fact_check
+                  </span>
+                  <h4 className="font-serif text-base text-primary font-semibold">
+                    No Active Handover Inspections
+                  </h4>
+                  <p className="text-xs text-on-surface-variant max-w-md">
+                    New client reservations confirmed via the public booking portal will automatically sync here for chauffeur dispatch, digital QR pass issuance, and pre-departure inspection sign-off.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {bookingList.map((b) => {
+                    const vehicleName =
+                      b.vehicles?.name ||
+                      (b.vehicles?.brand && b.vehicles?.model
+                        ? `${b.vehicles.brand} ${b.vehicles.model}`
+                        : "Executive Fleet Vehicle");
+                    const guestName =
+                      b.profiles?.full_name || "Executive Guest";
+                    const guestPhone = b.profiles?.phone || "No phone listed";
+                    const statusLabel =
+                      b.status === "in_transit"
+                        ? "IN TRANSIT"
+                        : b.status === "confirmed"
+                          ? "READY AT VALET"
+                          : b.status === "completed"
+                            ? "COMPLETED"
+                            : b.status === "cancelled"
+                              ? "CANCELLED"
+                              : "PENDING SIGN-OFF";
+                    const statusClass =
+                      b.status === "in_transit"
+                        ? "bg-emerald-100 text-emerald-900"
+                        : b.status === "confirmed"
+                          ? "bg-secondary-container text-on-secondary-container"
+                          : b.status === "cancelled"
+                            ? "bg-red-100 text-red-900"
+                            : "bg-amber-100 text-amber-900";
+
+                    return (
+                      <div
+                        key={b.id}
+                        className="p-4 rounded-xl bg-surface-container-low border border-surface-container flex flex-col justify-between gap-3 shadow-sm hover:border-secondary transition-all"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-primary text-secondary-fixed flex items-center justify-center font-bold text-sm">
+                              LP
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-primary font-semibold">
+                                  Booking #{b.booking_reference || b.id.slice(0, 8).toUpperCase()}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusClass}`}
+                                >
+                                  {statusLabel}
+                                </span>
+                              </div>
+                              <span className="text-xs text-on-surface-variant">
+                                Guest: {guestName} • {guestPhone}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-secondary font-mono font-semibold text-xs whitespace-nowrap">
+                            {new Date(
+                              b.pickup_datetime || b.created_at,
+                            ).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}{" "}
+                            WAT
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs bg-surface-container-lowest p-2.5 rounded-lg border border-surface-container/50">
+                          <div>
+                            <span className="text-on-surface-variant block text-[10px] uppercase font-semibold">
+                              Vehicle
+                            </span>
+                            <span className="font-semibold text-primary truncate block">
+                              {vehicleName}
+                            </span>
+                            <span className="text-[10px] text-on-surface-variant font-mono">
+                              {b.vehicles?.license_plate || "LAG-EXEC"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-on-surface-variant block text-[10px] uppercase font-semibold">
+                              Assigned Chauffeur
+                            </span>
+                            <div className="mt-0.5">
+                              <select
+                                value={b.driver_id || ""}
+                                onChange={(e) =>
+                                  handleAssignDriverToBooking(
+                                    b.id,
+                                    e.target.value || null,
+                                  )
+                                }
+                                disabled={assigningBookingId === b.id}
+                                className="w-full h-7 px-2 rounded-lg bg-surface-container-low border border-surface-container text-[11px] font-medium text-primary focus:outline-none focus:border-secondary cursor-pointer disabled:opacity-50"
+                              >
+                                <option value="">-- No Driver Assigned --</option>
+                                {driverList.map((d) => (
+                                  <option key={d.id} value={d.id}>
+                                    {d.full_name} ({d.badge_number || "CH"}) •{" "}
+                                    {d.current_status === "available" || d.is_available
+                                      ? "Available"
+                                      : d.current_status === "on_trip"
+                                        ? "On Trip"
+                                        : "Off Duty"}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="col-span-2 pt-1 border-t border-surface-container flex items-center justify-between text-[11px]">
+                            <span className="truncate max-w-[240px]">
+                              📍 {b.pickup_location || "Operations Hub"}
+                            </span>
+                            <span className="text-secondary font-semibold">
+                              ₦{Number(b.total_amount_ngn || 0).toLocaleString()} Paid
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1">
+                          <a
+                            href={`${clientUrl}/reservation-pass?token=${
+                              b.qr_pass_token || b.id
+                            }&code=${b.booking_reference || b.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-secondary hover:underline text-xs font-semibold flex items-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-sm">
+                              qr_code_2
+                            </span>
+                            View QR Pass
+                          </a>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleAdminPing({
+                                  vehicleId: b.vehicle_id,
+                                  vehicleName,
+                                })
+                              }
+                              className="px-2.5 py-1.5 rounded-lg bg-surface-container text-primary text-xs font-semibold hover:bg-surface-container-high transition-colors flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-xs">
+                                cell_tower
+                              </span>
+                              <span>Ping</span>
+                            </button>
+                            <a
+                              href={`${clientUrl}/handover-inspection?booking_id=${b.id}&vehicle_id=${b.vehicle_id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-secondary transition-colors flex items-center gap-1"
+                            >
+                              <span>Inspection Console</span>
+                              <span className="material-symbols-outlined text-xs">
+                                arrow_forward
+                              </span>
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           )}
 
-          {/* TAB 5: CHAUFFEUR ROSTER */}
+          {/* TAB 5: DRIVER MANAGEMENT */}
           {activeTab === "drivers" && (
             <section className="bg-surface-container-lowest rounded-xl p-5 shadow-sm border border-surface-container/40 flex flex-col gap-4 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-surface-container/40">
                 <div>
                   <span className="text-[11px] uppercase tracking-wider text-secondary font-semibold">
-                    Driver Management
+                    Operations Cockpit
                   </span>
                   <h3 className="font-serif text-xl text-primary font-semibold">
-                    Chauffeur Duty Roster ({driverList.length} Active
-                    Chauffeurs)
+                    Driver Management ({driverList.length} Active Drivers)
                   </h3>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1980,13 +2180,15 @@ export default function AdminDashboardPage() {
                     <span className="material-symbols-outlined text-sm">
                       person_add
                     </span>
-                    <span>+ Add Chauffeur</span>
+                    <span>+ Add Driver</span>
                   </button>
                   <button
                     onClick={() => setIsBroadcastModalOpen(true)}
-                    className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold transition-colors"
+                    className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold transition-colors flex items-center gap-1"
+                    title="Send an urgent announcement or corridor dispatch alert to all active drivers"
                   >
-                    Broadcast Notice
+                    <span className="material-symbols-outlined text-sm">campaign</span>
+                    <span>Broadcast Notice</span>
                   </button>
                 </div>
               </div>
@@ -1997,77 +2199,119 @@ export default function AdminDashboardPage() {
                     badge
                   </span>
                   <h4 className="font-serif text-base text-primary font-semibold">
-                    No Chauffeurs On Roster
+                    No Drivers On Roster
                   </h4>
                   <p className="text-xs text-on-surface-variant">
-                    Click '+ Add Chauffeur' to recruit and vet your first
-                    executive driver.
+                    Click '+ Add Driver' to enroll and vet your first executive chauffeur.
                   </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {driverList.map((d) => (
-                    <div
-                      key={d.id}
-                      className="p-4 rounded-xl bg-surface-container-low border border-surface-container flex flex-col gap-3 group relative"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="relative w-12 h-12 rounded-full overflow-hidden shrink-0 bg-surface-container">
-                          <img
-                            className="w-full h-full object-cover"
-                            alt={d.full_name}
-                            src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400"
-                          />
-                          <span className="absolute bottom-0 right-0 w-3 h-3 bg-secondary rounded-full ring-2 ring-surface-container-lowest" />
+                  {driverList.map((d) => {
+                    const rawStatus =
+                      d.current_status || (d.is_available ? "available" : "not_available");
+                    const normalizedStatus =
+                      rawStatus === "off_duty" ? "not_available" : rawStatus;
+
+                    return (
+                      <div
+                        key={d.id}
+                        className="p-4 rounded-xl bg-surface-container-low border border-surface-container flex flex-col gap-3 group relative shadow-sm hover:border-secondary transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="relative w-12 h-12 rounded-full overflow-hidden shrink-0 bg-surface-container">
+                            <img
+                              className="w-full h-full object-cover"
+                              alt={d.full_name}
+                              src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400"
+                            />
+                            <span
+                              className={`absolute bottom-0 right-0 w-3 h-3 rounded-full ring-2 ring-surface-container-lowest ${
+                                normalizedStatus === "available"
+                                  ? "bg-emerald-500"
+                                  : normalizedStatus === "on_trip"
+                                    ? "bg-amber-500"
+                                    : "bg-red-500"
+                              }`}
+                            />
+                          </div>
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="text-sm text-primary font-semibold truncate">
+                              {d.full_name}
+                            </span>
+                            <span className="text-xs text-secondary font-semibold">
+                              {d.rating || 5.0} ★ • Senior Chauffeur
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteDriver(d.id, d.full_name)}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-on-surface-variant hover:text-red-700 hover:bg-red-50 transition-all"
+                            title="Remove Driver"
+                          >
+                            <span className="material-symbols-outlined text-base">
+                              delete
+                            </span>
+                          </button>
                         </div>
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span className="text-sm text-primary font-semibold truncate">
-                            {d.full_name}
+
+                        {/* Status Manager Toggle */}
+                        <div className="flex flex-col gap-1 bg-surface-container-lowest p-2 rounded-lg border border-surface-container/50">
+                          <span className="text-[10px] text-on-surface-variant uppercase font-semibold">
+                            Operational Status:
                           </span>
-                          <span className="text-xs text-secondary font-semibold">
-                            {d.rating || 5.0} ★ • Senior Chauffeur
-                          </span>
+                          <select
+                            value={normalizedStatus}
+                            onChange={(e) =>
+                              handleUpdateDriverStatus(d.id, e.target.value, d.full_name)
+                            }
+                            className={`h-7 px-2 rounded-md text-xs font-bold uppercase transition-colors border cursor-pointer ${
+                              normalizedStatus === "available"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                : normalizedStatus === "on_trip"
+                                  ? "bg-amber-50 text-amber-800 border-amber-300"
+                                  : "bg-red-50 text-red-800 border-red-300"
+                            }`}
+                          >
+                            <option value="available">● Available</option>
+                            <option value="on_trip">● On Trip</option>
+                            <option value="not_available">● Not Available</option>
+                          </select>
                         </div>
-                        <button
-                          onClick={() => handleDeleteDriver(d.id, d.full_name)}
-                          className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-on-surface-variant hover:text-red-700 hover:bg-red-50 transition-all"
-                          title="Remove Chauffeur"
-                        >
-                          <span className="material-symbols-outlined text-base">
-                            delete
-                          </span>
-                        </button>
+
+                        {/* Assignment & Duty info */}
+                        <div className="text-xs text-on-surface-variant space-y-1">
+                          <div className="flex justify-between">
+                            <span>Badge:</span>
+                            <span className="font-mono font-semibold text-primary">
+                              {d.badge_number || "CH-400"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Shift:</span>
+                            <span className="font-medium text-primary">
+                              {normalizedStatus === "available"
+                                ? "Standby / Ready"
+                                : normalizedStatus === "on_trip"
+                                  ? "Active Charter"
+                                  : "Off Duty"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-surface-container flex items-center justify-between text-xs">
+                          <a
+                            href={`tel:${d.phone}`}
+                            className="text-secondary hover:underline font-semibold flex items-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-sm">
+                              call
+                            </span>
+                            {d.phone}
+                          </a>
+                        </div>
                       </div>
-                      <div className="text-xs text-on-surface-variant space-y-1">
-                        <div className="flex justify-between">
-                          <span>Assigned:</span>{" "}
-                          <span className="font-medium text-primary truncate max-w-[140px]">
-                            {d.assigned_vehicle || "Standby"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Shift:</span>{" "}
-                          <span className="text-emerald-700 font-semibold">
-                            {d.status || "Active On Shift"}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="pt-2 border-t border-surface-container flex items-center justify-between text-xs">
-                        <a
-                          href={`tel:${d.phone}`}
-                          className="text-secondary hover:underline font-semibold flex items-center gap-1"
-                        >
-                          <span className="material-symbols-outlined text-sm">
-                            call
-                          </span>
-                          Call
-                        </a>
-                        <span className="text-primary font-mono">
-                          {d.badge_number || "CH-400"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -2130,10 +2374,7 @@ export default function AdminDashboardPage() {
                               </div>
                               <div className="flex flex-col">
                                 <span className="font-medium text-primary">
-                                  {u.full_name || "Registered Member"}
-                                </span>
-                                <span className="text-[10px] text-on-surface-variant">
-                                  UUID: {u.id.slice(0, 8)}...
+                                  {u.full_name || "Registered Client"}
                                 </span>
                               </div>
                             </div>
@@ -2149,50 +2390,48 @@ export default function AdminDashboardPage() {
                             {u.email}
                           </td>
                           <td className="py-3.5 px-4">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                currentTier === "standard" ||
-                                currentTier === "member"
-                                  ? "bg-surface-container text-on-surface"
-                                  : currentTier === "executive"
-                                    ? "bg-secondary-fixed text-on-secondary-fixed"
-                                    : currentTier === "first_class"
-                                      ? "bg-amber-100 text-amber-900"
-                                      : "bg-purple-100 text-purple-900"
-                              }`}
-                            >
-                              <span className="material-symbols-outlined text-xs">
-                                verified
+                            {currentTier === "standard" || currentTier === "member" ? (
+                              <span className="text-xs text-on-surface-variant font-medium">
+                                Member
                               </span>
-                              {currentTier === "standard" ||
-                              currentTier === "member"
-                                ? "Member"
-                                : currentTier === "executive"
-                                  ? "VIP Executive"
-                                  : currentTier === "first_class"
-                                    ? "VIP First Class"
-                                    : "VIP Diplomatic"}
-                            </span>
+                            ) : currentTier === "executive" ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-black text-white text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                                <span className="material-symbols-outlined text-xs text-white">
+                                  shield
+                                </span>
+                                Executive
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#fedeb2] text-[#725b38] border border-[#d8a86a] text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                                <span className="material-symbols-outlined text-xs text-[#725b38]">
+                                  workspace_premium
+                                </span>
+                                VIP
+                              </span>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-2">
                               <select
                                 disabled={updatingUserId === u.id}
-                                value={currentTier}
+                                value={
+                                  currentTier === "first_class" ||
+                                  currentTier === "diplomatic" ||
+                                  currentTier === "vip"
+                                    ? "first_class"
+                                    : currentTier
+                                }
                                 onChange={(e) =>
                                   handleUpdateTier(u.id, e.target.value)
                                 }
                                 className="h-8 px-2.5 rounded-lg bg-surface-container-low border border-surface-container text-xs font-semibold text-primary focus:outline-none focus:border-secondary cursor-pointer disabled:opacity-50"
                               >
-                                <option value="standard">
-                                  Member (Default)
+                                <option value="standard">Member (No Badge)</option>
+                                <option value="executive">
+                                  Executive (Black Badge)
                                 </option>
-                                <option value="executive">VIP Executive</option>
                                 <option value="first_class">
-                                  VIP First Class
-                                </option>
-                                <option value="diplomatic">
-                                  VIP Diplomatic
+                                  VIP (Gold Badge)
                                 </option>
                               </select>
                               {vipFeedback && vipFeedback.id === u.id && (
@@ -3704,10 +3943,10 @@ export default function AdminDashboardPage() {
                 </div>
                 <div>
                   <h3 className="font-serif text-lg text-primary font-semibold">
-                    Enroll Executive Chauffeur
+                    Enroll Executive Driver
                   </h3>
                   <p className="text-[11px] text-on-surface-variant">
-                    Add a vetted, licensed chauffeur to the operational roster.
+                    Add a vetted, licensed driver to the operational roster.
                   </p>
                 </div>
               </div>
@@ -3803,32 +4042,6 @@ export default function AdminDashboardPage() {
                   placeholder="e.g. DL-LA-992140"
                   className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-mono text-primary focus:outline-none focus:border-secondary"
                 />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
-                  Security Clearance Level
-                </label>
-                <select
-                  value={driverFormData.security_clearance_level}
-                  onChange={(e) =>
-                    setDriverFormData({
-                      ...driverFormData,
-                      security_clearance_level: e.target.value,
-                    })
-                  }
-                  className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
-                >
-                  <option value="Airside VIP & Diplomatic Escort">
-                    Airside VIP &amp; Diplomatic Escort
-                  </option>
-                  <option value="Executive Chauffeur Certified">
-                    Executive Chauffeur Certified
-                  </option>
-                  <option value="Defensive Armed Escort">
-                    Defensive Armed Escort
-                  </option>
-                </select>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-surface-container">
@@ -4033,6 +4246,45 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* SHADCN DELETE CONFIRMATION DIALOG */}
+      <Dialog
+        open={Boolean(deleteConfirm?.isOpen)}
+        onOpenChange={(open) => !open && setDeleteConfirm(null)}
+      >
+        <DialogContent className="sm:max-w-md bg-surface-container-lowest border border-surface-container rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-lg text-primary font-bold">
+              Confirm {deleteConfirm?.type === "driver" ? "Driver" : "Vehicle"} Deletion
+            </DialogTitle>
+            <DialogDescription className="text-xs text-on-surface-variant mt-2 leading-relaxed">
+              Are you sure you want to remove <strong>{deleteConfirm?.name}</strong>? This action cannot be undone and will permanently remove this{" "}
+              {deleteConfirm?.type === "driver"
+                ? "driver from the active roster"
+                : "vehicle from the fleet inventory"}
+              .
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2 mt-4 flex items-center justify-end">
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={() => setDeleteConfirm(null)}
+              className="px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={handleConfirmDelete}
+              className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-md active:scale-95"
+            >
+              {isDeleting ? "Removing..." : "Delete Permanently"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

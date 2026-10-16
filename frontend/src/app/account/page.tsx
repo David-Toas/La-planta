@@ -7,6 +7,7 @@ import { Footer } from "@/components/footer";
 import { useAuth } from "@/context/auth-context";
 import { backendApi } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 
 interface InvoiceData {
   id: string;
@@ -62,9 +63,12 @@ export default function AccountPage() {
 
   // Extension Form
   const [extensionDays, setExtensionDays] = useState(2);
-  const [newReturnDate, setNewReturnDate] = useState(
-    "Nov 19, 2024 (18:00 WAT)",
-  );
+  const [newReturnDate, setNewReturnDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 2);
+    d.setHours(18, 0, 0, 0);
+    return d.toISOString();
+  });
   const [extensionReason, setExtensionReason] = useState(
     "Executive meetings extended in Victoria Island",
   );
@@ -2001,8 +2005,12 @@ export default function AccountPage() {
                         type="button"
                         onClick={() => {
                           setExtensionDays(days);
-                          const d = 17 + days;
-                          setNewReturnDate(`Nov ${d}, 2024 (18:00 WAT)`);
+                          const baseDate = activeBooking?.dropoff_datetime
+                            ? new Date(activeBooking.dropoff_datetime)
+                            : new Date();
+                          const nextDate = new Date(baseDate.getTime() + days * 86400000);
+                          nextDate.setHours(18, 0, 0, 0);
+                          setNewReturnDate(nextDate.toISOString());
                         }}
                         className={`py-2.5 px-3 rounded-xl border text-center transition-all ${
                           extensionDays === days
@@ -2026,12 +2034,19 @@ export default function AccountPage() {
                     <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
                       New Return Date &amp; Time
                     </label>
-                    <input
-                      type="text"
+                    <DateTimePicker
                       value={newReturnDate}
-                      onChange={(e) => setNewReturnDate(e.target.value)}
-                      required
-                      className="w-full h-10 px-3 rounded-lg bg-surface-container-low border border-surface-container font-mono text-xs font-semibold text-primary"
+                      onChange={(d, iso) => {
+                        if (iso) setNewReturnDate(iso);
+                        else if (d) setNewReturnDate(d.toISOString());
+                      }}
+                      minDate={
+                        activeBooking?.dropoff_datetime
+                          ? new Date(activeBooking.dropoff_datetime)
+                          : new Date()
+                      }
+                      placeholder="Select new return date"
+                      buttonClassName="h-10 px-3 bg-surface-container-low border border-surface-container text-xs font-semibold"
                     />
                   </div>
                   <div className="flex flex-col gap-1">

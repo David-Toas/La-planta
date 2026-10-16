@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
 import { AdminAuthProvider } from "@/context/admin-auth-context";
+import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -35,7 +36,9 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans bg-surface text-on-surface antialiased min-h-screen">
-        <AdminAuthProvider>{children}</AdminAuthProvider>
+        <ToastProvider>
+          <AdminAuthProvider>{children}</AdminAuthProvider>
+        </ToastProvider>
       </body>
     </html>
   );

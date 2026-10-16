@@ -48,7 +48,12 @@ export default function AdminLoginPage() {
             </div>
           </div>
           <a
-            href="http://localhost:3000"
+            href={
+              process.env.NEXT_PUBLIC_CLIENT_URL ||
+              (typeof window !== "undefined"
+                ? window.location.origin.replace(":3001", ":3000")
+                : "http://localhost:3000")
+            }
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary transition-colors"

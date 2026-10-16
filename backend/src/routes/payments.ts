@@ -365,12 +365,13 @@ paymentsRouter.post("/webhook", async (req: Request, res: Response) => {
         .update({
           payment_status: "paid",
           status: "confirmed",
-          total_amount: amountNgn,
+          total_amount_ngn: amountNgn,
         })
         .or(`id.eq.${ref},id.eq.${data.metadata?.booking_code}`);
 
       // Dispatch confirmation email in background
       if (data.customer?.email) {
+        const clientDomain = process.env.FRONTEND_URL || "https://la-planta-ocrt.vercel.app";
         sendBookingConfirmationEmail({
           clientName: data.customer?.first_name
             ? `${data.customer.first_name} ${data.customer.last_name || ""}`
@@ -383,8 +384,8 @@ paymentsRouter.post("/webhook", async (req: Request, res: Response) => {
           amountFormatted: `₦${amountNgn.toLocaleString()}`,
           chauffeurProtocol: "Dedicated Professional Driver Included",
           corridor: "Lagos & Abuja Executive Corridors",
-          passUrl: `http://localhost:3000/reservation-pass`,
-          trackingUrl: `http://localhost:3000/live-tracking`,
+          passUrl: `${clientDomain}/reservation-pass`,
+          trackingUrl: `${clientDomain}/live-tracking`,
         }).catch((err) =>
           console.warn("[Webhook Email Warning]:", err.message)
         );
@@ -409,7 +410,7 @@ paymentsRouter.get("/logs", async (req: Request, res: Response) => {
     try {
       const { data } = await supabase
         .from("bookings")
-        .select("id, total_amount, payment_status, status, created_at, profiles(full_name, email, phone), vehicles(name, brand, model)")
+        .select("id, total_amount_ngn, payment_status, status, created_at, profiles(full_name, email, phone), vehicles(name, brand, model)")
         .order("created_at", { ascending: false });
 
       if (data && data.length > 0) {
@@ -419,8 +420,8 @@ paymentsRouter.get("/logs", async (req: Request, res: Response) => {
             id: `db-${b.id}`,
             reference: `LP-PAY-${b.id.substring(0, 8).toUpperCase()}`,
             gateway: "paystack",
-            amount: Number(b.total_amount) || 0,
-            amount_formatted: `₦${(Number(b.total_amount) || 0).toLocaleString()}`,
+            amount: Number(b.total_amount_ngn) || 0,
+            amount_formatted: `₦${(Number(b.total_amount_ngn) || 0).toLocaleString()}`,
             currency: "NGN",
             channel: "card",
             customer_name: (b.profiles as any)?.full_name || "Executive Guest",

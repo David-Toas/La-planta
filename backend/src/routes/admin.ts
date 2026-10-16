@@ -14,7 +14,7 @@ adminRouter.get("/overview", async (req: Request, res: Response) => {
     const [vehiclesRes, driversRes, bookingsRes, profilesRes] = await Promise.all([
       supabase.from("vehicles").select("id, status"),
       supabase.from("drivers").select("id, full_name, is_available, current_status, vetting_status"),
-      supabase.from("bookings").select("id, status, total_amount, payment_status, service_type"),
+      supabase.from("bookings").select("id, status, total_amount_ngn, payment_status, service_type"),
       supabase.from("profiles").select("id, role, vip_tier"),
     ]);
 
@@ -29,7 +29,7 @@ adminRouter.get("/overview", async (req: Request, res: Response) => {
 
     const totalRevenue = bookings
       .filter((b) => b.payment_status === "paid")
-      .reduce((sum, b) => sum + (Number(b.total_amount) || 0), 0);
+      .reduce((sum, b) => sum + (Number(b.total_amount_ngn) || 0), 0);
 
     const activeBookings = bookings.filter((b) => b.status === "in_transit" || b.status === "confirmed").length;
     const vipUsers = profiles.filter((p) => p.vip_tier && p.vip_tier !== "standard").length;
@@ -483,6 +483,91 @@ adminRouter.delete("/drivers/:id", async (req: Request, res: Response) => {
     if (error) throw error;
     return res.json({ success: true, message: "Driver removed" });
   } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/admin/drivers/:id
+ * Update driver status (available, on_trip, not_available/off_duty) and info
+ */
+adminRouter.patch("/drivers/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { current_status, is_available, full_name, phone, license_number, badge_number } = req.body;
+    const updates: any = { updated_at: new Date().toISOString() };
+
+    if (current_status !== undefined) {
+      // Normalize 'not_available' to 'off_duty' if needed
+      const normalizedStatus = current_status === "not_available" ? "off_duty" : current_status;
+      updates.current_status = normalizedStatus;
+      updates.is_available = normalizedStatus === "available";
+    }
+
+    if (is_available !== undefined && current_status === undefined) {
+      updates.is_available = Boolean(is_available);
+      updates.current_status = is_available ? "available" : "off_duty";
+    }
+
+    if (full_name) updates.full_name = full_name;
+    if (phone) updates.phone = phone;
+    if (license_number) updates.license_number = license_number;
+    if (badge_number) updates.badge_number = badge_number;
+
+    const { data, error } = await supabase
+      .from("drivers")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log(`\x1b[32m[Driver Updated]\x1b[0m ${id} -> status: ${updates.current_status || "updated"}`);
+    return res.json({ success: true, driver: data });
+  } catch (err: any) {
+    console.error("[Admin Error] Update driver failed:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/admin/bookings/:id/assign-driver
+ * Assign or reassign a driver to a booking
+ */
+adminRouter.patch("/bookings/:id/assign-driver", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { driver_id } = req.body;
+
+    const { data: booking, error: bError } = await supabase
+      .from("bookings")
+      .update({
+        driver_id: driver_id || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select("*, vehicles(*), profiles(*), drivers(*)")
+      .single();
+
+    if (bError) throw bError;
+
+    // If a driver is assigned, update their status to on_trip
+    if (driver_id) {
+      await supabase
+        .from("drivers")
+        .update({
+          current_status: "on_trip",
+          is_available: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", driver_id);
+    }
+
+    console.log(`\x1b[32m[Driver Assigned]\x1b[0m Booking ${id} assigned to driver ${driver_id || "None"}`);
+    return res.json({ success: true, booking });
+  } catch (err: any) {
+    console.error("[Admin Error] Driver assignment failed:", err);
     return res.status(500).json({ error: err.message });
   }
 });

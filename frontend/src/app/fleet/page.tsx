@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/navbar";
@@ -9,6 +9,7 @@ import { backendApi } from "@/lib/api";
 import { supabase, Vehicle } from "@/lib/supabase";
 import { useAuth } from "@/context/auth-context";
 import { VehicleCard } from "@/components/vehicle-card";
+import { cn } from "@/lib/utils";
 
 export default function FleetPage() {
   const router = useRouter();
@@ -40,6 +41,16 @@ export default function FleetPage() {
   // Gallery Modal State
   const [galleryVehicle, setGalleryVehicle] = useState<Vehicle | null>(null);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState<number>(0);
+
+  // Pagination State (Limit 12 fleets per page)
+  const ITEMS_PER_PAGE = 12;
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const fleetGridRef = useRef<HTMLDivElement>(null);
+
+  // Automatically reset to Page 1 when any filter or sorting criteria changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategory, selectedCapacity, maxPrice, sortBy]);
 
   // Fetch Live Fleet Data
   useEffect(() => {
@@ -109,6 +120,7 @@ export default function FleetPage() {
     setSelectedCapacity("All");
     setMaxPrice(2000000);
     setSortBy("popular");
+    setCurrentPage(1);
   };
 
   const isAnyFilterActive =
@@ -170,6 +182,22 @@ export default function FleetPage() {
       return aAvail - bAvail;
     });
 
+  // Pagination Calculations
+  const totalPages = Math.max(1, Math.ceil(filteredVehicles.length / ITEMS_PER_PAGE));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedVehicles = filteredVehicles.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE
+  );
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    if (fleetGridRef.current) {
+      fleetGridRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   // Photos for active modal
   const modalPhotos = galleryVehicle
     ? ([
@@ -228,7 +256,9 @@ export default function FleetPage() {
                   Refine Inventory
                 </span>
                 <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface text-[11px] font-semibold">
-                  Showing {filteredVehicles.length} of {vehicles.length}
+                  {filteredVehicles.length > 0
+                    ? `Showing ${startIndex + 1}–${Math.min(startIndex + ITEMS_PER_PAGE, filteredVehicles.length)} of ${filteredVehicles.length}`
+                    : "0 units"}
                 </span>
               </div>
 
@@ -424,18 +454,93 @@ export default function FleetPage() {
             </div>
           ) : (
             /* 3–4 Side-by-Side Responsive Grid of Compact Auto-Scrolling Vehicle Cards */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredVehicles.map((vehicle) => (
-                <VehicleCard
-                  key={vehicle.id}
-                  vehicle={vehicle}
-                  onOpenGallery={(v, idx) => {
-                    setGalleryVehicle(v);
-                    setActiveGalleryIndex(idx || 0);
-                  }}
-                  onReserve={handleReserve}
-                />
-              ))}
+            <div ref={fleetGridRef} className="flex flex-col gap-10">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {paginatedVehicles.map((vehicle) => (
+                  <VehicleCard
+                    key={vehicle.id}
+                    vehicle={vehicle}
+                    onOpenGallery={(v, idx) => {
+                      setGalleryVehicle(v);
+                      setActiveGalleryIndex(idx || 0);
+                    }}
+                    onReserve={handleReserve}
+                  />
+                ))}
+              </div>
+
+              {/* Luxury Obsidian & Gold Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="w-full bg-surface-container-lowest p-5 sm:p-6 rounded-2xl shadow-sm border border-black/[0.05] flex flex-col sm:flex-row items-center justify-between gap-4 mt-2">
+                  <div className="text-xs text-on-surface-variant font-medium">
+                    Showing{" "}
+                    <span className="font-bold text-primary font-mono">
+                      {startIndex + 1}
+                    </span>
+                    –
+                    <span className="font-bold text-primary font-mono">
+                      {Math.min(startIndex + ITEMS_PER_PAGE, filteredVehicles.length)}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-bold text-primary font-mono">
+                      {filteredVehicles.length}
+                    </span>{" "}
+                    luxury units (12 per page)
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Previous Page Button */}
+                    <button
+                      type="button"
+                      disabled={safeCurrentPage === 1}
+                      onClick={() => handlePageChange(safeCurrentPage - 1)}
+                      className="px-3.5 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5 border border-surface-container bg-surface-container-low text-primary transition-all hover:bg-secondary-fixed/50 hover:border-secondary/40 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        chevron_left
+                      </span>
+                      <span>Previous</span>
+                    </button>
+
+                    {/* Page Numbers */}
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                        (pageNum) => {
+                          const isCurrent = pageNum === safeCurrentPage;
+                          return (
+                            <button
+                              key={pageNum}
+                              type="button"
+                              onClick={() => handlePageChange(pageNum)}
+                              className={cn(
+                                "w-9 h-9 rounded-xl text-xs font-bold transition-all flex items-center justify-center font-mono shadow-sm",
+                                isCurrent
+                                  ? "bg-primary text-white shadow-md scale-105"
+                                  : "bg-surface-container-lowest border border-surface-container text-on-surface hover:bg-secondary-fixed/50 hover:border-secondary/30",
+                              )}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        },
+                      )}
+                    </div>
+
+                    {/* Next Page Button */}
+                    <button
+                      type="button"
+                      disabled={safeCurrentPage === totalPages}
+                      onClick={() => handlePageChange(safeCurrentPage + 1)}
+                      className="px-3.5 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5 border border-surface-container bg-surface-container-low text-primary transition-all hover:bg-secondary-fixed/50 hover:border-secondary/40 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                    >
+                      <span>Next</span>
+                      <span className="material-symbols-outlined text-sm">
+                        chevron_right
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

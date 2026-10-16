@@ -11,6 +11,7 @@ import { useAuth } from "@/context/auth-context";
 import { backendApi } from "@/lib/api";
 import { supabase, Vehicle } from "@/lib/supabase";
 import { VehicleCard } from "@/components/vehicle-card";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 
 const FALLBACK_VEHICLES: Vehicle[] = [
   {
@@ -31,7 +32,11 @@ const FALLBACK_VEHICLES: Vehicle[] = [
     fuel_battery_level: 100,
     odometer_km: 12000,
     status: "available",
-    features: ["Burmester 4D Audio", "Chilled Refreshment Box", "First-Class Reclining Seats"],
+    features: [
+      "Burmester 4D Audio",
+      "Chilled Refreshment Box",
+      "First-Class Reclining Seats",
+    ],
     hero_image_url:
       "https://lh3.googleusercontent.com/aida-public/AB6AXuDEq6CKJotgsSHP0Gqq0hBl0rPx0O5c28Wh0S2i4oXF-UbSzwP2JwvTg-5No9c5hsLD52FwTXXwd4iJADQ8dLYddKFKQgCA0FHWbVdCQMoHMAUatLtrRf58ctM5XNuE4KS4VUjm3lT6wpaEeWw-fr_acU-K8IzijLlNZNuofyS0povaQIT-A1RLy48Ty1Mvpk9tRASC45JejF1cT8v1lXbUGjv0DMoOF-taw17Z43cae4ymMpql9jYL",
     gallery_image_urls: [],
@@ -57,7 +62,11 @@ const FALLBACK_VEHICLES: Vehicle[] = [
     fuel_battery_level: 100,
     odometer_km: 15400,
     status: "available",
-    features: ["Air Ride LWB", "Active Noise Cancellation", "Executive Hot Stone Massage"],
+    features: [
+      "Air Ride LWB",
+      "Active Noise Cancellation",
+      "Executive Hot Stone Massage",
+    ],
     hero_image_url:
       "https://lh3.googleusercontent.com/aida-public/AB6AXuBVWLez2z5YguHmqNI0_vRyMhuXrigLDRxmJ_agXTCAnGaYgFm5LTy9GZAX9s3PUXJjHYPR8RSET9c6JqFXig12OSehhkM0ZMC85CbABXlww06rgFNbz_tFjx8CdxI2vjxuzJ5adLqMxNfMAqjnVbCXtkB4m412raW-q_dDk8W_OnwvGGHcXlP29H8THTb7BSAH4p9FTcPII-b-0F-Z_nlSk0v0oGNoVzGBGuJBxo45LHt2tFPReO1z",
     gallery_image_urls: [],
@@ -83,7 +92,11 @@ const FALLBACK_VEHICLES: Vehicle[] = [
     fuel_battery_level: 100,
     odometer_km: 9800,
     status: "available",
-    features: ["Four-Zone Climate", "Chilled Cool Box", "Rear Seat Entertainment"],
+    features: [
+      "Four-Zone Climate",
+      "Chilled Cool Box",
+      "Rear Seat Entertainment",
+    ],
     hero_image_url:
       "https://lh3.googleusercontent.com/aida-public/AB6AXuCUjMQeK58RYlQJ7WwCSuRBQG0j-U8TS29VtLsEnGMmNXymViex4KflYxJ9CHXITyZboqW9veUEFYh9qVbwsqTD-mB4YzsqTCAd5VSoBgAdBx0UGCg8UgAqHelIXP45WJjpqqeJVQosmIkH45Eas0YQRkbyFxBo_wm8w-YCDQLQL86vODcFKZ0OdDb7ZRGw_1bE2mMCKZcpU44pJsKjORQcZal9SicgNThG9inGn1OvgXtRP7zkHHgH",
     gallery_image_urls: [],
@@ -102,6 +115,36 @@ export default function HomePage() {
     "Lagos (VI, Ikoyi, Lekki & Airport)",
   );
 
+  const [pickupDateTime, setPickupDateTime] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(10, 0, 0, 0);
+    return d.toISOString();
+  });
+  const [returnDateTime, setReturnDateTime] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 4);
+    d.setHours(18, 0, 0, 0);
+    return d.toISOString();
+  });
+
+  const handlePickupChange = (date: Date | undefined, iso?: string) => {
+    if (!date) return;
+    setPickupDateTime(iso || date.toISOString());
+    const ret = new Date(returnDateTime);
+    if (ret <= date) {
+      const nextRet = new Date(date);
+      nextRet.setDate(nextRet.getDate() + 2);
+      nextRet.setHours(18, 0, 0, 0);
+      setReturnDateTime(nextRet.toISOString());
+    }
+  };
+
+  const handleReturnChange = (date: Date | undefined, iso?: string) => {
+    if (!date) return;
+    setReturnDateTime(iso || date.toISOString());
+  };
+
   const [vehicles, setVehicles] = useState<Vehicle[]>(FALLBACK_VEHICLES);
   const [isLoadingVehicles, setIsLoadingVehicles] = useState(true);
 
@@ -112,7 +155,12 @@ export default function HomePage() {
       try {
         // 1. Try Express Backend API
         const res = await backendApi.getFleet();
-        if (isMounted && res?.success && Array.isArray(res.vehicles) && res.vehicles.length > 0) {
+        if (
+          isMounted &&
+          res?.success &&
+          Array.isArray(res.vehicles) &&
+          res.vehicles.length > 0
+        ) {
           setVehicles(res.vehicles);
           setIsLoadingVehicles(false);
           return;
@@ -274,10 +322,12 @@ export default function HomePage() {
                     </span>
                     Pickup Date &amp; Time
                   </span>
-                  <input
-                    className="w-full bg-transparent text-sm font-semibold text-on-surface outline-none cursor-pointer"
-                    type="datetime-local"
-                    defaultValue="2025-04-12T14:00"
+                  <DateTimePicker
+                    value={pickupDateTime}
+                    onChange={handlePickupChange}
+                    minDate={new Date()}
+                    placeholder="Select Pickup Date & Time"
+                    buttonClassName="h-9 px-2 bg-surface-container-lowest/80 border border-surface-container/60 hover:bg-surface-container-lowest text-xs sm:text-sm font-semibold"
                   />
                   <span className="text-[11px] text-on-surface-variant">
                     Scheduled pickup time
@@ -291,10 +341,14 @@ export default function HomePage() {
                     </span>
                     Return Date &amp; Time
                   </span>
-                  <input
-                    className="w-full bg-transparent text-sm font-semibold text-on-surface outline-none cursor-pointer"
-                    type="datetime-local"
-                    defaultValue="2025-04-14T18:00"
+                  <DateTimePicker
+                    value={returnDateTime}
+                    onChange={handleReturnChange}
+                    minDate={
+                      pickupDateTime ? new Date(pickupDateTime) : new Date()
+                    }
+                    placeholder="Select Return Date & Time"
+                    buttonClassName="h-9 px-2 bg-surface-container-lowest/80 border border-surface-container/60 hover:bg-surface-container-lowest text-xs sm:text-sm font-semibold"
                   />
                   <span className="text-[11px] text-secondary font-medium">
                     Complimentary flexible adjustment
@@ -408,7 +462,9 @@ export default function HomePage() {
                   <VehicleCard
                     key={vehicle.id}
                     vehicle={vehicle}
-                    onReserve={(id) => handleReserve(`/checkout?vehicleId=${id}`)}
+                    onReserve={(id) =>
+                      handleReserve(`/checkout?vehicleId=${id}`)
+                    }
                   />
                 ))}
             </div>
@@ -420,11 +476,10 @@ export default function HomePage() {
                 className="inline-flex items-center gap-2.5 px-8 py-3.5 rounded-full bg-primary hover:bg-secondary text-white text-xs font-semibold uppercase tracking-widest transition-all duration-300 shadow-md hover:shadow-xl hover:scale-[1.02] cursor-pointer"
               >
                 <span>See More</span>
-                <span className="material-symbols-outlined text-base">arrow_forward</span>
+                <span className="material-symbols-outlined text-base">
+                  arrow_forward
+                </span>
               </Link>
-              <span className="text-xs text-on-surface-variant font-medium">
-                Explore the full La Planta Prime executive fleet
-              </span>
             </div>
           </div>
         </section>

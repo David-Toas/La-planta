@@ -8,6 +8,7 @@ import { Footer } from "@/components/footer";
 import { useAuth } from "@/context/auth-context";
 import { backendApi } from "@/lib/api";
 import { supabase, Vehicle } from "@/lib/supabase";
+import { DatePicker } from "@/components/ui/date-picker";
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -741,17 +742,14 @@ function CheckoutContent() {
                                 </span>
                                 Commencement (Pickup Date)
                               </span>
-                              <div className="relative">
-                                <input
-                                  type="date"
-                                  min={todayIso}
-                                  value={startDate}
-                                  onChange={(e) =>
-                                    handleStartDateChange(e.target.value)
-                                  }
-                                  className="w-full h-12 px-4 rounded-xl bg-surface-container-lowest border border-surface-container text-primary text-sm font-semibold focus:outline-none focus:border-secondary transition-colors"
-                                />
-                              </div>
+                              <DatePicker
+                                value={startDate}
+                                onChange={(_, dateStr) =>
+                                  handleStartDateChange(dateStr || "")
+                                }
+                                minDate={todayIso}
+                                placeholder="Select pickup date"
+                              />
                               <span className="text-[11px] text-secondary font-medium">
                                 Starts 09:00 AM Handover
                               </span>
@@ -765,17 +763,14 @@ function CheckoutContent() {
                                 </span>
                                 Conclusion (Return Date)
                               </span>
-                              <div className="relative">
-                                <input
-                                  type="date"
-                                  min={startDate || todayIso}
-                                  value={endDate}
-                                  onChange={(e) =>
-                                    handleEndDateChange(e.target.value)
-                                  }
-                                  className="w-full h-12 px-4 rounded-xl bg-surface-container-lowest border border-surface-container text-primary text-sm font-semibold focus:outline-none focus:border-secondary transition-colors"
-                                />
-                              </div>
+                              <DatePicker
+                                value={endDate}
+                                onChange={(_, dateStr) =>
+                                  handleEndDateChange(dateStr || "")
+                                }
+                                minDate={startDate || todayIso}
+                                placeholder="Select return date"
+                              />
                               <span className="text-[11px] text-secondary font-medium">
                                 Release by 06:00 PM
                               </span>
