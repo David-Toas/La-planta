@@ -22,7 +22,7 @@ export interface Vehicle {
 
 interface GoogleFleetMapProps {
   vehicles: Vehicle[];
-  onPingTracker?: (trackerId: string) => Promise<void>;
+  onPingTracker?: (target?: any) => Promise<void>;
 }
 
 // Nationwide Nigeria City Bounds & Coordinates
@@ -610,7 +610,15 @@ export function GoogleFleetMap({ vehicles, onPingTracker }: GoogleFleetMapProps)
             <div className="flex items-center gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => handlePing()}
+                onClick={() => {
+                  if (onPingTracker) {
+                    onPingTracker({
+                      vehicleId: selectedVehicle.id,
+                      vehicleName: `${selectedVehicle.brand} ${selectedVehicle.model}`,
+                      deviceCode: selectedVehicle.license_plate ? `TRK-${selectedVehicle.license_plate}-SIM` : undefined,
+                    });
+                  }
+                }}
                 className="flex-1 py-1.5 rounded-lg bg-secondary hover:bg-secondary/90 text-primary font-bold text-xs uppercase tracking-wider transition-all"
               >
                 Ping Telemetry

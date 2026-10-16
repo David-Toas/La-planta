@@ -346,7 +346,7 @@ export default function HomePage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Link
-                        href="/vehicle-details"
+                        href="/vehicle-details?vehicleId=a1b2c3d4-e5f6-7890-abcd-222222222222"
                         className="px-3 py-2 rounded-lg bg-surface-container-high text-on-surface hover:bg-secondary-fixed text-xs uppercase tracking-wider font-semibold transition-colors"
                       >
                         Details
@@ -434,7 +434,7 @@ export default function HomePage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Link
-                        href="/vehicle-details"
+                        href="/vehicle-details?vehicleId=a1b2c3d4-e5f6-7890-abcd-111111111111"
                         className="px-3 py-2 rounded-lg bg-surface-container-high text-on-surface hover:bg-secondary-fixed text-xs uppercase tracking-wider font-semibold transition-colors"
                       >
                         Details
@@ -522,7 +522,7 @@ export default function HomePage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Link
-                        href="/vehicle-details"
+                        href="/vehicle-details?vehicleId=a1b2c3d4-e5f6-7890-abcd-444444444444"
                         className="px-3 py-2 rounded-lg bg-surface-container-high text-on-surface hover:bg-secondary-fixed text-xs uppercase tracking-wider font-semibold transition-colors"
                       >
                         Details

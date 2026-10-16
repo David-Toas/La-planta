@@ -136,6 +136,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const openAuthModal = useCallback(() => {
     console.log("[AuthContext] openAuthModal triggered");
+    if (typeof window !== "undefined") {
+      const current = window.location.pathname + window.location.search;
+      if (current && !current.includes("/guest-login") && !current.includes("/account")) {
+        sessionStorage.setItem("laPlanta_current_page", current);
+      }
+    }
     setIsAuthModalOpen(true);
   }, []);
 

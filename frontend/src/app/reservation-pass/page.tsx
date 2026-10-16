@@ -80,7 +80,10 @@ const DEFAULT_BOOKING: BookingPassData = {
       { icon: "wifi", label: "High-Speed Starlink Wi-Fi" },
       { icon: "wine_bar", label: "Chilled Refreshments & Water" },
       { icon: "volume_off", label: "Acoustic Privacy Glazing" },
-      { icon: "airline_seat_recline_extra", label: "Executive Massaging Seats" },
+      {
+        icon: "airline_seat_recline_extra",
+        label: "Executive Massaging Seats",
+      },
     ],
   },
   driver: {
@@ -122,7 +125,9 @@ function ReservationPassContent() {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [searchCodeInput, setSearchCodeInput] = useState("");
   const [showSearchDrawer, setShowSearchDrawer] = useState(false);
-  const [activeMobileTab, setActiveMobileTab] = useState<"pass" | "vehicle" | "itinerary" | "all">("all");
+  const [activeMobileTab, setActiveMobileTab] = useState<
+    "pass" | "vehicle" | "itinerary" | "all"
+  >("all");
   const [qrImgError, setQrImgError] = useState(false);
 
   // Load from URL, LocalStorage or Supabase
@@ -155,8 +160,10 @@ function ReservationPassContent() {
                 },
                 itinerary: {
                   ...prev.itinerary,
-                  pickupAddress: parsed.deliveryAddress || prev.itinerary.pickupAddress,
-                  flightNumber: parsed.flightNumber || prev.itinerary.flightNumber,
+                  pickupAddress:
+                    parsed.deliveryAddress || prev.itinerary.pickupAddress,
+                  flightNumber:
+                    parsed.flightNumber || prev.itinerary.flightNumber,
                   duration: `${parsed.rentalDays || 3} Full Days Reserved`,
                 },
               }));
@@ -172,11 +179,13 @@ function ReservationPassContent() {
         setLoading(true);
         const { data: dbBooking, error } = await supabase
           .from("bookings")
-          .select(`
+          .select(
+            `
             *,
             vehicles:vehicle_id (*),
             drivers:driver_id (*)
-          `)
+          `,
+          )
           .eq("booking_reference", targetCode)
           .maybeSingle();
 
@@ -192,9 +201,10 @@ function ReservationPassContent() {
             amountFormatted: dbBooking.total_amount_ngn
               ? `₦${Number(dbBooking.total_amount_ngn).toLocaleString()}`
               : prev.amountFormatted,
-            serviceTier: dbBooking.service_type === "diplomatic_escort"
-              ? "Diplomatic Armored Escort"
-              : "Executive First Class",
+            serviceTier:
+              dbBooking.service_type === "diplomatic_escort"
+                ? "Diplomatic Armored Escort"
+                : "Executive First Class",
             vehicle: v
               ? {
                   id: v.id,
@@ -203,7 +213,10 @@ function ReservationPassContent() {
                   year: v.year || prev.vehicle.year,
                   color: v.color || prev.vehicle.color,
                   licensePlate: v.license_plate || prev.vehicle.licensePlate,
-                  image: v.hero_image_url || v.gallery_image_urls?.[0] || prev.vehicle.image,
+                  image:
+                    v.hero_image_url ||
+                    v.gallery_image_urls?.[0] ||
+                    prev.vehicle.image,
                   amenities: prev.vehicle.amenities,
                 }
               : prev.vehicle,
@@ -217,13 +230,17 @@ function ReservationPassContent() {
                   phone: d.phone || prev.driver.phone,
                   avatar: d.avatar_url || prev.driver.avatar,
                   bio: prev.driver.bio,
-                  tags: d.certifications?.length ? d.certifications : prev.driver.tags,
+                  tags: d.certifications?.length
+                    ? d.certifications
+                    : prev.driver.tags,
                 }
               : prev.driver,
             itinerary: {
               ...prev.itinerary,
-              pickupLocation: dbBooking.pickup_location || prev.itinerary.pickupLocation,
-              pickupAddress: dbBooking.pickup_location || prev.itinerary.pickupAddress,
+              pickupLocation:
+                dbBooking.pickup_location || prev.itinerary.pickupLocation,
+              pickupAddress:
+                dbBooking.pickup_location || prev.itinerary.pickupAddress,
               pickupDate: dbBooking.pickup_datetime
                 ? new Date(dbBooking.pickup_datetime).toLocaleString("en-NG", {
                     dateStyle: "medium",
@@ -236,7 +253,8 @@ function ReservationPassContent() {
                     timeStyle: "short",
                   }) + " WAT"
                 : prev.itinerary.returnDate,
-              flightNumber: dbBooking.flight_number || prev.itinerary.flightNumber,
+              flightNumber:
+                dbBooking.flight_number || prev.itinerary.flightNumber,
             },
           }));
         }
@@ -269,7 +287,9 @@ function ReservationPassContent() {
     try {
       const res = await backendApi.pingTracker("TRK-892-SIM");
       if (res && res.success) {
-        setPingNotice(`✓ Sent "WHERE#" ping to SIM ${res.simPhone || "+2348140313381"} (Africa's Talking ACK)`);
+        setPingNotice(
+          `✓ Sent "WHERE#" ping to SIM ${res.simPhone || "+2348140313381"} (Africa's Talking ACK)`,
+        );
       } else {
         setPingNotice(`Notice: ${res?.error || "Dispatched"}`);
       }
@@ -309,7 +329,7 @@ function ReservationPassContent() {
 
   const handoverInspectionUrl = `${originUrl}/handover-inspection?code=${booking.bookingCode}&pin=${booking.verificationPin}`;
   const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data=${encodeURIComponent(
-    handoverInspectionUrl
+    handoverInspectionUrl,
   )}`;
 
   return (
@@ -339,7 +359,6 @@ function ReservationPassContent() {
 
       <main className="w-full pt-16 lg:pt-20 pb-28 lg:pb-16 flex-1">
         <div className="max-w-[1280px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
-
           {/* Top Status Notification Banner */}
           <div className="w-full rounded-2xl bg-[#0c1017] border border-white/[0.08] p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl backdrop-blur-xl">
             <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-start">
@@ -349,7 +368,9 @@ function ReservationPassContent() {
               </span>
               <span className="text-stone-500 hidden sm:inline">•</span>
               <span className="text-xs font-medium text-stone-300 flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-sm text-[#d4af37]">badge</span>
+                <span className="material-symbols-outlined text-sm text-[#d4af37]">
+                  badge
+                </span>
                 Chauffeur Scheduled
               </span>
               <span className="text-stone-500 hidden sm:inline">•</span>
@@ -364,12 +385,18 @@ function ReservationPassContent() {
                 type="button"
                 className="no-print inline-flex items-center gap-1.5 text-xs text-stone-400 hover:text-white px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] transition-all"
               >
-                <span className="material-symbols-outlined text-sm">search</span>
+                <span className="material-symbols-outlined text-sm">
+                  search
+                </span>
                 <span>Switch Pass</span>
               </button>
               <div className="flex items-center gap-1.5 text-xs text-stone-400">
-                <span className="material-symbols-outlined text-[#d4af37] text-base">verified</span>
-                <span className="hidden md:inline">Private Handover Cleared</span>
+                <span className="material-symbols-outlined text-[#d4af37] text-base">
+                  verified
+                </span>
+                <span className="hidden md:inline">
+                  Private Handover Cleared
+                </span>
               </div>
             </div>
           </div>
@@ -378,14 +405,20 @@ function ReservationPassContent() {
           {showSearchDrawer && (
             <div className="no-print p-4 rounded-xl bg-[#0c1017] border border-[#d4af37]/30 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center gap-2 w-full sm:w-auto">
-                <span className="material-symbols-outlined text-[#d4af37] text-lg">manage_search</span>
-                <span className="text-xs text-stone-300 font-medium">Lookup Reservation Reference:</span>
+                <span className="material-symbols-outlined text-[#d4af37] text-lg">
+                  manage_search
+                </span>
+                <span className="text-xs text-stone-300 font-medium">
+                  Lookup Reservation Reference:
+                </span>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <input
                   type="text"
                   value={searchCodeInput}
-                  onChange={(e) => setSearchCodeInput(e.target.value.toUpperCase())}
+                  onChange={(e) =>
+                    setSearchCodeInput(e.target.value.toUpperCase())
+                  }
                   placeholder="e.g. LP-8842"
                   className="px-3 py-1.5 rounded-lg bg-black/60 border border-white/20 text-white text-xs font-mono focus:outline-none focus:border-[#d4af37] w-full sm:w-44"
                 />
@@ -408,7 +441,9 @@ function ReservationPassContent() {
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-2 border-b border-white/[0.06]">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="material-symbols-outlined text-[#d4af37] text-base">hotel_class</span>
+                <span className="material-symbols-outlined text-[#d4af37] text-base">
+                  hotel_class
+                </span>
                 <span className="text-[11px] uppercase tracking-widest text-[#d4af37] font-bold">
                   VIP Guest Reservation
                 </span>
@@ -418,7 +453,9 @@ function ReservationPassContent() {
               </h1>
             </div>
             <div className="flex items-center gap-2 self-start md:self-auto">
-              <span className="text-xs uppercase tracking-wider text-stone-400">Service Tier:</span>
+              <span className="text-xs uppercase tracking-wider text-stone-400">
+                Service Tier:
+              </span>
               <span className="px-3 py-1 rounded-md bg-[#d4af37] text-black text-xs font-bold uppercase tracking-wider shadow-sm">
                 {booking.serviceTier}
               </span>
@@ -445,7 +482,9 @@ function ReservationPassContent() {
                   : "text-stone-400 hover:text-white"
               }`}
             >
-              <span className="material-symbols-outlined text-sm">qr_code_2</span>
+              <span className="material-symbols-outlined text-sm">
+                qr_code_2
+              </span>
               <span>QR Voucher</span>
             </button>
             <button
@@ -456,7 +495,9 @@ function ReservationPassContent() {
                   : "text-stone-400 hover:text-white"
               }`}
             >
-              <span className="material-symbols-outlined text-sm">directions_car</span>
+              <span className="material-symbols-outlined text-sm">
+                directions_car
+              </span>
               <span>Asset &amp; Driver</span>
             </button>
             <button
@@ -474,11 +515,12 @@ function ReservationPassContent() {
 
           {/* Main 2-Column Responsive Layout (7 Cols / 5 Cols on desktop) */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
             {/* Left Column: Digital Scannable Pass, Quick Actions, Chauffeur Profile */}
             <div
               className={`lg:col-span-7 flex flex-col gap-6 ${
-                activeMobileTab !== "all" && activeMobileTab !== "pass" && activeMobileTab !== "vehicle"
+                activeMobileTab !== "all" &&
+                activeMobileTab !== "pass" &&
+                activeMobileTab !== "vehicle"
                   ? "hidden lg:flex"
                   : "flex"
               }`}
@@ -539,42 +581,291 @@ function ReservationPassContent() {
                             viewBox="0 0 160 160"
                             xmlns="http://www.w3.org/2000/svg"
                           >
-                            <rect fill="#000000" height="46" rx="6" width="46" x="0" y="0"></rect>
-                            <rect fill="#FFFFFF" height="32" rx="4" width="32" x="7" y="7"></rect>
-                            <rect fill="#000000" height="18" width="18" x="14" y="14"></rect>
-                            <rect fill="#000000" height="46" rx="6" width="46" x="114" y="0"></rect>
-                            <rect fill="#FFFFFF" height="32" rx="4" width="32" x="121" y="7"></rect>
-                            <rect fill="#000000" height="18" width="18" x="128" y="14"></rect>
-                            <rect fill="#000000" height="46" rx="6" width="46" x="0" y="114"></rect>
-                            <rect fill="#FFFFFF" height="32" rx="4" width="32" x="7" y="121"></rect>
-                            <rect fill="#000000" height="18" width="18" x="14" y="128"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="58" y="8"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="74" y="8"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="90" y="8"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="58" y="24"></rect>
-                            <rect fill="#d4af37" height="10" rx="2" width="10" x="74" y="24"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="90" y="24"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="8" y="58"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="24" y="58"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="40" y="58"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="56" y="58"></rect>
-                            <rect fill="#d4af37" height="16" rx="3" width="16" x="72" y="58"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="94" y="58"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="110" y="58"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="126" y="58"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="142" y="58"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="8" y="74"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="24" y="74"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="40" y="74"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="94" y="74"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="110" y="74"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="142" y="74"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="8" y="90"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="24" y="90"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="56" y="90"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="72" y="90"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="88" y="90"></rect>
-                            <rect fill="#000000" height="10" rx="2" width="10" x="126" y="90"></rect>
+                            <rect
+                              fill="#000000"
+                              height="46"
+                              rx="6"
+                              width="46"
+                              x="0"
+                              y="0"
+                            ></rect>
+                            <rect
+                              fill="#FFFFFF"
+                              height="32"
+                              rx="4"
+                              width="32"
+                              x="7"
+                              y="7"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="18"
+                              width="18"
+                              x="14"
+                              y="14"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="46"
+                              rx="6"
+                              width="46"
+                              x="114"
+                              y="0"
+                            ></rect>
+                            <rect
+                              fill="#FFFFFF"
+                              height="32"
+                              rx="4"
+                              width="32"
+                              x="121"
+                              y="7"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="18"
+                              width="18"
+                              x="128"
+                              y="14"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="46"
+                              rx="6"
+                              width="46"
+                              x="0"
+                              y="114"
+                            ></rect>
+                            <rect
+                              fill="#FFFFFF"
+                              height="32"
+                              rx="4"
+                              width="32"
+                              x="7"
+                              y="121"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="18"
+                              width="18"
+                              x="14"
+                              y="128"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="58"
+                              y="8"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="74"
+                              y="8"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="90"
+                              y="8"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="58"
+                              y="24"
+                            ></rect>
+                            <rect
+                              fill="#d4af37"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="74"
+                              y="24"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="90"
+                              y="24"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="8"
+                              y="58"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="24"
+                              y="58"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="40"
+                              y="58"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="56"
+                              y="58"
+                            ></rect>
+                            <rect
+                              fill="#d4af37"
+                              height="16"
+                              rx="3"
+                              width="16"
+                              x="72"
+                              y="58"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="94"
+                              y="58"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="110"
+                              y="58"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="126"
+                              y="58"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="142"
+                              y="58"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="8"
+                              y="74"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="24"
+                              y="74"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="40"
+                              y="74"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="94"
+                              y="74"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="110"
+                              y="74"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="142"
+                              y="74"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="8"
+                              y="90"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="24"
+                              y="90"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="56"
+                              y="90"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="72"
+                              y="90"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="88"
+                              y="90"
+                            ></rect>
+                            <rect
+                              fill="#000000"
+                              height="10"
+                              rx="2"
+                              width="10"
+                              x="126"
+                              y="90"
+                            ></rect>
                           </svg>
                         )}
 
@@ -590,7 +881,9 @@ function ReservationPassContent() {
                         onClick={() => setShowQrModal(true)}
                         className="no-print w-full mt-2 py-1 px-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-stone-300 text-[11px] flex items-center justify-center gap-1 transition-colors"
                       >
-                        <span className="material-symbols-outlined text-xs text-[#d4af37]">fullscreen</span>
+                        <span className="material-symbols-outlined text-xs text-[#d4af37]">
+                          fullscreen
+                        </span>
                         <span>Tap to Enlarge QR</span>
                       </button>
                     </div>
@@ -619,7 +912,9 @@ function ReservationPassContent() {
                           title="Click to copy Verification PIN"
                         >
                           <span className="text-[#d4af37] font-bold">PIN:</span>
-                          <span className="font-bold text-white">{booking.verificationPin}</span>
+                          <span className="font-bold text-white">
+                            {booking.verificationPin}
+                          </span>
                           <span className="material-symbols-outlined text-sm text-stone-400 group-hover:text-white">
                             {copiedPin ? "check" : "content_copy"}
                           </span>
@@ -633,13 +928,19 @@ function ReservationPassContent() {
                       )}
 
                       <p className="text-xs text-stone-400 leading-relaxed">
-                        Present this QR pass upon arrival at the hotel forecourt or private airport terminal.
-                        Your assigned chauffeur will scan the token at vehicle handover to authenticate your itinerary.
+                        Present this QR pass upon arrival at the hotel forecourt
+                        or private airport terminal. Your assigned chauffeur
+                        will scan the token at vehicle handover to authenticate
+                        your itinerary.
                       </p>
 
                       <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 text-[11px] text-stone-400">
-                        <span className="material-symbols-outlined text-emerald-400 text-sm">verified_user</span>
-                        <span>VIP Handover Protocol Cleared • Zero Forecourt Wait</span>
+                        <span className="material-symbols-outlined text-emerald-400 text-sm">
+                          verified_user
+                        </span>
+                        <span>
+                          VIP Handover Protocol Cleared • Zero Forecourt Wait
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -650,19 +951,11 @@ function ReservationPassContent() {
                       href={`/live-tracking?code=${booking.bookingCode}`}
                       className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#d4af37] hover:bg-[#fedeb2] text-black font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-[#d4af37]/15 active:scale-95"
                     >
-                      <span className="material-symbols-outlined text-base">near_me</span>
+                      <span className="material-symbols-outlined text-base">
+                        near_me
+                      </span>
                       <span>Track Chauffeur Live</span>
                     </Link>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowWalletModal(true)}
-                      className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-white font-semibold text-xs transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-base text-[#d4af37]">account_balance_wallet</span>
-                      <span>Add to Apple / Google Wallet</span>
-                    </button>
-
                     <button
                       type="button"
                       onClick={handleDownloadPdf}
@@ -673,37 +966,9 @@ function ReservationPassContent() {
                         {isDownloadingPdf ? "sync" : "picture_as_pdf"}
                       </span>
                       <span>
-                        {isDownloadingPdf ? "Generating PDF Pass..." : "Download Luxury PDF Pass"}
-                      </span>
-                    </button>
-
-                    <a
-                      href={`https://wa.me/23418885275?text=${encodeURIComponent(
-                        `Hello La Planta Concierge, I am inquiring regarding VIP reservation #${booking.bookingCode}`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] text-stone-300 font-medium text-xs transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-base text-emerald-400">chat</span>
-                      <span>WhatsApp Concierge</span>
-                    </a>
-
-                    <button
-                      type="button"
-                      onClick={handlePingSim}
-                      disabled={isPinging}
-                      className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-stone-900/90 hover:bg-stone-800 border border-[#d4af37]/35 text-white font-semibold text-xs transition-all active:scale-95 disabled:opacity-50 sm:col-span-2"
-                    >
-                      <span
-                        className={`material-symbols-outlined text-base ${isPinging ? "animate-spin text-[#d4af37]" : "text-emerald-400"}`}
-                      >
-                        {isPinging ? "sync" : "satellite_alt"}
-                      </span>
-                      <span>
-                        {isPinging
-                          ? "Pinging Tracker SIM..."
-                          : "Ping Chauffeur GPS SIM (Africa's Talking)"}
+                        {isDownloadingPdf
+                          ? "Generating PDF Pass..."
+                          : "Download Luxury PDF Pass"}
                       </span>
                     </button>
                   </div>
@@ -742,7 +1007,9 @@ function ReservationPassContent() {
                       </h2>
                     </div>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-                      <span className="material-symbols-outlined text-xs">verified</span>
+                      <span className="material-symbols-outlined text-xs">
+                        verified
+                      </span>
                       ON SCHEDULE
                     </span>
                   </div>
@@ -765,11 +1032,18 @@ function ReservationPassContent() {
                           {booking.driver.name}
                         </h3>
                         <div className="flex items-center justify-center sm:justify-start gap-1 text-[#d4af37]">
-                          <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+                          <span
+                            className="material-symbols-outlined text-sm"
+                            style={{ fontVariationSettings: "'FILL' 1" }}
+                          >
                             star
                           </span>
-                          <span className="font-bold text-white text-xs">{booking.driver.rating}</span>
-                          <span className="text-stone-400 text-xs">({booking.driver.trips}+ completed trips)</span>
+                          <span className="font-bold text-white text-xs">
+                            {booking.driver.rating}
+                          </span>
+                          <span className="text-stone-400 text-xs">
+                            ({booking.driver.trips}+ completed trips)
+                          </span>
                         </div>
                       </div>
 
@@ -795,19 +1069,10 @@ function ReservationPassContent() {
                       href={`tel:${booking.driver.phone}`}
                       className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-white font-semibold text-xs transition-colors"
                     >
-                      <span className="material-symbols-outlined text-sm text-[#d4af37]">call</span>
+                      <span className="material-symbols-outlined text-sm text-[#d4af37]">
+                        call
+                      </span>
                       <span>Call Chauffeur Directly</span>
-                    </a>
-                    <a
-                      href={`https://wa.me/${booking.driver.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
-                        `Hello Chauffeur ${booking.driver.name}, I am reaching out regarding reservation #${booking.bookingCode}`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-stone-300 hover:text-white font-semibold text-xs transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-sm text-emerald-400">chat</span>
-                      <span>WhatsApp Chauffeur</span>
                     </a>
                   </div>
                 </div>
@@ -817,7 +1082,9 @@ function ReservationPassContent() {
             {/* Right Column: Designated Fleet Asset & Itinerary Logistics */}
             <div
               className={`lg:col-span-5 flex flex-col gap-6 ${
-                activeMobileTab !== "all" && activeMobileTab !== "vehicle" && activeMobileTab !== "itinerary"
+                activeMobileTab !== "all" &&
+                activeMobileTab !== "vehicle" &&
+                activeMobileTab !== "itinerary"
                   ? "hidden lg:flex"
                   : "flex"
               }`}
@@ -830,7 +1097,10 @@ function ReservationPassContent() {
                       <span className="text-[10px] uppercase font-bold tracking-widest text-[#d4af37]">
                         Designated Fleet Asset
                       </span>
-                      <Link href="/vehicle-details" className="hover:text-[#d4af37] transition-colors">
+                      <Link
+                        href="/vehicle-details"
+                        className="hover:text-[#d4af37] transition-colors"
+                      >
                         <h2 className="font-serif text-lg sm:text-xl text-white font-bold">
                           {booking.vehicle.name}
                         </h2>
@@ -882,20 +1152,25 @@ function ReservationPassContent() {
               )}
 
               {/* Reservation & Trip Summary Card */}
-              {(activeMobileTab === "all" || activeMobileTab === "itinerary") && (
+              {(activeMobileTab === "all" ||
+                activeMobileTab === "itinerary") && (
                 <div className="rounded-3xl bg-[#0c1017] border border-white/[0.08] p-6 shadow-xl flex flex-col gap-5">
                   <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
                     <h2 className="font-serif text-lg sm:text-xl text-white font-bold">
                       Reservation &amp; Trip Summary
                     </h2>
-                    <span className="material-symbols-outlined text-[#d4af37]">flight_land</span>
+                    <span className="material-symbols-outlined text-[#d4af37]">
+                      flight_land
+                    </span>
                   </div>
 
                   <div className="flex flex-col gap-4 text-xs">
                     {/* Dates / Timeline */}
                     <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
                       <div className="p-2 rounded-lg bg-[#d4af37]/15 text-[#d4af37] shrink-0">
-                        <span className="material-symbols-outlined text-base">calendar_today</span>
+                        <span className="material-symbols-outlined text-base">
+                          calendar_today
+                        </span>
                       </div>
                       <div className="flex flex-col">
                         <span className="text-[10px] text-stone-400 uppercase tracking-wider font-semibold">
@@ -905,7 +1180,8 @@ function ReservationPassContent() {
                           {booking.itinerary.pickupDate}
                         </span>
                         <span className="text-[11px] text-[#fedeb2] mt-0.5">
-                          Return: {booking.itinerary.returnDate} ({booking.itinerary.duration})
+                          Return: {booking.itinerary.returnDate} (
+                          {booking.itinerary.duration})
                         </span>
                       </div>
                     </div>
@@ -913,7 +1189,9 @@ function ReservationPassContent() {
                     {/* Flight Details */}
                     <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
                       <div className="p-2 rounded-lg bg-emerald-500/15 text-emerald-400 shrink-0">
-                        <span className="material-symbols-outlined text-base">flight</span>
+                        <span className="material-symbols-outlined text-base">
+                          flight
+                        </span>
                       </div>
                       <div className="flex flex-col">
                         <span className="text-[10px] text-stone-400 uppercase tracking-wider font-semibold">
@@ -936,7 +1214,9 @@ function ReservationPassContent() {
                     {/* Delivery Destination */}
                     <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
                       <div className="p-2 rounded-lg bg-amber-500/15 text-amber-400 shrink-0">
-                        <span className="material-symbols-outlined text-base">location_on</span>
+                        <span className="material-symbols-outlined text-base">
+                          location_on
+                        </span>
                       </div>
                       <div className="flex flex-col">
                         <span className="text-[10px] text-stone-400 uppercase tracking-wider font-semibold">
@@ -955,7 +1235,9 @@ function ReservationPassContent() {
                   {/* 24/7 Concierge Support Callout */}
                   <div className="p-4 rounded-2xl bg-black/50 border border-white/[0.08] flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-stone-300 text-xs">
-                      <span className="material-symbols-outlined text-[#d4af37] text-base">support_agent</span>
+                      <span className="material-symbols-outlined text-[#d4af37] text-base">
+                        support_agent
+                      </span>
                       <span>Need changes to your itinerary?</span>
                     </div>
                     <a
@@ -988,7 +1270,9 @@ function ReservationPassContent() {
             type="button"
             className="px-3 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-white text-xs font-semibold flex items-center gap-1 active:scale-95"
           >
-            <span className="material-symbols-outlined text-sm text-[#d4af37]">qr_code_2</span>
+            <span className="material-symbols-outlined text-sm text-[#d4af37]">
+              qr_code_2
+            </span>
             <span>QR Pass</span>
           </button>
           <Link
@@ -1044,17 +1328,21 @@ function ReservationPassContent() {
             </div>
 
             <p className="text-xs text-stone-400 leading-relaxed max-w-xs">
-              Present this high-contrast screen directly to your chauffeur or security personnel. The code is optimized to scan through tinted glass and in low light.
+              Present this high-contrast screen directly to your chauffeur or
+              security personnel. The code is optimized to scan through tinted
+              glass and in low light.
             </p>
 
             <button
               type="button"
               onClick={() => {
                 if (typeof navigator !== "undefined" && navigator.share) {
-                  navigator.share({
-                    title: `La Planta VIP Pass #${booking.bookingCode}`,
-                    url: window.location.href,
-                  }).catch(() => {});
+                  navigator
+                    .share({
+                      title: `La Planta VIP Pass #${booking.bookingCode}`,
+                      url: window.location.href,
+                    })
+                    .catch(() => {});
                 } else {
                   handleCopyPin();
                 }
@@ -1096,13 +1384,17 @@ function ReservationPassContent() {
 
               <div className="flex justify-between items-start text-left">
                 <div>
-                  <div className="text-[9px] uppercase tracking-wider text-stone-400">VEHICLE ASSET</div>
+                  <div className="text-[9px] uppercase tracking-wider text-stone-400">
+                    VEHICLE ASSET
+                  </div>
                   <div className="font-serif text-sm font-bold text-white truncate max-w-[170px]">
                     {booking.vehicle.name}
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[9px] uppercase tracking-wider text-stone-400">BOOKING CODE</div>
+                  <div className="text-[9px] uppercase tracking-wider text-stone-400">
+                    BOOKING CODE
+                  </div>
                   <div className="font-mono text-sm font-bold text-[#d4af37]">
                     #{booking.bookingCode}
                   </div>
@@ -1111,19 +1403,32 @@ function ReservationPassContent() {
 
               <div className="flex justify-between items-start text-left border-t border-white/[0.06] pt-2 text-xs">
                 <div>
-                  <div className="text-[9px] uppercase tracking-wider text-stone-400">CHAUFFEUR</div>
-                  <div className="text-white font-medium">{booking.driver.name}</div>
+                  <div className="text-[9px] uppercase tracking-wider text-stone-400">
+                    CHAUFFEUR
+                  </div>
+                  <div className="text-white font-medium">
+                    {booking.driver.name}
+                  </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[9px] uppercase tracking-wider text-stone-400">PIN CODE</div>
-                  <div className="font-mono text-white font-bold">{booking.verificationPin}</div>
+                  <div className="text-[9px] uppercase tracking-wider text-stone-400">
+                    PIN CODE
+                  </div>
+                  <div className="font-mono text-white font-bold">
+                    {booking.verificationPin}
+                  </div>
                 </div>
               </div>
 
               {/* Barcode Strip */}
               <div className="pt-2 flex flex-col items-center gap-1 border-t border-white/10">
                 <div className="w-32 h-14 bg-white rounded p-1 flex items-center justify-center">
-                  <img src={qrCodeApiUrl} alt="Wallet QR" className="w-full h-full object-contain" suppressHydrationWarning />
+                  <img
+                    src={qrCodeApiUrl}
+                    alt="Wallet QR"
+                    className="w-full h-full object-contain"
+                    suppressHydrationWarning
+                  />
                 </div>
                 <span className="font-mono text-[9px] text-stone-400 tracking-widest">
                   {booking.reference}
@@ -1135,23 +1440,31 @@ function ReservationPassContent() {
               <button
                 type="button"
                 onClick={() => {
-                  alert("Digital Pass ready. In production, this generates a signed Apple .pkpass file for Apple Wallet.");
+                  alert(
+                    "Digital Pass ready. In production, this generates a signed Apple .pkpass file for Apple Wallet.",
+                  );
                   setShowWalletModal(false);
                 }}
                 className="w-full py-3 rounded-xl bg-black border border-white/20 text-white font-semibold text-xs flex items-center justify-center gap-2 hover:bg-white/10 transition-colors"
               >
-                <span className="material-symbols-outlined text-base">phone_iphone</span>
+                <span className="material-symbols-outlined text-base">
+                  phone_iphone
+                </span>
                 <span>Add to Apple Wallet</span>
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  alert("Digital Pass ready. In production, this links directly to Google Wallet via JWT token.");
+                  alert(
+                    "Digital Pass ready. In production, this links directly to Google Wallet via JWT token.",
+                  );
                   setShowWalletModal(false);
                 }}
                 className="w-full py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-stone-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
               >
-                <span className="material-symbols-outlined text-base">wallet</span>
+                <span className="material-symbols-outlined text-base">
+                  wallet
+                </span>
                 <span>Add to Google Wallet</span>
               </button>
             </div>
@@ -1169,7 +1482,9 @@ export default function ReservationPassPage() {
         <div className="min-h-screen bg-[#040505] text-white flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <span className="w-8 h-8 border-2 border-[#d4af37] border-t-transparent rounded-full animate-spin"></span>
-            <span className="text-xs uppercase tracking-widest text-[#d4af37]">Loading VIP Digital Pass...</span>
+            <span className="text-xs uppercase tracking-widest text-[#d4af37]">
+              Loading VIP Digital Pass...
+            </span>
           </div>
         </div>
       }

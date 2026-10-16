@@ -264,6 +264,8 @@ adminRouter.post("/fleet", async (req: Request, res: Response) => {
       hero_image_url,
       gallery_image_urls,
       current_location_name,
+      tracker_code,
+      tracker_sim_phone,
     } = req.body;
 
     if (!brand || !model || !daily_rate_ngn || !license_plate) {
@@ -299,6 +301,55 @@ adminRouter.post("/fleet", async (req: Request, res: Response) => {
 
     if (error) throw error;
 
+    // Handle tracker device registration and assignment
+    if (tracker_code || tracker_sim_phone) {
+      const code = (tracker_code || `TRK-${license_plate.trim().toUpperCase()}-SIM`).trim().toUpperCase();
+      const simPhone = tracker_sim_phone ? tracker_sim_phone.trim() : null;
+
+      try {
+        const { data: existingTracker } = await supabase
+          .from("tracker_devices")
+          .select("id")
+          .eq("device_code", code)
+          .maybeSingle();
+
+        let trackerId: string | null = null;
+
+        if (existingTracker) {
+          trackerId = existingTracker.id;
+          await supabase
+            .from("tracker_devices")
+            .update({
+              ...(simPhone ? { sim_phone_number: simPhone } : {}),
+              assigned_vehicle_id: data.id,
+              status: "online",
+            })
+            .eq("id", trackerId);
+        } else if (simPhone) {
+          const { data: newTracker } = await supabase
+            .from("tracker_devices")
+            .insert({
+              device_code: code,
+              sim_phone_number: simPhone,
+              assigned_vehicle_id: data.id,
+              status: "online",
+              protocol_type: "SMS_NMEA_HYBRID",
+            })
+            .select("id")
+            .single();
+          if (newTracker) trackerId = newTracker.id;
+        }
+
+        if (trackerId) {
+          await supabase.from("vehicles").update({ assigned_tracker_id: trackerId }).eq("id", data.id);
+          data.assigned_tracker_id = trackerId;
+          console.log(`\x1b[35m[Telematics Linked]\x1b[0m Vehicle ${data.id} linked to Tracker ${code} (SIM: ${simPhone || "unchanged"})`);
+        }
+      } catch (trackerErr: any) {
+        console.warn("[Admin Fleet Notice] Tracker assignment error:", trackerErr.message);
+      }
+    }
+
     console.log(`\x1b[32m[Admin Fleet Added]\x1b[0m ${vehicleName} (${license_plate})`);
     return res.status(201).json({ success: true, vehicle: data });
   } catch (err: any) {
@@ -314,7 +365,8 @@ adminRouter.post("/fleet", async (req: Request, res: Response) => {
 adminRouter.patch("/fleet/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const updates = { ...req.body, updated_at: new Date().toISOString() };
+    const { tracker_code, tracker_sim_phone, ...vehicleFields } = req.body;
+    const updates = { ...vehicleFields, updated_at: new Date().toISOString() };
 
     const { data, error } = await supabase
       .from("vehicles")
@@ -324,6 +376,41 @@ adminRouter.patch("/fleet/:id", async (req: Request, res: Response) => {
       .single();
 
     if (error) throw error;
+
+    // Handle tracker device updates if provided
+    if (tracker_code || tracker_sim_phone) {
+      try {
+        const simPhone = tracker_sim_phone ? tracker_sim_phone.trim() : null;
+        let trackerId = data.assigned_tracker_id;
+
+        if (trackerId) {
+          const trackerUpdates: any = { assigned_vehicle_id: id };
+          if (tracker_code) trackerUpdates.device_code = tracker_code.trim().toUpperCase();
+          if (simPhone) trackerUpdates.sim_phone_number = simPhone;
+
+          await supabase.from("tracker_devices").update(trackerUpdates).eq("id", trackerId);
+        } else if (tracker_code || simPhone) {
+          const code = (tracker_code || `TRK-${data.license_plate}-SIM`).trim().toUpperCase();
+          const { data: newTracker } = await supabase
+            .from("tracker_devices")
+            .upsert({
+              device_code: code,
+              sim_phone_number: simPhone || "+2348140313381",
+              assigned_vehicle_id: id,
+              status: "online",
+            }, { onConflict: "device_code" })
+            .select("id")
+            .single();
+
+          if (newTracker) {
+            await supabase.from("vehicles").update({ assigned_tracker_id: newTracker.id }).eq("id", id);
+            data.assigned_tracker_id = newTracker.id;
+          }
+        }
+      } catch (tErr: any) {
+        console.warn("[Admin Fleet Notice] Tracker update error:", tErr.message);
+      }
+    }
 
     console.log(`\x1b[33m[Admin Fleet Updated]\x1b[0m Vehicle ${id}`);
     return res.json({ success: true, vehicle: data });

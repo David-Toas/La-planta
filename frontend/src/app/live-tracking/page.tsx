@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { backendApi } from "@/lib/api";
@@ -9,7 +10,9 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/auth-context";
 import { GoogleTrackingMap } from "@/components/google-tracking-map";
 
-export default function LiveTrackingPage() {
+function LiveTrackingContent() {
+  const searchParams = useSearchParams();
+  const vehicleIdParam = searchParams?.get("vehicleId") || searchParams?.get("id") || "a1b2c3d4-e5f6-7890-abcd-111111111111";
   const { session } = useAuth();
   const [backendHealth, setBackendHealth] = useState<{
     status: string;
@@ -75,8 +78,39 @@ export default function LiveTrackingPage() {
   // Fetch live hardware coordinates from Telematics Backend & Supabase
   const fetchLiveTelemetry = useCallback(async () => {
     try {
-      // 1. Fetch from backend API (uses service role and includes ngrok-skip-browser-warning)
-      const res = await backendApi.getTrackerStatus("TRK-892-SIM");
+      // 1. Direct Supabase query to public.vehicles
+      const { data: vehicleData } = await supabase
+        .from("vehicles")
+        .select("id, name, current_latitude, current_longitude, updated_at, assigned_tracker_id")
+        .eq("id", vehicleIdParam)
+        .maybeSingle();
+
+      if (
+        vehicleData &&
+        vehicleData.current_latitude &&
+        vehicleData.current_longitude
+      ) {
+        const latNum = Number(vehicleData.current_latitude);
+        const lngNum = Number(vehicleData.current_longitude);
+        setDriverCoords({ lat: latNum, lng: lngNum });
+        setGpsCoordinates({
+          lat: `${latNum.toFixed(4)}° N`,
+          lng: `${lngNum.toFixed(4)}° E`,
+        });
+      }
+
+      // 2. Fetch tracker status from backend API if assigned tracker exists or by default unit
+      let trackerCode = "TRK-892-SIM";
+      if (vehicleData?.assigned_tracker_id) {
+        const { data: t } = await supabase
+          .from("tracker_devices")
+          .select("device_code")
+          .eq("id", vehicleData.assigned_tracker_id)
+          .maybeSingle();
+        if (t?.device_code) trackerCode = t.device_code;
+      }
+
+      const res = await backendApi.getTrackerStatus(trackerCode);
       if (res && res.success && res.tracker) {
         const t = res.tracker;
         if (t.last_latitude && t.last_longitude) {
@@ -100,36 +134,15 @@ export default function LiveTrackingPage() {
           }
         }
       }
-
-      // 2. Direct Supabase query to public.vehicles (publicly readable by anon)
-      const { data: vehicleData } = await supabase
-        .from("vehicles")
-        .select("current_latitude, current_longitude, updated_at")
-        .eq("id", "a1b2c3d4-e5f6-7890-abcd-111111111111")
-        .maybeSingle();
-
-      if (
-        vehicleData &&
-        vehicleData.current_latitude &&
-        vehicleData.current_longitude
-      ) {
-        const latNum = Number(vehicleData.current_latitude);
-        const lngNum = Number(vehicleData.current_longitude);
-        setDriverCoords({ lat: latNum, lng: lngNum });
-        setGpsCoordinates({
-          lat: `${latNum.toFixed(4)}° N`,
-          lng: `${lngNum.toFixed(4)}° E`,
-        });
-      }
     } catch (err) {
       console.warn("[LiveTracking] Tracker fetch notice:", err);
     }
-  }, []);
+  }, [vehicleIdParam]);
 
-  // Dispatch real SMS ping command ("WHERE#") to SIM tracker every 30 seconds
+  // Dispatch real SMS ping command ("WHERE#") to SIM tracker every 60 seconds
   const triggerAutoPing = useCallback(async () => {
     try {
-      const response = await backendApi.pingTracker("TRK-892-SIM");
+      const response = await backendApi.pingTracker({ vehicleId: vehicleIdParam });
       const now = new Date();
       const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} WAT`;
       if (response && response.success) {
@@ -139,7 +152,7 @@ export default function LiveTrackingPage() {
     } catch (e) {
       console.warn("Auto-ping dispatch error:", e);
     }
-  }, [fetchLiveTelemetry]);
+  }, [fetchLiveTelemetry, vehicleIdParam]);
 
   const triggerAutoPingRef = useRef(triggerAutoPing);
   useEffect(() => {
@@ -1185,5 +1198,24 @@ export default function LiveTrackingPage() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function LiveTrackingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-surface flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm font-serif text-primary">
+              Connecting to Fleet Telematics...
+            </span>
+          </div>
+        </div>
+      }
+    >
+      <LiveTrackingContent />
+    </Suspense>
   );
 }

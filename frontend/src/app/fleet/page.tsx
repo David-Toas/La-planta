@@ -168,9 +168,11 @@ function VehicleCardItem({
               Ready
             </span>
           </div>
-          <h3 className="font-serif text-xl sm:text-2xl text-primary font-semibold leading-snug truncate">
-            {vehicleName}
-          </h3>
+          <Link href={`/vehicle-details?vehicleId=${vehicle.id}`} className="hover:text-secondary transition-colors">
+            <h3 className="font-serif text-xl sm:text-2xl text-primary font-semibold leading-snug truncate">
+              {vehicleName}
+            </h3>
+          </Link>
           <p className="text-xs text-on-surface-variant line-clamp-2 leading-relaxed">
             {vehicle.features && vehicle.features.length > 0
               ? vehicle.features.slice(0, 3).join(" • ")
@@ -214,14 +216,13 @@ function VehicleCardItem({
 
         {/* Action Buttons Row (Placed BELOW the Price) */}
         <div className="grid grid-cols-2 gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => onOpenGallery(vehicle, currentIndex)}
+          <Link
+            href={`/vehicle-details?vehicleId=${vehicle.id}`}
             className="w-full h-10 rounded-xl bg-surface-container hover:bg-secondary-fixed text-primary text-xs font-semibold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5"
           >
-            <span className="material-symbols-outlined text-sm">photo_library</span>
-            <span>Gallery</span>
-          </button>
+            <span className="material-symbols-outlined text-sm">info</span>
+            <span>Detail</span>
+          </Link>
 
           <button
             type="button"

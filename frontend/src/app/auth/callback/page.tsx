@@ -20,8 +20,13 @@ export default function AuthCallbackPage() {
               sessionStorage.removeItem("laPlanta_intended_destination");
               return dest;
             }
+            const returnPage = sessionStorage.getItem("laPlanta_current_page");
+            if (returnPage && !returnPage.includes("/account") && !returnPage.includes("/guest-login")) {
+              sessionStorage.removeItem("laPlanta_current_page");
+              return returnPage;
+            }
           }
-          return "/account";
+          return "/fleet";
         };
 
         // 1. Check if Supabase client already auto-resolved the session from the URL hash/code

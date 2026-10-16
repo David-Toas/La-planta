@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useAdminAuth } from "@/context/admin-auth-context";
 import { adminApi } from "@/lib/api";
 import { GoogleFleetMap } from "@/components/google-fleet-map";
+import { supabase } from "@/lib/supabase";
 
 type TabType =
   | "overview"
@@ -41,6 +42,10 @@ interface FleetVehicle {
   hero_image_url?: string;
   gallery_image_urls?: string[];
   features?: string[];
+  assigned_tracker_id?: string;
+  tracker_code?: string;
+  tracker_sim_phone?: string;
+  tracker_devices?: any;
 }
 
 interface DriverItem {
@@ -80,6 +85,7 @@ export default function AdminDashboardPage() {
   const [fleetFilter, setFleetFilter] = useState<"all" | "active" | "reserve">(
     "all",
   );
+  const [fleetSearchQuery, setFleetSearchQuery] = useState("");
   const [paymentLogs, setPaymentLogs] = useState<any[]>([]);
   const [paymentSummary, setPaymentSummary] = useState<any>(null);
 
@@ -195,7 +201,37 @@ export default function AdminDashboardPage() {
       });
     }, 10000);
 
-    return () => clearInterval(poller);
+    // 10. Real-time PostgreSQL Change Listeners via Supabase Websockets
+    const channel = supabase
+      .channel("admin-app-fleet-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vehicles" },
+        () => {
+          reloadFleetAndKpis();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "drivers" },
+        () => {
+          reloadDrivers();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings" },
+        () => {
+          reloadRequests();
+          reloadFleetAndKpis();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(poller);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const reloadRequests = async () => {
@@ -309,6 +345,8 @@ export default function AdminDashboardPage() {
     gallery_image_urls: "",
     features:
       "Starlink Wi-Fi, Executive Rear Seating, Chilled Refreshments Console, Acoustic Privacy Glass, Massage Seats",
+    tracker_code: "",
+    tracker_sim_phone: "",
   };
   const [vehicleFormData, setVehicleFormData] = useState(initialVehicleForm);
   const [isUploadingHero, setIsUploadingHero] = useState(false);
@@ -358,6 +396,10 @@ export default function AdminDashboardPage() {
 
   const handleOpenEditVehicle = (v: FleetVehicle) => {
     setEditingVehicle(v);
+    const resolvedTracker = Array.isArray(v.tracker_devices)
+      ? v.tracker_devices[0]
+      : v.tracker_devices;
+
     setVehicleFormData({
       brand: v.brand || v.make || "",
       model: v.model || "",
@@ -383,6 +425,8 @@ export default function AdminDashboardPage() {
       features:
         (v.features || []).join(", ") ||
         "Starlink Wi-Fi, Executive Rear Seating",
+      tracker_code: v.tracker_code || resolvedTracker?.device_code || "",
+      tracker_sim_phone: v.tracker_sim_phone || resolvedTracker?.sim_phone_number || "",
     });
     setVehicleFormError(null);
     setImageUploadError(null);
@@ -510,6 +554,8 @@ export default function AdminDashboardPage() {
         .split(",")
         .map((s) => s.trim())
         .filter((s) => s.length > 0),
+      tracker_code: vehicleFormData.tracker_code.trim() || undefined,
+      tracker_sim_phone: vehicleFormData.tracker_sim_phone.trim() || undefined,
     };
 
     try {
@@ -597,19 +643,45 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Ping Tracker action
-  const handleAdminPing = async () => {
+  // Dynamic Ping Tracker action
+  const handleAdminPing = async (
+    target?:
+      | string
+      | { vehicleId?: string; deviceCode?: string; vehicleName?: string }
+      | any,
+  ) => {
     setIsPinging(true);
-    const res = await adminApi.pingTracker("TRK-892-SIM");
+    let payload: any = "TRK-892-SIM";
+    let assetLabel = "";
+
+    // Guard against React ClickEvent being passed as target
+    if (target && typeof target === "object" && ("nativeEvent" in target || "currentTarget" in target)) {
+      target = undefined;
+    }
+
+    if (typeof target === "string") {
+      payload = { deviceCode: target };
+      assetLabel = ` (${target})`;
+    } else if (target && typeof target === "object") {
+      payload = {
+        vehicleId: target.vehicleId,
+        deviceCode: target.deviceCode,
+      };
+      if (target.vehicleName) assetLabel = ` for ${target.vehicleName}`;
+    }
+
+    const res = await adminApi.pingTracker(payload);
     if (res?.success) {
+      const simDisplay = res.simPhone || "Database SIM";
+      const unitDisplay = res.deviceCode ? ` [${res.deviceCode}]` : "";
       setPingAlert(
-        `✓ Sent "WHERE#" ping to SIM ${res.simPhone || "+2348037294810"} (Express :4000 ACK)`,
+        `✓ Sent "WHERE#" ping to SIM ${simDisplay}${unitDisplay}${assetLabel} (Telematics ACK)`,
       );
     } else {
       setPingAlert(`Notice: ${res?.error || "Dispatched"}`);
     }
     setIsPinging(false);
-    setTimeout(() => setPingAlert(null), 5000);
+    setTimeout(() => setPingAlert(null), 6000);
   };
 
   // Admin VIP Tier Update handler
@@ -652,9 +724,22 @@ export default function AdminDashboardPage() {
 
   // Filtered fleet
   const displayedFleet = fleetList.filter((v) => {
-    if (fleetFilter === "active")
-      return v.status === "in_transit" || v.status === "reserved";
-    if (fleetFilter === "reserve") return v.status === "available";
+    if (fleetFilter === "active") {
+      if (v.status !== "in_transit" && v.status !== "reserved") return false;
+    } else if (fleetFilter === "reserve") {
+      if (v.status !== "available") return false;
+    }
+
+    if (fleetSearchQuery.trim()) {
+      const q = fleetSearchQuery.toLowerCase();
+      const matchBrand = (v.brand || v.make || "").toLowerCase().includes(q);
+      const matchModel = (v.model || "").toLowerCase().includes(q);
+      const matchName = (v.name || "").toLowerCase().includes(q);
+      const matchPlate = (v.license_plate || v.plate_number || "").toLowerCase().includes(q);
+      const matchHub = (v.current_location_name || v.current_hub || "").toLowerCase().includes(q);
+      return matchBrand || matchModel || matchName || matchPlate || matchHub;
+    }
+
     return true;
   });
 
@@ -1029,7 +1114,7 @@ export default function AdminDashboardPage() {
           <div className="flex items-center gap-3">
             {/* Ping SIM Tracker Button (Express :4000) */}
             <button
-              onClick={handleAdminPing}
+              onClick={() => handleAdminPing()}
               disabled={isPinging}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary text-white font-semibold hover:bg-secondary/90 transition-all text-xs shadow-sm disabled:opacity-50"
             >
@@ -1417,6 +1502,25 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
+                  <div className="bg-surface-container-low rounded-lg px-3 py-1.5 flex items-center gap-2 border border-surface-container text-xs">
+                    <span className="material-symbols-outlined text-secondary text-sm">
+                      search
+                    </span>
+                    <input
+                      value={fleetSearchQuery}
+                      onChange={(e) => setFleetSearchQuery(e.target.value)}
+                      placeholder="Search plate or model..."
+                      className="bg-transparent border-none text-xs text-primary focus:outline-none w-32 sm:w-44 placeholder-on-surface-variant"
+                    />
+                    {fleetSearchQuery && (
+                      <button
+                        onClick={() => setFleetSearchQuery("")}
+                        className="text-on-surface-variant hover:text-primary text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                   <div className="flex items-center bg-surface-container-low rounded-lg p-0.5 border border-surface-container text-xs">
                     <button
                       onClick={() => setFleetFilter("all")}
@@ -1644,6 +1748,22 @@ export default function AdminDashboardPage() {
                             <td className="py-3.5 px-4 text-right">
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
+                                  onClick={() =>
+                                    handleAdminPing({
+                                      vehicleId: v.id,
+                                      vehicleName,
+                                      deviceCode: v.tracker_code,
+                                    })
+                                  }
+                                  disabled={isPinging}
+                                  className="p-1.5 rounded-lg bg-surface-container-low hover:bg-secondary hover:text-white text-secondary transition-colors"
+                                  title={`Ping Tracker (${vehicleName})`}
+                                >
+                                  <span className="material-symbols-outlined text-base">
+                                    satellite_alt
+                                  </span>
+                                </button>
+                                <button
                                   onClick={() => handleOpenEditVehicle(v)}
                                   className="p-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-primary transition-colors"
                                   title="Edit Vehicle"
@@ -1824,7 +1944,7 @@ export default function AdminDashboardPage() {
                       Chauffeur staged at terminal
                     </span>
                     <button
-                      onClick={handleAdminPing}
+                      onClick={() => handleAdminPing()}
                       className="px-3 py-1.5 rounded-lg bg-surface-container text-primary text-xs font-semibold hover:bg-surface-container-high transition-colors"
                     >
                       Ping Tracker
@@ -3249,6 +3369,60 @@ export default function AdminDashboardPage() {
                     }
                     className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container text-xs font-medium text-primary focus:outline-none focus:border-secondary"
                   />
+                </div>
+              </div>
+
+              {/* Row 5.5: Telematics Tracker & Dedicated GSM SIM Configuration */}
+              <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-surface-container-low/70 border border-secondary/20">
+                <div className="flex items-center justify-between">
+                  <label className="text-primary uppercase font-bold text-[11px] flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-secondary text-base">
+                      satellite_alt
+                    </span>
+                    Dedicated Telematics Tracker &amp; SIM Card
+                  </label>
+                  <span className="text-[10px] text-secondary font-semibold">
+                    Autonomous 60s Ping Target
+                  </span>
+                </div>
+                <p className="text-[11px] text-on-surface-variant">
+                  Each vehicle has its own dedicated hardware GPS tracker SIM card. The system dispatches automated cellular &amp; SMS ping commands directly to this SIM.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                      Tracker Device Code
+                    </label>
+                    <input
+                      type="text"
+                      value={vehicleFormData.tracker_code}
+                      onChange={(e) =>
+                        setVehicleFormData({
+                          ...vehicleFormData,
+                          tracker_code: e.target.value.toUpperCase(),
+                        })
+                      }
+                      placeholder="e.g. TRK-892-SIM or TRK-MAYBACH-01"
+                      className="w-full h-10 px-3 rounded-xl bg-surface-container-lowest border border-surface-container text-xs font-mono font-medium text-primary focus:outline-none focus:border-secondary"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-on-surface-variant uppercase font-semibold text-[10px]">
+                      Tracker SIM Phone Number (MSISDN) *
+                    </label>
+                    <input
+                      type="tel"
+                      value={vehicleFormData.tracker_sim_phone}
+                      onChange={(e) =>
+                        setVehicleFormData({
+                          ...vehicleFormData,
+                          tracker_sim_phone: e.target.value,
+                        })
+                      }
+                      placeholder="e.g. +2348140313381"
+                      className="w-full h-10 px-3 rounded-xl bg-surface-container-lowest border border-surface-container text-xs font-mono font-bold text-primary focus:outline-none focus:border-secondary"
+                    />
+                  </div>
                 </div>
               </div>
 

@@ -10,41 +10,88 @@ export const telematicsRouter = Router();
  */
 telematicsRouter.post("/ping-request", async (req: Request, res: Response) => {
   try {
-    const { deviceCode, vehicleId } = req.body;
+    const { deviceCode, vehicleId, trackerId } = req.body;
 
-    if (!deviceCode && !vehicleId) {
-      return res.status(400).json({ error: "Provide either deviceCode or vehicleId" });
+    if (!deviceCode && !vehicleId && !trackerId) {
+      return res.status(400).json({ error: "Provide either deviceCode, vehicleId, or trackerId" });
     }
 
-    let trackerData = null;
-    let query = supabase.from("tracker_devices").select("id, device_code, sim_phone_number, assigned_vehicle_id");
-    if (deviceCode) {
-      query = query.eq("device_code", deviceCode);
-    } else if (vehicleId) {
-      query = query.eq("assigned_vehicle_id", vehicleId);
+    let trackerData: any = null;
+    let vehicleName: string | null = null;
+
+    // 1. If vehicleId is provided, first check the vehicle's assigned tracker reference
+    if (vehicleId) {
+      const { data: vehicle } = await supabase
+        .from("vehicles")
+        .select("id, name, assigned_tracker_id")
+        .eq("id", vehicleId)
+        .maybeSingle();
+
+      if (vehicle) {
+        vehicleName = vehicle.name;
+        if (vehicle.assigned_tracker_id) {
+          const { data: t } = await supabase
+            .from("tracker_devices")
+            .select("id, device_code, sim_phone_number, assigned_vehicle_id, status")
+            .eq("id", vehicle.assigned_tracker_id)
+            .maybeSingle();
+          if (t) trackerData = t;
+        }
+      }
+
+      // Also check if any tracker points directly to this vehicle
+      if (!trackerData) {
+        const { data: tByVehicle } = await supabase
+          .from("tracker_devices")
+          .select("id, device_code, sim_phone_number, assigned_vehicle_id, status")
+          .eq("assigned_vehicle_id", vehicleId)
+          .maybeSingle();
+        if (tByVehicle) trackerData = tByVehicle;
+      }
     }
 
-    const { data: tracker, error } = await query.maybeSingle();
-    if (tracker) {
-      trackerData = tracker;
-    } else {
-      // Graceful fallback for initial testing if database seed hasn't completed yet
+    // 2. Lookup by trackerId or deviceCode if not resolved yet
+    if (!trackerData) {
+      let query = supabase.from("tracker_devices").select("id, device_code, sim_phone_number, assigned_vehicle_id, status");
+      if (trackerId) {
+        query = query.eq("id", trackerId);
+      } else if (deviceCode) {
+        query = query.eq("device_code", deviceCode);
+      }
+      const { data: tDirect } = await query.maybeSingle();
+      if (tDirect) trackerData = tDirect;
+    }
+
+    // 3. Fallback for demo unit if tracker record does not exist
+    if (!trackerData) {
       trackerData = {
         id: "demo-trk-892",
         device_code: deviceCode || "TRK-892-SIM",
-        sim_phone_number: "+2348037294810",
+        sim_phone_number: "+2348140313381",
       };
       console.log(`[Telematics Notice] Tracker not in DB yet; using designated fleet fallback: ${trackerData.device_code}`);
     }
 
+    // 4. Resolve target SIM phone:
+    // Priority 1: Manual override in request body
+    // Priority 2: Database record sim_phone_number (The production standard)
+    // Priority 3: Environment variable fallback
     const targetSimPhone =
       req.body.simPhoneNumber ||
-      process.env.TRACKER_SIM_PHONE ||
-      trackerData.sim_phone_number;
+      trackerData.sim_phone_number ||
+      process.env.TRACKER_SIM_PHONE;
 
-    // 2. Dispatch SMS command to tracker SIM (Standard command: "WHERE#" or "STATUS#")
+    if (!targetSimPhone) {
+      return res.status(422).json({
+        error: `No SIM phone number found in database for tracker ${trackerData.device_code}. Please configure the SIM number in the Admin Dashboard.`,
+      });
+    }
+
+    // 5. Dispatch SMS command to tracker SIM (Standard GSM command: "WHERE#")
     const commandText = "WHERE#";
-    console.log(`\x1b[35m[GSM DISPATCH]\x1b[0m Sending "${commandText}" to SIM \x1b[33m${targetSimPhone}\x1b[0m for Unit \x1b[32m${trackerData.device_code}\x1b[0m`);
+    console.log(
+      `\x1b[35m[GSM DISPATCH]\x1b[0m Sending "${commandText}" to SIM \x1b[33m${targetSimPhone}\x1b[0m for Asset \x1b[32m"${vehicleName || trackerData.device_code}"\x1b[0m (Source: ${trackerData.sim_phone_number ? "Database" : "Env Fallback"})`,
+    );
     const dispatchResult = await sendSmsToTracker(targetSimPhone, commandText);
 
     return res.json({
@@ -52,6 +99,8 @@ telematicsRouter.post("/ping-request", async (req: Request, res: Response) => {
       message: `Encrypted ping command "${commandText}" dispatched to SIM ${targetSimPhone}`,
       deviceCode: trackerData.device_code,
       simPhone: targetSimPhone,
+      vehicleName: vehicleName || undefined,
+      simSource: trackerData.sim_phone_number ? "database" : "env_fallback",
       dispatch: dispatchResult,
     });
   } catch (err: any) {

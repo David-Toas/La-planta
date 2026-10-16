@@ -48,6 +48,8 @@ const config: Config = {
         },
         "on-surface": "#111c2c",
         "on-surface-variant": "#444748",
+        "on-primary": "#ffffff",
+        "on-secondary": "#ffffff",
         muted: {
           DEFAULT: "#f0f3ff",
           foreground: "#444748",

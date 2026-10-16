@@ -20,7 +20,46 @@ function CheckoutContent() {
   const [isLoadingVehicle, setIsLoadingVehicle] = useState(true);
 
   // Booking & Form States
+  const todayIso = new Date().toISOString().split("T")[0];
+  const threeDaysLater = new Date(Date.now() + 3 * 86400000).toISOString().split("T")[0];
+
+  const [startDate, setStartDate] = useState<string>(todayIso);
+  const [endDate, setEndDate] = useState<string>(threeDaysLater);
   const [rentalDays, setRentalDays] = useState<number>(3);
+
+  const handleStartDateChange = (newStart: string) => {
+    setStartDate(newStart);
+    if (!newStart) return;
+    const startD = new Date(newStart);
+    const endD = new Date(endDate);
+    if (endD <= startD) {
+      const nextDay = new Date(startD.getTime() + 86400000);
+      const nextDayIso = nextDay.toISOString().split("T")[0];
+      setEndDate(nextDayIso);
+      setRentalDays(1);
+    } else {
+      const diffTime = endD.getTime() - startD.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setRentalDays(Math.max(1, diffDays));
+    }
+  };
+
+  const handleEndDateChange = (newEnd: string) => {
+    setEndDate(newEnd);
+    if (!newEnd) return;
+    const startD = new Date(startDate);
+    const endD = new Date(newEnd);
+    if (endD <= startD) {
+      const nextDay = new Date(startD.getTime() + 86400000);
+      const nextDayIso = nextDay.toISOString().split("T")[0];
+      setEndDate(nextDayIso);
+      setRentalDays(1);
+    } else {
+      const diffTime = endD.getTime() - startD.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setRentalDays(Math.max(1, diffDays));
+    }
+  };
   const [bookingCode, setBookingCode] = useState<string>("LP-LOS-89240");
   const [handoverMode, setHandoverMode] = useState<"delivery" | "office">("delivery");
   const [deliveryAddress, setDeliveryAddress] = useState("");
@@ -238,8 +277,8 @@ function CheckoutContent() {
         vehicleColor: vehicle?.color || "Obsidian Black",
         vehicleImage: vehicle?.hero_image_url || vehicle?.gallery_image_urls?.[0] || "",
         rentalDays,
-        startDate: new Date().toISOString(),
-        endDate: new Date(Date.now() + 86400000 * (rentalDays || 3)).toISOString(),
+        startDate: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
+        endDate: endDate ? new Date(endDate).toISOString() : new Date(Date.now() + 86400000 * (rentalDays || 3)).toISOString(),
         deliveryAddress: handoverMode === "delivery" ? deliveryAddress : "La Planta Flagship Hub (Victoria Island)",
         customerName: effectiveName,
         customerEmail: effectiveEmail,
@@ -293,8 +332,8 @@ function CheckoutContent() {
         vehicleColor: vehicle?.color || "Obsidian Black",
         vehicleImage: vehicle?.hero_image_url || vehicle?.gallery_image_urls?.[0] || "",
         rentalDays,
-        startDate: new Date().toISOString(),
-        endDate: new Date(Date.now() + 86400000 * (rentalDays || 3)).toISOString(),
+        startDate: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
+        endDate: endDate ? new Date(endDate).toISOString() : new Date(Date.now() + 86400000 * (rentalDays || 3)).toISOString(),
         deliveryAddress: handoverMode === "delivery" ? deliveryAddress : "La Planta Flagship Hub (Victoria Island)",
         customerName: effectiveName,
         customerEmail: effectiveEmail,
@@ -562,26 +601,77 @@ function CheckoutContent() {
                           </span>
                         </div>
 
-                        {/* Rental Duration Selector */}
-                        <div className="flex flex-col gap-2">
-                          <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
-                            Rental Duration (Days)
-                          </label>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {[1, 2, 3, 5, 7, 14].map((d) => (
-                              <button
-                                key={d}
-                                type="button"
-                                onClick={() => setRentalDays(d)}
-                                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                                  rentalDays === d
-                                    ? "bg-secondary text-on-secondary shadow-md"
-                                    : "bg-surface-container-low text-on-surface hover:bg-surface-container-high"
-                                }`}
-                              >
-                                {d} {d === 1 ? "Day" : "Days"}
-                              </button>
-                            ))}
+                        {/* Calendar Date-Range Picker (Start Date & End Date) */}
+                        <div className="flex flex-col gap-3.5 p-4 sm:p-5 rounded-2xl bg-surface-container-low border border-surface-container">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <label className="font-label-sm text-xs uppercase tracking-wider text-on-surface font-semibold flex items-center gap-2">
+                              <span className="material-symbols-outlined text-secondary text-base">
+                                calendar_month
+                              </span>
+                              <span>Reservation Schedule (Start &amp; End Dates)</span>
+                            </label>
+                            <span className="px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-bold shadow-sm">
+                              {rentalDays} {rentalDays === 1 ? "Day Duration" : "Days Duration"}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                            {/* Start Date */}
+                            <div className="flex flex-col gap-1.5">
+                              <span className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
+                                <span className="material-symbols-outlined text-xs text-secondary">
+                                  flight_land
+                                </span>
+                                Commencement (Pickup Date)
+                              </span>
+                              <div className="relative">
+                                <input
+                                  type="date"
+                                  min={todayIso}
+                                  value={startDate}
+                                  onChange={(e) => handleStartDateChange(e.target.value)}
+                                  className="w-full h-12 px-4 rounded-xl bg-surface-container-lowest border border-surface-container text-primary text-sm font-semibold focus:outline-none focus:border-secondary transition-colors"
+                                />
+                              </div>
+                              <span className="text-[11px] text-secondary font-medium">
+                                Starts 09:00 AM Handover
+                              </span>
+                            </div>
+
+                            {/* End Date */}
+                            <div className="flex flex-col gap-1.5">
+                              <span className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
+                                <span className="material-symbols-outlined text-xs text-secondary">
+                                  flight_takeoff
+                                </span>
+                                Conclusion (Return Date)
+                              </span>
+                              <div className="relative">
+                                <input
+                                  type="date"
+                                  min={startDate || todayIso}
+                                  value={endDate}
+                                  onChange={(e) => handleEndDateChange(e.target.value)}
+                                  className="w-full h-12 px-4 rounded-xl bg-surface-container-lowest border border-surface-container text-primary text-sm font-semibold focus:outline-none focus:border-secondary transition-colors"
+                                />
+                              </div>
+                              <span className="text-[11px] text-secondary font-medium">
+                                Release by 06:00 PM
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Calculated Term Badge */}
+                          <div className="flex items-center justify-between text-xs text-on-surface-variant pt-2 border-t border-surface-container/60">
+                            <span className="flex items-center gap-1">
+                              <span className="material-symbols-outlined text-secondary text-sm">
+                                schedule
+                              </span>
+                              <span>Chauffeur Service Coverage:</span>
+                            </span>
+                            <span className="font-semibold text-primary">
+                              {rentalDays * 24} Hours ({rentalDays} Full Calendar {rentalDays === 1 ? "Day" : "Days"})
+                            </span>
                           </div>
                         </div>
 

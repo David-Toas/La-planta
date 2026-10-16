@@ -51,6 +51,22 @@ export default function GuestLoginPage() {
     }
   };
 
+  const getReturnUrl = () => {
+    if (typeof window !== "undefined") {
+      const intended = sessionStorage.getItem("laPlanta_intended_destination");
+      if (intended) {
+        sessionStorage.removeItem("laPlanta_intended_destination");
+        return intended;
+      }
+      const returnPage = sessionStorage.getItem("laPlanta_current_page");
+      if (returnPage && !returnPage.includes("/account") && !returnPage.includes("/guest-login")) {
+        sessionStorage.removeItem("laPlanta_current_page");
+        return returnPage;
+      }
+    }
+    return "/fleet";
+  };
+
   const handleDemoSignIn = () => {
     login({
       id: "00000000-0000-0000-0000-000000000002",
@@ -60,9 +76,9 @@ export default function GuestLoginPage() {
       vipTier: "VIP First Class",
       role: "client",
     });
-    setAlertMessage({ type: "success", text: "Logged in as VIP Demo Guest! Redirecting..." });
+    setAlertMessage({ type: "success", text: "Logged in as VIP Demo Guest! Returning to session..." });
     setTimeout(() => {
-      router.push("/account");
+      router.push(getReturnUrl());
     }, 400);
   };
 
@@ -80,9 +96,9 @@ export default function GuestLoginPage() {
     setIsSubmitting(false);
 
     if (res.success) {
-      setAlertMessage({ type: "success", text: "Welcome back! Redirecting..." });
+      setAlertMessage({ type: "success", text: "Welcome back! Returning to session..." });
       setTimeout(() => {
-        router.push("/account");
+        router.push(getReturnUrl());
       }, 500);
     } else {
       setAlertMessage({ type: "error", text: res.error || "Invalid credentials." });
@@ -108,9 +124,9 @@ export default function GuestLoginPage() {
     setIsSubmitting(false);
 
     if (res.success) {
-      setAlertMessage({ type: "success", text: "Account created! Redirecting to dashboard..." });
+      setAlertMessage({ type: "success", text: "Account created! Returning to session..." });
       setTimeout(() => {
-        router.push("/account");
+        router.push(getReturnUrl());
       }, 600);
     } else {
       setAlertMessage({ type: "error", text: res.error || "Failed to create account." });

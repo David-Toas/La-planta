@@ -26,8 +26,12 @@ export const backendApi = {
   /**
    * Trigger an on-demand ping to the vehicle's tracker device
    */
-  async pingTracker(deviceCode: string, token?: string) {
+  async pingTracker(
+    target: string | { deviceCode?: string; vehicleId?: string; trackerId?: string },
+    token?: string
+  ) {
     try {
+      const payload = typeof target === "string" ? { deviceCode: target } : target;
       const res = await fetch(`${BACKEND_URL}/api/telematics/ping-request`, {
         method: "POST",
         headers: {
@@ -35,7 +39,7 @@ export const backendApi = {
           ...BASE_HEADERS,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ deviceCode }),
+        body: JSON.stringify(payload),
       });
       return await res.json();
     } catch (err: any) {

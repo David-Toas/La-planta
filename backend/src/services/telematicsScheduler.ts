@@ -37,7 +37,8 @@ export function startTelematicsScheduler(intervalSeconds = 60) {
       }
 
       for (const vehicle of activeVehicles) {
-        let trackerSimPhone = config.trackerSimPhone;
+        let trackerSimPhone: string | null = null;
+        let deviceCode: string | null = null;
 
         if (vehicle.assigned_tracker_id) {
           const { data: tracker } = await supabase
@@ -48,12 +49,32 @@ export function startTelematicsScheduler(intervalSeconds = 60) {
 
           if (tracker && tracker.sim_phone_number) {
             trackerSimPhone = tracker.sim_phone_number;
+            deviceCode = tracker.device_code;
           }
+        }
+
+        // Check if any tracker has assigned_vehicle_id pointing to this vehicle
+        if (!trackerSimPhone) {
+          const { data: tracker } = await supabase
+            .from("tracker_devices")
+            .select("sim_phone_number, device_code")
+            .eq("assigned_vehicle_id", vehicle.id)
+            .maybeSingle();
+
+          if (tracker && tracker.sim_phone_number) {
+            trackerSimPhone = tracker.sim_phone_number;
+            deviceCode = tracker.device_code;
+          }
+        }
+
+        // Optional safety net fallback to config only if DB has no phone
+        if (!trackerSimPhone && config.trackerSimPhone) {
+          trackerSimPhone = config.trackerSimPhone;
         }
 
         if (trackerSimPhone) {
           console.log(
-            `\x1b[35m[Auto-Telematics]\x1b[0m Automated ping dispatch for active asset \x1b[32m"${vehicle.name}"\x1b[0m (SIM: \x1b[33m${trackerSimPhone}\x1b[0m)`,
+            `\x1b[35m[Auto-Telematics]\x1b[0m Automated ping dispatch for active asset \x1b[32m"${vehicle.name}"\x1b[0m (SIM: \x1b[33m${trackerSimPhone}\x1b[0m, Unit: \x1b[36m${deviceCode || "Assigned"}\x1b[0m)`,
           );
           await sendSmsToTracker(trackerSimPhone, "WHERE#");
         }
