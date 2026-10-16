@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { useAuth } from "@/context/auth-context";
 import { backendApi } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 
 interface InvoiceData {
   id: string;
@@ -24,6 +25,11 @@ export default function AccountPage() {
   >("active");
   const [backendStatus, setBackendStatus] = useState<string>("connecting");
 
+  // Real-time user bookings state
+  const [activeBooking, setActiveBooking] = useState<any | null>(null);
+  const [dbBookings, setDbBookings] = useState<any[]>([]);
+  const [isLoadingBookings, setIsLoadingBookings] = useState(true);
+
   // Selected invoice modal state
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceData | null>(
     null,
@@ -40,26 +46,33 @@ export default function AccountPage() {
 
   // Cancellation Form
   const [cancellationReason, setCancellationReason] = useState(
-    "Corporate schedule change / Board meeting rescheduled"
+    "Corporate schedule change / Board meeting rescheduled",
   );
   const [cancellationNotes, setCancellationNotes] = useState("");
   const [refundBank, setRefundBank] = useState("Zenith Bank Plc");
   const [refundAccount, setRefundAccount] = useState("1029384756");
   const [refundAccountName, setRefundAccountName] = useState(
-    user?.name || "Dr. Adekunle Balogun"
+    user?.name || "Dr. Adekunle Balogun",
   );
-  const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
-  const [cancellationSuccessMsg, setCancellationSuccessMsg] = useState<string | null>(null);
+  const [isSubmittingCancellation, setIsSubmittingCancellation] =
+    useState(false);
+  const [cancellationSuccessMsg, setCancellationSuccessMsg] = useState<
+    string | null
+  >(null);
 
   // Extension Form
   const [extensionDays, setExtensionDays] = useState(2);
-  const [newReturnDate, setNewReturnDate] = useState("Nov 19, 2024 (18:00 WAT)");
+  const [newReturnDate, setNewReturnDate] = useState(
+    "Nov 19, 2024 (18:00 WAT)",
+  );
   const [extensionReason, setExtensionReason] = useState(
-    "Executive meetings extended in Victoria Island"
+    "Executive meetings extended in Victoria Island",
   );
   const [extensionNotes, setExtensionNotes] = useState("");
   const [isSubmittingExtension, setIsSubmittingExtension] = useState(false);
-  const [extensionSuccessMsg, setExtensionSuccessMsg] = useState<string | null>(null);
+  const [extensionSuccessMsg, setExtensionSuccessMsg] = useState<string | null>(
+    null,
+  );
 
   // Profile edit state
   const [profileName, setProfileName] = useState(user?.name || "");
@@ -111,52 +124,232 @@ export default function AccountPage() {
       });
     }
 
-    // Sync guest booking request from localStorage or backend
+    // 1. Immediately read active booking from localStorage cache
+    if (typeof window !== "undefined") {
+      try {
+        const storedBooking = localStorage.getItem("laplanta_active_booking");
+        if (storedBooking) {
+          const parsed = JSON.parse(storedBooking);
+          if (parsed && (parsed.bookingCode || parsed.reference)) {
+            setActiveBooking(parsed);
+          }
+        }
+      } catch (e) {
+        console.warn("[Account] LocalStorage booking read bypassed:", e);
+      }
+    }
+
+    // 2. Fetch live bookings from backend service & Supabase
+    let isMounted = true;
+    async function fetchLiveBookings() {
+      setIsLoadingBookings(true);
+      try {
+        let liveBookings: any[] = [];
+
+        // A. Backend API (uses service-role client, 100% immune to RLS restrictions)
+        try {
+          const res = await backendApi.getUserBookings({
+            userId: user?.id,
+            email: user?.email,
+          });
+          if (res?.success && Array.isArray(res.bookings) && res.bookings.length > 0) {
+            liveBookings = res.bookings;
+          }
+        } catch (backendErr) {
+          console.warn("[Account] Backend bookings fetch notice:", backendErr);
+        }
+
+        // B. Direct Supabase query as complementary channel
+        if (liveBookings.length === 0) {
+          let query = supabase
+            .from("bookings")
+            .select(
+              `
+              *,
+              vehicles:vehicle_id (*),
+              drivers:driver_id (*)
+            `,
+            )
+            .order("created_at", { ascending: false });
+
+          if (user?.id && user?.email) {
+            query = query.or(`client_id.eq.${user.id},special_instructions.ilike.%${user.email}%`);
+          } else if (user?.id) {
+            query = query.eq("client_id", user.id);
+          } else if (user?.email) {
+            query = query.ilike("special_instructions", `%${user.email}%`);
+          } else {
+            if (isMounted) setIsLoadingBookings(false);
+            return;
+          }
+
+          const { data, error } = await query;
+          if (!error && data && data.length > 0) {
+            liveBookings = data;
+          }
+        }
+
+        if (liveBookings.length > 0 && isMounted) {
+          setDbBookings(liveBookings);
+          const current =
+            liveBookings.find(
+              (b) =>
+                b.status === "confirmed" ||
+                b.status === "in_transit" ||
+                b.status === "pending",
+            ) || liveBookings[0];
+
+          const v = current.vehicles;
+          const d = current.drivers;
+
+          setActiveBooking({
+            bookingCode: current.booking_reference,
+            reference: current.payment_reference,
+            amountFormatted: `₦${Number(current.total_amount_ngn || current.base_price_ngn || 0).toLocaleString()}`,
+            totalAmountNgn: current.total_amount_ngn,
+            paidDate: new Date(current.created_at).toLocaleDateString("en-NG", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            }),
+            startDateFormatted: new Date(
+              current.pickup_datetime,
+            ).toLocaleDateString("en-NG", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            }),
+            endDateFormatted: new Date(
+              current.dropoff_datetime,
+            ).toLocaleDateString("en-NG", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            }),
+            vehicle:
+              v?.name ||
+              (v?.brand && v?.model
+                ? `${v.brand} ${v.model}`
+                : "Reserved Executive Fleet Unit"),
+            vehicleColor: v?.color || "Obsidian Black",
+            vehicleImage:
+              v?.hero_image_url ||
+              v?.gallery_image_urls?.[0] ||
+              "https://images.unsplash.com/photo-1617814076367-b759c7d7e738?auto=format&fit=crop&q=80&w=1200",
+            vehicleId: current.vehicle_id,
+            licensePlate: v?.license_plate || "LAG-892-XZ",
+            rentalDays: 3,
+            deliveryAddress: current.pickup_location,
+            customerName: user?.name || "Executive Client",
+            customerEmail: user?.email,
+            customerPhone: user?.phone,
+            verificationPin: current.verification_pin || "8842-09",
+            status: current.status,
+            driverName: d?.full_name || "Emmanuel Okafor",
+            driverPhone: d?.phone || "+234 1 888 5275",
+            isOfficePickup: Boolean(
+              current.pickup_location?.toLowerCase().includes("office") ||
+              current.pickup_location?.toLowerCase().includes("hub") ||
+              current.pickup_location?.toLowerCase().includes("wings office") ||
+              current.pickup_location?.toLowerCase().includes("flagship") ||
+              current.pickup_location?.toLowerCase().includes("la planta")
+            ),
+          });
+        }
+      } catch (err: any) {
+        console.error(
+          "[Account] Failed to fetch live bookings from Supabase:",
+          err,
+        );
+      } finally {
+        if (isMounted) setIsLoadingBookings(false);
+      }
+    }
+
+    fetchLiveBookings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user, session]);
+
+  // Sync concierge request strictly matching the current active booking
+  useEffect(() => {
+    const activeCode = activeBooking?.bookingCode || (isDemoUser ? "LP-8842" : null);
+    if (!activeCode) {
+      setActiveRequest(null);
+      return;
+    }
+
+    const cleanCode = activeCode.replace("#", "");
+
+    // 1. Try reading localStorage for this specific booking
+    let foundReq: any = null;
     try {
-      const stored = localStorage.getItem("laplanta_active_request_LP-8842");
+      const stored = localStorage.getItem(`laplanta_active_request_${cleanCode}`);
       if (stored) {
-        setActiveRequest(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        if (parsed.bookingCode?.replace("#", "") === cleanCode) {
+          foundReq = parsed;
+        }
       }
     } catch {}
 
+    if (foundReq) {
+      setActiveRequest(foundReq);
+    } else {
+      setActiveRequest(null);
+    }
+
+    // 2. Sync from backend matching only this booking code
     backendApi.getBookingRequests().then((res) => {
-      if (res?.success && res.requests) {
+      if (res?.success && Array.isArray(res.requests)) {
         const found = res.requests.find(
-          (r: any) =>
-            r.bookingCode === "#LP-8842" || r.bookingCode === "LP-8842",
+          (r: any) => r.bookingCode?.replace("#", "") === cleanCode,
         );
         if (found) {
           setActiveRequest(found);
           try {
             localStorage.setItem(
-              "laplanta_active_request_LP-8842",
+              `laplanta_active_request_${cleanCode}`,
               JSON.stringify(found),
             );
           } catch {}
+        } else if (!foundReq) {
+          setActiveRequest(null);
         }
       }
     });
-  }, [user, session]);
+  }, [activeBooking?.bookingCode, isDemoUser]);
 
   const handleSubmitCancellation = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmittingCancellation(true);
     setCancellationSuccessMsg(null);
 
+    const code =
+      activeBooking?.bookingCode || (isDemoUser ? "#LP-8842" : "LP-8842");
     const payload = {
-      bookingCode: "#LP-8842",
-      vehicleName: "Range Rover Autobiography LWB",
-      guestName: user?.name || "Dr. Adekunle Balogun",
-      guestEmail: user?.email || "a.balogun@executivecorp.ng",
-      guestPhone: user?.phone || "+234 802 345 6789",
+      bookingCode: code.startsWith("#") ? code : `#${code}`,
+      vehicleName:
+        activeBooking?.vehicle ||
+        (isDemoUser ? "Range Rover Autobiography LWB" : "Reserved Fleet Unit"),
+      guestName:
+        user?.name || activeBooking?.customerName || "Dr. Adekunle Balogun",
+      guestEmail:
+        user?.email ||
+        activeBooking?.customerEmail ||
+        "a.balogun@executivecorp.ng",
+      guestPhone:
+        user?.phone || activeBooking?.customerPhone || "+234 802 345 6789",
       vipTier: user?.vipTier || "VIP Executive",
       type: "cancellation",
       reason: cancellationReason,
       refundBank,
       refundAccount,
       refundAccountName,
-      refundAmount: 1350000,
-      refundAmountFormatted: "₦1,350,000",
+      refundAmount: activeBooking?.totalAmountNgn || 1350000,
+      refundAmountFormatted: activeBooking?.amountFormatted || "₦1,350,000",
       notes:
         cancellationNotes ||
         "Client requests cancellation with manual wire refund to primary bank.",
@@ -175,7 +368,7 @@ export default function AccountPage() {
     setActiveRequest(requestObj);
     try {
       localStorage.setItem(
-        "laplanta_active_request_LP-8842",
+        `laplanta_active_request_${code.replace("#", "")}`,
         JSON.stringify(requestObj),
       );
     } catch {}
@@ -194,12 +387,21 @@ export default function AccountPage() {
     setIsSubmittingExtension(true);
     setExtensionSuccessMsg(null);
 
+    const code =
+      activeBooking?.bookingCode || (isDemoUser ? "#LP-8842" : "LP-8842");
     const payload = {
-      bookingCode: "#LP-8842",
-      vehicleName: "Range Rover Autobiography LWB",
-      guestName: user?.name || "Dr. Adekunle Balogun",
-      guestEmail: user?.email || "a.balogun@executivecorp.ng",
-      guestPhone: user?.phone || "+234 802 345 6789",
+      bookingCode: code.startsWith("#") ? code : `#${code}`,
+      vehicleName:
+        activeBooking?.vehicle ||
+        (isDemoUser ? "Range Rover Autobiography LWB" : "Reserved Fleet Unit"),
+      guestName:
+        user?.name || activeBooking?.customerName || "Dr. Adekunle Balogun",
+      guestEmail:
+        user?.email ||
+        activeBooking?.customerEmail ||
+        "a.balogun@executivecorp.ng",
+      guestPhone:
+        user?.phone || activeBooking?.customerPhone || "+234 802 345 6789",
       vipTier: user?.vipTier || "VIP Executive",
       type: "extension",
       extraDays: extensionDays,
@@ -223,7 +425,7 @@ export default function AccountPage() {
     setActiveRequest(requestObj);
     try {
       localStorage.setItem(
-        "laplanta_active_request_LP-8842",
+        `laplanta_active_request_${code.replace("#", "")}`,
         JSON.stringify(requestObj),
       );
     } catch {}
@@ -309,6 +511,60 @@ export default function AccountPage() {
       serviceType: "VIP Protocol Escort",
     },
   ];
+
+  const hasActiveReservation = Boolean(activeBooking || isDemoUser);
+
+  const isOfficePickup = Boolean(
+    activeBooking?.handoverMode === "office" ||
+    activeBooking?.isOfficePickup === true ||
+    activeBooking?.deliveryAddress?.toLowerCase().includes("office") ||
+    activeBooking?.deliveryAddress?.toLowerCase().includes("hub") ||
+    activeBooking?.deliveryAddress?.toLowerCase().includes("flagship") ||
+    activeBooking?.deliveryAddress?.toLowerCase().includes("pickup") ||
+    activeBooking?.deliveryAddress?.toLowerCase().includes("wings office") ||
+    activeBooking?.deliveryAddress?.toLowerCase().includes("la planta")
+  );
+
+  const isRequestForActiveBooking = Boolean(
+    activeRequest &&
+    (activeRequest.bookingCode?.replace("#", "") === (activeBooking?.bookingCode || (isDemoUser ? "LP-8842" : "")).replace("#", ""))
+  );
+
+  const displayInvoices: InvoiceData[] = React.useMemo(() => {
+    if (dbBookings && dbBookings.length > 0) {
+      return dbBookings.map((b) => {
+        const v = b.vehicles;
+        return {
+          id: b.booking_reference || b.id.slice(0, 8),
+          vehicle:
+            v?.name ||
+            (v?.brand && v?.model
+              ? `${v.brand} ${v.model}`
+              : "Executive Fleet Unit"),
+          dates: `${new Date(b.pickup_datetime).toLocaleDateString("en-NG", {
+            month: "short",
+            day: "numeric",
+          })} – ${new Date(b.dropoff_datetime).toLocaleDateString("en-NG", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}`,
+          amount: `₦${Number(
+            b.total_amount_ngn || b.base_price_ngn || 0,
+          ).toLocaleString()}`,
+          paymentMethod: b.payment_reference
+            ? `Paystack Ref •••• ${b.payment_reference.slice(-4)}`
+            : "Verified Payment",
+          corridor: b.pickup_location || "Lagos Executive Corridor",
+          serviceType: "Dedicated Chauffeur Driven",
+        };
+      });
+    }
+    if (isDemoUser) {
+      return pastInvoices;
+    }
+    return [];
+  }, [dbBookings, isDemoUser]);
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">
@@ -435,7 +691,8 @@ export default function AccountPage() {
                       </span>
                       Booking PIN:{" "}
                       <strong className="text-primary font-semibold font-mono">
-                        {isDemoUser ? "#LP-8910" : "—"}
+                        {activeBooking?.verificationPin ||
+                          (isDemoUser ? "#LP-8910" : "—")}
                       </strong>
                     </span>
                   </div>
@@ -450,7 +707,13 @@ export default function AccountPage() {
                   Booking Status
                 </span>
                 <span className="text-sm font-semibold text-primary mt-0.5">
-                  {isDemoUser ? "Active & Confirmed" : "—"}
+                  {activeBooking
+                    ? activeBooking.status === "in_transit"
+                      ? "Chauffeur En Route"
+                      : "Active & Confirmed"
+                    : isDemoUser
+                      ? "Active & Confirmed"
+                      : "—"}
                 </span>
               </div>
               <div className="flex flex-col">
@@ -458,7 +721,11 @@ export default function AccountPage() {
                   Rental Days
                 </span>
                 <span className="text-sm font-semibold text-primary mt-0.5">
-                  {isDemoUser ? "18 Days (Annual)" : "0 Days"}
+                  {activeBooking
+                    ? `${activeBooking.rentalDays || 3} Days Executive Hire`
+                    : isDemoUser
+                      ? "18 Days (Annual)"
+                      : "0 Days"}
                 </span>
               </div>
               <div className="flex flex-col">
@@ -466,9 +733,13 @@ export default function AccountPage() {
                   Chauffeur Protocol
                 </span>
                 <span className="text-sm font-semibold text-primary mt-0.5">
-                  {isDemoUser
-                    ? "Dedicated Professional Driver"
-                    : "None Assigned"}
+                  {activeBooking
+                    ? activeBooking.driverName
+                      ? `Driver: ${activeBooking.driverName}`
+                      : "Dedicated Chauffeur Assigned"
+                    : isDemoUser
+                      ? "Dedicated Professional Driver"
+                      : "None Assigned"}
                 </span>
               </div>
               <div className="flex flex-col">
@@ -476,7 +747,11 @@ export default function AccountPage() {
                   Billing Type
                 </span>
                 <span className="text-sm font-semibold text-primary mt-0.5">
-                  {isDemoUser ? "Corporate Account" : "—"}
+                  {activeBooking
+                    ? "Online Paid (Card/Transfer)"
+                    : isDemoUser
+                      ? "Corporate Account"
+                      : "—"}
                 </span>
               </div>
             </div>
@@ -498,7 +773,7 @@ export default function AccountPage() {
               >
                 <span>Active Reservations</span>
                 <span className="px-2 py-0.5 rounded-full bg-primary text-white text-[10px] font-bold">
-                  {isDemoUser ? 1 : 0}
+                  {hasActiveReservation ? 1 : 0}
                 </span>
               </button>
               <button
@@ -512,7 +787,7 @@ export default function AccountPage() {
               >
                 <span>Past Trips &amp; Invoices</span>
                 <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface text-[10px] font-bold">
-                  {isDemoUser ? 3 : 0}
+                  {displayInvoices.length}
                 </span>
               </button>
               <button
@@ -544,10 +819,14 @@ export default function AccountPage() {
                     Current Booking Overview
                   </h2>
                 </div>
-                {isDemoUser ? (
+                {hasActiveReservation ? (
                   <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                    <span>Chauffeur En Route for Handover</span>
+                    <span>
+                      {activeBooking?.status === "in_transit"
+                        ? "Chauffeur En Route for Handover"
+                        : "Active Reservation Confirmed"}
+                    </span>
                   </div>
                 ) : (
                   <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface-container text-on-surface-variant text-xs font-medium">
@@ -557,45 +836,91 @@ export default function AccountPage() {
                 )}
               </div>
 
-              {isDemoUser ? (
+              {hasActiveReservation ? (
                 <>
-                  {/* Dedicated En Route Live Telematics Corridor Banner */}
-                  <div className="bg-gradient-to-r from-primary to-primary-container text-white p-5 sm:p-6 rounded-2xl shadow-lg border border-secondary/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-secondary text-primary flex items-center justify-center shrink-0 shadow-md">
-                        <span className="material-symbols-outlined text-2xl animate-pulse">
-                          satellite_alt
-                        </span>
-                      </div>
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs uppercase tracking-widest text-secondary-fixed font-bold">
-                            En Route Vehicle Telematics
-                          </span>
-                          <span className="flex h-2 w-2 relative">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  {/* Staged at Office Hub / En Route Telematics Banner */}
+                  {isOfficePickup ? (
+                    <div className="bg-gradient-to-r from-primary to-primary-container text-white p-5 sm:p-6 rounded-2xl shadow-lg border border-secondary/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-secondary text-primary flex items-center justify-center shrink-0 shadow-md">
+                          <span className="material-symbols-outlined text-2xl">
+                            storefront
                           </span>
                         </div>
-                        <h3 className="font-serif text-lg font-semibold text-white mt-0.5">
-                          Range Rover Autobiography (LAG-892-XZ) is En Route
-                        </h3>
-                        <p className="text-xs text-white/70 font-mono mt-0.5">
-                          Falomo Corridor • ETA ~17 mins (42 km/h) • Driver:
-                          Emmanuel Okafor
-                        </p>
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs uppercase tracking-widest text-secondary-fixed font-bold">
+                              Office Pickup Protocol
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold uppercase tracking-wider">
+                              Ready for Collection
+                            </span>
+                          </div>
+                          <h3 className="font-serif text-lg font-semibold text-white mt-0.5">
+                            {activeBooking?.vehicle || "Reserved Fleet Vehicle"} ({activeBooking?.licensePlate || "LAG-104-XX"}) is Staged
+                          </h3>
+                          <p className="text-xs text-white/70 font-mono mt-0.5">
+                            {activeBooking?.deliveryAddress || "La Planta Flagship Hub (Victoria Island)"} • Assigned Driver:{" "}
+                            {activeBooking?.driverName || "Dedicated Chauffeur"}
+                          </p>
+                        </div>
                       </div>
+                      <Link
+                        href={
+                          activeBooking?.bookingCode
+                            ? `/reservation-pass?booking=${activeBooking.bookingCode}`
+                            : "/reservation-pass"
+                        }
+                        className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-secondary hover:bg-secondary/90 text-primary font-bold text-xs uppercase tracking-wider transition-all shadow-md shrink-0 active:scale-95"
+                      >
+                        <span className="material-symbols-outlined text-base">
+                          qr_code_scanner
+                        </span>
+                        Open QR Handover Pass →
+                      </Link>
                     </div>
-                    <Link
-                      href="/live-tracking"
-                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-secondary hover:bg-secondary/90 text-primary font-bold text-xs uppercase tracking-wider transition-all shadow-md shrink-0 active:scale-95"
-                    >
-                      <span className="material-symbols-outlined text-base">
-                        share_location
-                      </span>
-                      Track En Route Car (Live GPS) →
-                    </Link>
-                  </div>
+                  ) : (
+                    <div className="bg-gradient-to-r from-primary to-primary-container text-white p-5 sm:p-6 rounded-2xl shadow-lg border border-secondary/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-secondary text-primary flex items-center justify-center shrink-0 shadow-md">
+                          <span className="material-symbols-outlined text-2xl animate-pulse">
+                            satellite_alt
+                          </span>
+                        </div>
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs uppercase tracking-widest text-secondary-fixed font-bold">
+                              En Route Vehicle Telematics
+                            </span>
+                            <span className="flex h-2 w-2 relative">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                          </div>
+                          <h3 className="font-serif text-lg font-semibold text-white mt-0.5">
+                            {activeBooking?.vehicle || "Range Rover Autobiography"} ({activeBooking?.licensePlate || "LAG-892-XZ"}) is En Route
+                          </h3>
+                          <p className="text-xs text-white/70 font-mono mt-0.5">
+                            {activeBooking?.deliveryAddress || "Lagos Executive Corridor"} • Chauffeur Protocol Active • Driver:{" "}
+                            {activeBooking?.driverName || "Emmanuel Okafor"}
+                          </p>
+                        </div>
+                      </div>
+                      <Link
+                        href={
+                          activeBooking?.vehicleId
+                            ? `/live-tracking?vehicle=${activeBooking.vehicleId}&booking=${activeBooking.bookingCode}`
+                            : "/live-tracking"
+                        }
+                        className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-secondary hover:bg-secondary/90 text-primary font-bold text-xs uppercase tracking-wider transition-all shadow-md shrink-0 active:scale-95"
+                      >
+                        <span className="material-symbols-outlined text-base">
+                          share_location
+                        </span>
+                        Track En Route Car (Live GPS) →
+                      </Link>
+                    </div>
+                  )}
 
                   {/* Active Booking Card */}
                   <div className="bg-surface-container-lowest rounded-2xl shadow-md border border-black/[0.04] overflow-hidden">
@@ -604,16 +929,21 @@ export default function AccountPage() {
                       <div className="lg:col-span-5 relative min-h-[300px] lg:min-h-full bg-surface-container-low overflow-hidden">
                         <img
                           className="w-full h-full object-cover"
-                          alt="Range Rover Autobiography"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuDcqGOlPZMKFl70boZOu8PPIDsdxhTW7sdwCr6DSVuoLgp3YwwEEDjLLxlyDOmusr14Y3CeEam6DK0JRk0cJNJFZfQ56ZTkKh_fA3UV6MXIPVouopev5KZxTZcw2mebDCtV_wBoyHSNMNQLp-4bZRCbV3hhpeAEC2IKlX6uhHAaoQthX6KUKEHFayR71dIBtAFRv_B4CO-KdbvPoDlPnt8uHWgh5egRV3yOo1_HhPEU9gTraL34BcJa"
+                          alt={
+                            activeBooking?.vehicle || "Assigned Luxury Vehicle"
+                          }
+                          src={
+                            activeBooking?.vehicleImage ||
+                            "https://lh3.googleusercontent.com/aida-public/AB6AXuDcqGOlPZMKFl70boZOu8PPIDsdxhTW7sdwCr6DSVuoLgp3YwwEEDjLLxlyDOmusr14Y3CeEam6DK0JRk0cJNJFZfQ56ZTkKh_fA3UV6MXIPVouopev5KZxTZcw2mebDCtV_wBoyHSNMNQLp-4bZRCbV3hhpeAEC2IKlX6uhHAaoQthX6KUKEHFayR71dIBtAFRv_B4CO-KdbvPoDlPnt8uHWgh5egRV3yOo1_HhPEU9gTraL34BcJa"
+                          }
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-primary/85 via-transparent to-transparent" />
                         <div className="absolute top-4 left-4 flex gap-2">
                           <span className="px-2.5 py-1 rounded-md bg-primary-container/90 text-white text-xs font-semibold backdrop-blur-md">
-                            Executive SUV Class
+                            Executive VIP Class
                           </span>
                           <span className="px-2.5 py-1 rounded-md bg-secondary text-white text-xs font-semibold backdrop-blur-md">
-                            VIP Protocol Ready
+                            Protocol Ready
                           </span>
                         </div>
                         <div className="absolute bottom-4 left-4 right-4 text-white">
@@ -621,15 +951,21 @@ export default function AccountPage() {
                             Assigned Vehicle
                           </span>
                           <Link
-                            href="/vehicle-details"
+                            href={
+                              activeBooking?.vehicleId
+                                ? `/vehicle-details?id=${activeBooking.vehicleId}`
+                                : "/vehicle-details"
+                            }
                             className="hover:underline block"
                           >
                             <h3 className="font-serif text-xl sm:text-2xl text-white font-semibold leading-tight">
-                              Range Rover Autobiography LWB
+                              {activeBooking?.vehicle ||
+                                "Range Rover Autobiography LWB"}
                             </h3>
                           </Link>
                           <p className="text-xs text-[#c8c6c5] mt-0.5">
-                            Plate: LAG-892-XZ • Executive Rear Cabin
+                            Plate: {activeBooking?.licensePlate || "LAG-892-XZ"}{" "}
+                            • Executive Rear Cabin
                           </p>
                         </div>
                       </div>
@@ -643,19 +979,21 @@ export default function AccountPage() {
                                 RESERVATION
                               </span>
                               <span className="text-lg font-mono text-primary font-bold">
-                                #LP-8842
+                                #{activeBooking?.bookingCode || "LP-8842"}
                               </span>
                             </div>
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container text-xs text-primary font-medium">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary/10 text-xs text-primary font-bold">
                               <span className="material-symbols-outlined text-sm text-secondary">
-                                flight_land
+                                payments
                               </span>
-                              LOS Airport VIP Protocol
+                              {activeBooking?.amountFormatted || "₦1,350,000"}{" "}
+                              Paid
                             </div>
                           </div>
 
                           {/* Real-time Concierge Request Alert Banners */}
-                          {activeRequest &&
+                          {isRequestForActiveBooking &&
+                            activeRequest &&
                             activeRequest.status === "pending" &&
                             activeRequest.type === "cancellation" && (
                               <div className="mt-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 flex items-start gap-3 text-xs animate-in fade-in duration-200">
@@ -665,34 +1003,38 @@ export default function AccountPage() {
                                 <div className="flex-1">
                                   <div className="flex items-center justify-between font-semibold text-amber-950">
                                     <span>
-                                      Cancellation Requested • Under Concierge Review
+                                      Cancellation Requested • Under Concierge
+                                      Review
                                     </span>
                                     <span className="text-[10px] font-mono uppercase bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded font-bold">
                                       Pending Verification
                                     </span>
                                   </div>
                                   <p className="text-[11px] text-amber-900/85 mt-1 leading-relaxed">
-                                    Reason: &ldquo;{activeRequest.reason}&rdquo;.
-                                    Our executive operations director is reviewing
-                                    your itinerary. A concierge will call{" "}
+                                    Reason: &ldquo;{activeRequest.reason}
+                                    &rdquo;. Our executive operations director
+                                    is reviewing your itinerary. A concierge
+                                    will call{" "}
                                     <strong className="font-mono">
                                       {activeRequest.guestPhone ||
                                         user?.phone ||
                                         "+234 802 345 6789"}
                                     </strong>{" "}
-                                    shortly to confirm your manual wire refund of{" "}
+                                    shortly to confirm your manual wire refund
+                                    of{" "}
                                     <strong className="text-amber-950 font-bold">
                                       {activeRequest.refundAmountFormatted ||
                                         "₦1,350,000"}
                                     </strong>{" "}
-                                    to{" "}
-                                    {activeRequest.refundBank || "your bank"}.
+                                    to {activeRequest.refundBank || "your bank"}
+                                    .
                                   </p>
                                 </div>
                               </div>
                             )}
 
-                          {activeRequest &&
+                          {isRequestForActiveBooking &&
+                            activeRequest &&
                             activeRequest.status === "pending" &&
                             activeRequest.type === "extension" && (
                               <div className="mt-4 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-900 flex items-start gap-3 text-xs animate-in fade-in duration-200">
@@ -703,7 +1045,8 @@ export default function AccountPage() {
                                   <div className="flex items-center justify-between font-semibold text-blue-950">
                                     <span>
                                       Extension Requested (+
-                                      {activeRequest.extraDays} Days) • Pending Review
+                                      {activeRequest.extraDays} Days) • Pending
+                                      Review
                                     </span>
                                     <span className="text-[10px] font-mono uppercase bg-blue-200/80 text-blue-900 px-2 py-0.5 rounded font-bold">
                                       In Operations Queue
@@ -715,14 +1058,17 @@ export default function AccountPage() {
                                       {activeRequest.newReturnDate}
                                     </strong>
                                     . Chauffeur roster &amp; corridor telematics
-                                    allocation are being verified by the operations desk.
+                                    allocation are being verified by the
+                                    operations desk.
                                   </p>
                                 </div>
                               </div>
                             )}
 
-                          {activeRequest &&
-                            activeRequest.status === "refunded_and_cancelled" && (
+                          {isRequestForActiveBooking &&
+                            activeRequest &&
+                            activeRequest.status ===
+                              "refunded_and_cancelled" && (
                               <div className="mt-4 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 flex items-start gap-3 text-xs animate-in fade-in duration-200">
                                 <span className="material-symbols-outlined text-emerald-600 text-lg shrink-0 mt-0.5">
                                   check_circle
@@ -743,8 +1089,8 @@ export default function AccountPage() {
                                         "₦1,350,000"}
                                     </strong>{" "}
                                     has been processed to{" "}
-                                    {activeRequest.refundBank || "your account"}.
-                                    Confirmation receipt has been sent to your
+                                    {activeRequest.refundBank || "your account"}
+                                    . Confirmation receipt has been sent to your
                                     email.
                                   </p>
                                 </div>
@@ -758,10 +1104,14 @@ export default function AccountPage() {
                                 Rental Period
                               </span>
                               <span className="text-sm text-primary font-semibold">
-                                Nov 14 – Nov 17, 2024
+                                {activeBooking?.startDateFormatted || "Nov 14"}{" "}
+                                –{" "}
+                                {activeBooking?.endDateFormatted ||
+                                  "Nov 17, 2024"}
                               </span>
                               <span className="text-xs text-on-surface-variant">
-                                4 Days Executive Hire
+                                {activeBooking?.rentalDays || 3} Days Executive
+                                Hire
                               </span>
                             </div>
                             <div className="flex flex-col gap-1">
@@ -769,10 +1119,13 @@ export default function AccountPage() {
                                 Delivery Destination
                               </span>
                               <span className="text-sm text-primary font-semibold">
-                                The Wheatbaker Ikoyi
+                                {activeBooking?.deliveryAddress ||
+                                  "The Wheatbaker Ikoyi"}
                               </span>
                               <span className="text-xs text-on-surface-variant">
-                                4 Onitolo Rd, Ikoyi, Lagos
+                                {activeBooking?.deliveryAddress
+                                  ? "Confirmed Delivery Location"
+                                  : "4 Onitolo Rd, Ikoyi, Lagos"}
                               </span>
                             </div>
                           </div>
@@ -783,14 +1136,15 @@ export default function AccountPage() {
                               <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-container shrink-0">
                                 <img
                                   className="w-full h-full object-cover"
-                                  alt="Driver Emmanuel Okafor"
+                                  alt={`Driver ${activeBooking?.driverName || "Emmanuel Okafor"}`}
                                   src="https://lh3.googleusercontent.com/aida-public/AB6AXuBZP6guV8VQUcpcoXuyQdctvwhwtwGoK5vA5kU8f0hi35_3Lj30r1A69H3EZUCkJbGPkialrd4TKt6bpq6X2E0Q87cDtg431RWkhEqDtgSOP7z_JHwqtua3Uu04Ye4LJvVVfulcXyOyntrW5lU45BRMlkyXkcoJgmqDfmcJGilhjeO2GPKhGkhC8JaK4WbGf8gUhegn2sfMY09E2-u3xUsbILUO8DUzT-gkw2gqeU0GHj1AxDyI3GW8"
                                 />
                               </div>
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-sm font-semibold text-primary">
-                                    Emmanuel Okafor
+                                    {activeBooking?.driverName ||
+                                      "Emmanuel Okafor"}
                                   </span>
                                   <span className="material-symbols-outlined text-sm text-secondary">
                                     verified_user
@@ -807,7 +1161,8 @@ export default function AccountPage() {
                                 Driver Phone
                               </span>
                               <span className="text-xs text-primary font-semibold font-mono">
-                                +234 1 888 5275
+                                {activeBooking?.driverPhone ||
+                                  "+234 1 888 5275"}
                               </span>
                             </div>
                           </div>
@@ -816,7 +1171,11 @@ export default function AccountPage() {
                         {/* Action Buttons */}
                         <div className="flex flex-wrap items-center gap-3 pt-2">
                           <Link
-                            href="/reservation-pass"
+                            href={
+                              activeBooking?.bookingCode
+                                ? `/reservation-pass?booking=${activeBooking.bookingCode}`
+                                : "/reservation-pass"
+                            }
                             className="inline-flex items-center gap-2 px-5 py-3 rounded-lg bg-primary hover:bg-secondary text-white transition-all text-xs uppercase tracking-wider font-semibold shadow-md"
                           >
                             <span className="material-symbols-outlined text-base">
@@ -824,15 +1183,21 @@ export default function AccountPage() {
                             </span>
                             Open QR Handover Pass
                           </Link>
-                          <Link
-                            href="/live-tracking"
-                            className="inline-flex items-center gap-2 px-5 py-3 rounded-lg bg-surface-container-high hover:bg-secondary-fixed hover:text-on-secondary-fixed text-primary transition-all text-xs uppercase tracking-wider font-semibold"
-                          >
-                            <span className="material-symbols-outlined text-base text-secondary">
-                              share_location
-                            </span>
-                            Track Delivery (Live GPS)
-                          </Link>
+                          {!isOfficePickup && (
+                            <Link
+                              href={
+                                activeBooking?.vehicleId
+                                  ? `/live-tracking?vehicle=${activeBooking.vehicleId}&booking=${activeBooking.bookingCode}`
+                                  : "/live-tracking"
+                              }
+                              className="inline-flex items-center gap-2 px-5 py-3 rounded-lg bg-surface-container-high hover:bg-secondary-fixed hover:text-on-secondary-fixed text-primary transition-all text-xs uppercase tracking-wider font-semibold"
+                            >
+                              <span className="material-symbols-outlined text-base text-secondary">
+                                share_location
+                              </span>
+                              Track Delivery (Live GPS)
+                            </Link>
+                          )}
                           <button
                             onClick={() => setIsExtensionModalOpen(true)}
                             className="inline-flex items-center gap-2 px-4 py-3 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary hover:text-primary transition-all text-xs uppercase tracking-wider font-semibold border border-black/[0.04]"
@@ -907,14 +1272,12 @@ export default function AccountPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-on-surface-variant font-medium">
-                    {isDemoUser
-                      ? "3 Total Completed Charters"
-                      : "0 Total Completed Charters"}
+                    {displayInvoices.length} Total Completed Charters
                   </span>
                 </div>
               </div>
 
-              {isDemoUser ? (
+              {displayInvoices.length > 0 ? (
                 /* Table */
                 <div className="bg-surface-container-lowest rounded-2xl shadow-sm border border-black/[0.04] overflow-hidden">
                   <div className="overflow-x-auto">
@@ -931,7 +1294,7 @@ export default function AccountPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-black/[0.04]">
-                        {pastInvoices.map((inv) => (
+                        {displayInvoices.map((inv) => (
                           <tr
                             key={inv.id}
                             className="hover:bg-surface-container-low/40 transition-colors"
@@ -1395,7 +1758,14 @@ export default function AccountPage() {
                     Request Charter Cancellation
                   </h3>
                   <span className="text-[11px] text-on-surface-variant font-mono">
-                    Booking #LP-8842 • Range Rover Autobiography
+                    Booking #
+                    {activeBooking?.bookingCode ||
+                      (isDemoUser ? "LP-8842" : "LP-BOOKING")}{" "}
+                    •{" "}
+                    {activeBooking?.vehicle ||
+                      (isDemoUser
+                        ? "Range Rover Autobiography"
+                        : "Reserved Fleet Unit")}
                   </span>
                 </div>
               </div>
@@ -1415,29 +1785,19 @@ export default function AccountPage() {
                   </span>
                   Cancellation Request Dispatched!
                 </div>
-                <p className="leading-relaxed">
-                  {cancellationSuccessMsg}
-                </p>
+                <p className="leading-relaxed">{cancellationSuccessMsg}</p>
                 <div className="p-3 bg-white/80 rounded-lg border border-emerald-100 flex items-center justify-between font-mono text-[11px]">
                   <span>Refund Amount In Review:</span>
-                  <strong className="text-emerald-800 text-sm">₦1,350,000</strong>
+                  <strong className="text-emerald-800 text-sm">
+                    {activeBooking?.amountFormatted || "₦1,350,000"}
+                  </strong>
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleSubmitCancellation} className="flex flex-col gap-4 text-xs">
-                {/* VIP Protocol Notice */}
-                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-950 flex items-start gap-2.5 leading-relaxed">
-                  <span className="material-symbols-outlined text-amber-700 text-base shrink-0 mt-0.5">
-                    info
-                  </span>
-                  <div>
-                    <strong className="block font-semibold">
-                      VIP Charter Protocol
-                    </strong>
-                    Guest users cannot unilaterally cancel active vehicle allocations. Our operations director will review your request, contact you via phone or WhatsApp within 15 minutes, and process your manual wire refund in accordance with charter terms.
-                  </div>
-                </div>
-
+              <form
+                onSubmit={handleSubmitCancellation}
+                className="flex flex-col gap-4 text-xs"
+              >
                 <div className="flex flex-col gap-1.5">
                   <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
                     Reason for Cancellation
@@ -1582,7 +1942,12 @@ export default function AccountPage() {
                     Request Itinerary Extension
                   </h3>
                   <span className="text-[11px] text-on-surface-variant font-mono">
-                    Booking #LP-8842 • Current End: Nov 17, 2024
+                    Booking #
+                    {activeBooking?.bookingCode ||
+                      (isDemoUser ? "LP-8842" : "LP-BOOKING")}{" "}
+                    • Current End:{" "}
+                    {activeBooking?.endDateFormatted ||
+                      (isDemoUser ? "Nov 17, 2024" : "Scheduled Return")}
                   </span>
                 </div>
               </div>
@@ -1602,18 +1967,26 @@ export default function AccountPage() {
                   </span>
                   Extension Request Dispatched!
                 </div>
-                <p className="leading-relaxed">
-                  {extensionSuccessMsg}
-                </p>
+                <p className="leading-relaxed">{extensionSuccessMsg}</p>
                 <div className="p-3 bg-white/80 rounded-lg border border-blue-100 flex items-center justify-between font-mono text-[11px]">
                   <span>Requested Extension:</span>
-                  <strong className="text-blue-800 text-sm">+{extensionDays} Extra Day(s)</strong>
+                  <strong className="text-blue-800 text-sm">
+                    +{extensionDays} Extra Day(s)
+                  </strong>
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleSubmitExtension} className="flex flex-col gap-4 text-xs">
+              <form
+                onSubmit={handleSubmitExtension}
+                className="flex flex-col gap-4 text-xs"
+              >
                 <p className="text-on-surface-variant leading-relaxed">
-                  Extend your Range Rover Autobiography charter. Your assigned chauffeur Emmanuel Okafor will be retained on continuous protocol.
+                  Extend your{" "}
+                  {activeBooking?.vehicle ||
+                    (isDemoUser ? "Range Rover Autobiography" : "charter")}
+                  . Your assigned chauffeur{" "}
+                  {activeBooking?.driverName || "driver"} will be retained on
+                  continuous protocol.
                 </p>
 
                 {/* Additional Days Selection */}
@@ -1637,7 +2010,9 @@ export default function AccountPage() {
                             : "bg-surface-container-low text-on-surface border-surface-container hover:bg-surface-container"
                         }`}
                       >
-                        <div className="text-sm font-bold">+{days} {days === 1 ? "Day" : "Days"}</div>
+                        <div className="text-sm font-bold">
+                          +{days} {days === 1 ? "Day" : "Days"}
+                        </div>
                         <div className="text-[10px] opacity-80 mt-0.5">
                           ₦{(days * 450000).toLocaleString()}
                         </div>

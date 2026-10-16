@@ -8,6 +8,90 @@ import { Footer } from "@/components/footer";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/context/auth-context";
+import { backendApi } from "@/lib/api";
+import { supabase, Vehicle } from "@/lib/supabase";
+import { VehicleCard } from "@/components/vehicle-card";
+
+const FALLBACK_VEHICLES: Vehicle[] = [
+  {
+    id: "a1b2c3d4-e5f6-7890-abcd-222222222222",
+    name: "Mercedes-Benz S-Class S580",
+    brand: "Mercedes-Benz",
+    model: "S-Class S580",
+    year: 2024,
+    license_plate: "APP-580-LP",
+    color: "Obsidian Black Metallic",
+    category: "Executive Saloon",
+    armored_level: "None",
+    daily_rate_ngn: 450000,
+    daily_rate_usd: 320,
+    seats: 3,
+    luggage_capacity: 2,
+    transmission: "Automatic",
+    fuel_battery_level: 100,
+    odometer_km: 12000,
+    status: "available",
+    features: ["Burmester 4D Audio", "Chilled Refreshment Box", "First-Class Reclining Seats"],
+    hero_image_url:
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuDEq6CKJotgsSHP0Gqq0hBl0rPx0O5c28Wh0S2i4oXF-UbSzwP2JwvTg-5No9c5hsLD52FwTXXwd4iJADQ8dLYddKFKQgCA0FHWbVdCQMoHMAUatLtrRf58ctM5XNuE4KS4VUjm3lT6wpaEeWw-fr_acU-K8IzijLlNZNuofyS0povaQIT-A1RLy48Ty1Mvpk9tRASC45JejF1cT8v1lXbUGjv0DMoOF-taw17Z43cae4ymMpql9jYL",
+    gallery_image_urls: [],
+    current_location_name: "Victoria Island, Lagos",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "a1b2c3d4-e5f6-7890-abcd-111111111111",
+    name: "Range Rover Autobiography",
+    brand: "Land Rover",
+    model: "Range Rover Autobiography",
+    year: 2024,
+    license_plate: "KJA-888-LP",
+    color: "Santorini Black Pearl",
+    category: "Executive SUV LWB",
+    armored_level: "None",
+    daily_rate_ngn: 620000,
+    daily_rate_usd: 440,
+    seats: 4,
+    luggage_capacity: 4,
+    transmission: "Automatic",
+    fuel_battery_level: 100,
+    odometer_km: 15400,
+    status: "available",
+    features: ["Air Ride LWB", "Active Noise Cancellation", "Executive Hot Stone Massage"],
+    hero_image_url:
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuBVWLez2z5YguHmqNI0_vRyMhuXrigLDRxmJ_agXTCAnGaYgFm5LTy9GZAX9s3PUXJjHYPR8RSET9c6JqFXig12OSehhkM0ZMC85CbABXlww06rgFNbz_tFjx8CdxI2vjxuzJ5adLqMxNfMAqjnVbCXtkB4m412raW-q_dDk8W_OnwvGGHcXlP29H8THTb7BSAH4p9FTcPII-b-0F-Z_nlSk0v0oGNoVzGBGuJBxo45LHt2tFPReO1z",
+    gallery_image_urls: [],
+    current_location_name: "Ikoyi, Lagos",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "a1b2c3d4-e5f6-7890-abcd-444444444444",
+    name: "Land Cruiser 300 VXR",
+    brand: "Toyota",
+    model: "Land Cruiser 300 VXR",
+    year: 2024,
+    license_plate: "AGL-300-LP",
+    color: "Raven Black Edition",
+    category: "Premium SUV",
+    armored_level: "None",
+    daily_rate_ngn: 580000,
+    daily_rate_usd: 410,
+    seats: 5,
+    luggage_capacity: 5,
+    transmission: "Automatic",
+    fuel_battery_level: 100,
+    odometer_km: 9800,
+    status: "available",
+    features: ["Four-Zone Climate", "Chilled Cool Box", "Rear Seat Entertainment"],
+    hero_image_url:
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuCUjMQeK58RYlQJ7WwCSuRBQG0j-U8TS29VtLsEnGMmNXymViex4KflYxJ9CHXITyZboqW9veUEFYh9qVbwsqTD-mB4YzsqTCAd5VSoBgAdBx0UGCg8UgAqHelIXP45WJjpqqeJVQosmIkH45Eas0YQRkbyFxBo_wm8w-YCDQLQL86vODcFKZ0OdDb7ZRGw_1bE2mMCKZcpU44pJsKjORQcZal9SicgNThG9inGn1OvgXtRP7zkHHgH",
+    gallery_image_urls: [],
+    current_location_name: "Victoria Island, Lagos",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
 
 export default function HomePage() {
   const router = useRouter();
@@ -17,6 +101,44 @@ export default function HomePage() {
   const [selectedCity, setSelectedCity] = useState(
     "Lagos (VI, Ikoyi, Lekki & Airport)",
   );
+
+  const [vehicles, setVehicles] = useState<Vehicle[]>(FALLBACK_VEHICLES);
+  const [isLoadingVehicles, setIsLoadingVehicles] = useState(true);
+
+  // Fetch real-time vehicles from backend / Supabase
+  useEffect(() => {
+    let isMounted = true;
+    async function loadFeaturedVehicles() {
+      try {
+        // 1. Try Express Backend API
+        const res = await backendApi.getFleet();
+        if (isMounted && res?.success && Array.isArray(res.vehicles) && res.vehicles.length > 0) {
+          setVehicles(res.vehicles);
+          setIsLoadingVehicles(false);
+          return;
+        }
+
+        // 2. Direct Supabase Query
+        const { data, error } = await supabase
+          .from("vehicles")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (isMounted && !error && data && data.length > 0) {
+          setVehicles(data as Vehicle[]);
+        }
+      } catch (err) {
+        console.error("[Homepage] Error fetching featured vehicles:", err);
+      } finally {
+        if (isMounted) setIsLoadingVehicles(false);
+      }
+    }
+
+    loadFeaturedVehicles();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const consoleRef = useRef<HTMLDivElement>(null);
   const [isScrolledPast, setIsScrolledPast] = useState(false);
@@ -273,271 +395,36 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* 3 Fleet Cards Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Card 1: Mercedes S-Class */}
-              <Card className="group overflow-hidden hover:shadow-xl transition-all duration-300 flex flex-col justify-between">
-                <div className="relative w-full h-64 bg-surface-container-low overflow-hidden">
-                  <img
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    alt="Mercedes-Benz S-Class sedan"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDEq6CKJotgsSHP0Gqq0hBl0rPx0O5c28Wh0S2i4oXF-UbSzwP2JwvTg-5No9c5hsLD52FwTXXwd4iJADQ8dLYddKFKQgCA0FHWbVdCQMoHMAUatLtrRf58ctM5XNuE4KS4VUjm3lT6wpaEeWw-fr_acU-K8IzijLlNZNuofyS0povaQIT-A1RLy48Ty1Mvpk9tRASC45JejF1cT8v1lXbUGjv0DMoOF-taw17Z43cae4ymMpql9jYL"
+            {/* 3 Featured Fleet Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {[...vehicles]
+                .sort((a, b) => {
+                  const aOrder = a.status === "available" ? 0 : 1;
+                  const bOrder = b.status === "available" ? 0 : 1;
+                  return aOrder - bOrder;
+                })
+                .slice(0, 3)
+                .map((vehicle) => (
+                  <VehicleCard
+                    key={vehicle.id}
+                    vehicle={vehicle}
+                    onReserve={(id) => handleReserve(`/checkout?vehicleId=${id}`)}
                   />
-                  <Badge variant="luxury" className="absolute top-4 left-4">
-                    Executive Saloon
-                  </Badge>
-                  <Badge variant="gold" className="absolute top-4 right-4">
-                    Dedicated Driver Included
-                  </Badge>
-                </div>
-                <CardContent className="p-6 flex flex-col gap-6">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] text-secondary uppercase tracking-widest font-semibold">
-                      Obsidian Black Metallic
-                    </span>
-                    <h3 className="font-serif text-2xl text-primary font-semibold">
-                      Mercedes-Benz S-Class S580
-                    </h3>
-                    <p className="text-xs text-on-surface-variant leading-relaxed">
-                      The definitive executive sanctuary featuring rear
-                      reclining first-class airline seats, Burmester 4D audio,
-                      and chilled refreshment compartment.
-                    </p>
-                  </div>
+                ))}
+            </div>
 
-                  <div className="grid grid-cols-3 gap-2 py-3 bg-surface-container-low rounded-lg text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="material-symbols-outlined text-secondary text-base">
-                        person
-                      </span>
-                      <span className="text-xs text-on-surface font-medium">
-                        3 Guests
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="material-symbols-outlined text-secondary text-base">
-                        luggage
-                      </span>
-                      <span className="text-xs text-on-surface font-medium">
-                        2 Large Cases
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="material-symbols-outlined text-secondary text-base">
-                        wifi
-                      </span>
-                      <span className="text-xs text-on-surface font-medium">
-                        Onboard 5G
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <div className="flex flex-col">
-                      <span className="text-xl font-bold text-primary">
-                        ₦450,000
-                        <span className="text-xs font-normal text-on-surface-variant">
-                          /day
-                        </span>
-                      </span>
-                      <span className="text-[11px] text-secondary tracking-wider">
-                        $320 USD equiv.
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href="/vehicle-details?vehicleId=a1b2c3d4-e5f6-7890-abcd-222222222222"
-                        className="px-3 py-2 rounded-lg bg-surface-container-high text-on-surface hover:bg-secondary-fixed text-xs uppercase tracking-wider font-semibold transition-colors"
-                      >
-                        Details
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => handleReserve("/checkout")}
-                        className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-secondary text-xs uppercase tracking-wider font-semibold transition-colors cursor-pointer"
-                      >
-                        Reserve
-                      </button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Card 2: Range Rover Autobiography */}
-              <Card className="group overflow-hidden hover:shadow-xl transition-all duration-300 flex flex-col justify-between">
-                <div className="relative w-full h-64 bg-surface-container-low overflow-hidden">
-                  <img
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    alt="Range Rover Autobiography"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuBVWLez2z5YguHmqNI0_vRyMhuXrigLDRxmJ_agXTCAnGaYgFm5LTy9GZAX9s3PUXJjHYPR8RSET9c6JqFXig12OSehhkM0ZMC85CbABXlww06rgFNbz_tFjx8CdxI2vjxuzJ5adLqMxNfMAqjnVbCXtkB4m412raW-q_dDk8W_OnwvGGHcXlP29H8THTb7BSAH4p9FTcPII-b-0F-Z_nlSk0v0oGNoVzGBGuJBxo45LHt2tFPReO1z"
-                  />
-                  <Badge variant="luxury" className="absolute top-4 left-4">
-                    Executive SUV LWB
-                  </Badge>
-                  <Badge variant="gold" className="absolute top-4 right-4">
-                    Dedicated Driver Included
-                  </Badge>
-                </div>
-                <CardContent className="p-6 flex flex-col gap-6">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] text-secondary uppercase tracking-widest font-semibold">
-                      Santorini Black Pearl
-                    </span>
-                    <h3 className="font-serif text-2xl text-primary font-semibold">
-                      Range Rover Autobiography
-                    </h3>
-                    <p className="text-xs text-on-surface-variant leading-relaxed">
-                      Commanding road posture with effortless electronic air
-                      suspension, active noise cancellation, and hot stone
-                      massage executive seating.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 py-3 bg-surface-container-low rounded-lg text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="material-symbols-outlined text-secondary text-base">
-                        person
-                      </span>
-                      <span className="text-xs text-on-surface font-medium">
-                        4 Guests
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="material-symbols-outlined text-secondary text-base">
-                        luggage
-                      </span>
-                      <span className="text-xs text-on-surface font-medium">
-                        4 Large Cases
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="material-symbols-outlined text-secondary text-base">
-                        airline_seat_recline_extra
-                      </span>
-                      <span className="text-xs text-on-surface font-medium">
-                        Air Ride LWB
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <div className="flex flex-col">
-                      <span className="text-xl font-bold text-primary">
-                        ₦620,000
-                        <span className="text-xs font-normal text-on-surface-variant">
-                          /day
-                        </span>
-                      </span>
-                      <span className="text-[11px] text-secondary tracking-wider">
-                        $440 USD equiv.
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href="/vehicle-details?vehicleId=a1b2c3d4-e5f6-7890-abcd-111111111111"
-                        className="px-3 py-2 rounded-lg bg-surface-container-high text-on-surface hover:bg-secondary-fixed text-xs uppercase tracking-wider font-semibold transition-colors"
-                      >
-                        Details
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => handleReserve("/checkout")}
-                        className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-secondary text-xs uppercase tracking-wider font-semibold transition-colors cursor-pointer"
-                      >
-                        Reserve
-                      </button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Card 3: Land Cruiser 300 */}
-              <Card className="group overflow-hidden hover:shadow-xl transition-all duration-300 flex flex-col justify-between">
-                <div className="relative w-full h-64 bg-surface-container-low overflow-hidden">
-                  <img
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    alt="Toyota Land Cruiser 300 VXR"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUjMQeK58RYlQJ7WwCSuRBQG0j-U8TS29VtLsEnGMmNXymViex4KflYxJ9CHXITyZboqW9veUEFYh9qVbwsqTD-mB4YzsqTCAd5VSoBgAdBx0UGCg8UgAqHelIXP45WJjpqqeJVQosmIkH45Eas0YQRkbyFxBo_wm8w-YCDQLQL86vODcFKZ0OdDb7ZRGw_1bE2mMCKZcpU44pJsKjORQcZal9SicgNThG9inGn1OvgXtRP7zkHHgH"
-                  />
-                  <Badge variant="luxury" className="absolute top-4 left-4">
-                    Premium SUV
-                  </Badge>
-                  <Badge variant="gold" className="absolute top-4 right-4">
-                    Dedicated Driver Included
-                  </Badge>
-                </div>
-                <CardContent className="p-6 flex flex-col gap-6">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] text-secondary uppercase tracking-widest font-semibold">
-                      Raven Black Edition
-                    </span>
-                    <h3 className="font-serif text-2xl text-primary font-semibold">
-                      Land Cruiser 300 VXR
-                    </h3>
-                    <p className="text-xs text-on-surface-variant leading-relaxed">
-                      Robust, commanding presence and road posture with
-                      four-zone climate control, rear entertainment, and chilled
-                      console box.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 py-3 bg-surface-container-low rounded-lg text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="material-symbols-outlined text-secondary text-base">
-                        groups
-                      </span>
-                      <span className="text-xs text-on-surface font-medium">
-                        5 Guests
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="material-symbols-outlined text-secondary text-base">
-                        luggage
-                      </span>
-                      <span className="text-xs text-on-surface font-medium">
-                        5 Cases
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="material-symbols-outlined text-secondary text-base">
-                        shield
-                      </span>
-                      <span className="text-xs text-on-surface font-medium">
-                        All-Terrain VIP
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <div className="flex flex-col">
-                      <span className="text-xl font-bold text-primary">
-                        ₦580,000
-                        <span className="text-xs font-normal text-on-surface-variant">
-                          /day
-                        </span>
-                      </span>
-                      <span className="text-[11px] text-secondary tracking-wider">
-                        $410 USD equiv.
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href="/vehicle-details?vehicleId=a1b2c3d4-e5f6-7890-abcd-444444444444"
-                        className="px-3 py-2 rounded-lg bg-surface-container-high text-on-surface hover:bg-secondary-fixed text-xs uppercase tracking-wider font-semibold transition-colors"
-                      >
-                        Details
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => handleReserve("/checkout")}
-                        className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-secondary text-xs uppercase tracking-wider font-semibold transition-colors cursor-pointer"
-                      >
-                        Reserve
-                      </button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            {/* See More Fleet Button */}
+            <div className="flex flex-col items-center justify-center pt-2 gap-3">
+              <Link
+                href="/fleet"
+                className="inline-flex items-center gap-2.5 px-8 py-3.5 rounded-full bg-primary hover:bg-secondary text-white text-xs font-semibold uppercase tracking-widest transition-all duration-300 shadow-md hover:shadow-xl hover:scale-[1.02] cursor-pointer"
+              >
+                <span>See More</span>
+                <span className="material-symbols-outlined text-base">arrow_forward</span>
+              </Link>
+              <span className="text-xs text-on-surface-variant font-medium">
+                Explore the full La Planta Prime executive fleet
+              </span>
             </div>
           </div>
         </section>

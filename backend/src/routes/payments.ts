@@ -102,7 +102,22 @@ paymentsRouter.post("/initialize", async (req: Request, res: Response) => {
  */
 paymentsRouter.post("/verify", async (req: Request, res: Response) => {
   try {
-    const { reference, bookingCode, customerName, email, amount, vehicleName, phone } = req.body;
+    const {
+      reference,
+      bookingCode,
+      customerName,
+      email,
+      amount,
+      vehicleName,
+      phone,
+      vehicleId,
+      clientId,
+      rentalDays,
+      startDate,
+      endDate,
+      pickupLocation,
+      dropoffLocation,
+    } = req.body;
 
     if (!reference) {
       return res.status(400).json({ error: "Transaction reference is required" });
@@ -162,19 +177,102 @@ paymentsRouter.post("/verify", async (req: Request, res: Response) => {
       };
       memoryPaymentLogs.unshift(auditLog);
 
-      // Update Supabase bookings table if booking exists
+      // Upsert into Supabase bookings table
       try {
-        await supabase
+        // Resolve client_id: use provided clientId, or lookup profile by email
+        let resolvedClientId = clientId;
+        if (!resolvedClientId && email) {
+          const { data: p } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("email", email)
+            .maybeSingle();
+          if (p?.id) resolvedClientId = p.id;
+        }
+        if (!resolvedClientId) {
+          resolvedClientId = "00000000-0000-0000-0000-000000000002";
+        }
+
+        // Resolve vehicle_id: use provided vehicleId, or lookup by vehicleName
+        let resolvedVehicleId = vehicleId;
+        if (!resolvedVehicleId && vehicleName) {
+          const { data: v } = await supabase
+            .from("vehicles")
+            .select("id")
+            .ilike("name", `%${vehicleName}%`)
+            .limit(1)
+            .maybeSingle();
+          if (v?.id) resolvedVehicleId = v.id;
+        }
+        if (!resolvedVehicleId) {
+          const { data: v } = await supabase.from("vehicles").select("id").limit(1).maybeSingle();
+          resolvedVehicleId = v?.id || "a1b2c3d4-e5f6-7890-abcd-111111111111";
+        }
+
+        const effectiveBookingCode = bookingCode || `LP-${Date.now().toString().slice(-4)}`;
+
+        // Check if booking already exists
+        const { data: existingBooking } = await supabase
           .from("bookings")
-          .update({
-            payment_status: "paid",
+          .select("id")
+          .or(`booking_reference.eq.${effectiveBookingCode},payment_reference.eq.${reference}`)
+          .maybeSingle();
+
+        if (existingBooking) {
+          await supabase
+            .from("bookings")
+            .update({
+              payment_status: "paid",
+              status: "confirmed",
+              total_amount_ngn: Number(paidAmount),
+              updated_at: timestamp,
+            })
+            .eq("id", existingBooking.id);
+          console.log(`[Payments] Updated existing booking ${existingBooking.id}`);
+        } else {
+          const { error: insErr } = await supabase.from("bookings").insert({
+            booking_reference: effectiveBookingCode,
+            client_id: resolvedClientId,
+            vehicle_id: resolvedVehicleId,
+            service_type: "chauffeur_driven",
             status: "confirmed",
-            total_amount: paidAmount,
+            pickup_location: pickupLocation || "La Planta Flagship Hub (Victoria Island)",
+            pickup_datetime: startDate || timestamp,
+            dropoff_location: dropoffLocation || pickupLocation || "Victoria Island / Lagos Mainland",
+            dropoff_datetime:
+              endDate ||
+              new Date(Date.now() + 86400000 * (Number(rentalDays) || 3)).toISOString(),
+            base_price_ngn: Number(paidAmount),
+            total_amount_ngn: Number(paidAmount),
+            total_amount_usd: Math.round(Number(paidAmount) / 1400),
+            payment_status: "paid",
+            payment_gateway: "paystack",
+            payment_reference: reference,
+            paid_at: timestamp,
+            special_instructions: `Executive Booking via Paystack for ${customerName || email}`,
+            verification_pin: `${effectiveBookingCode.replace(/\D/g, "").slice(-4) || "8842"}-09`,
+            qr_pass_token: crypto.randomBytes(16).toString("hex"),
+            is_tarmac_intake_required: false,
+            created_at: timestamp,
             updated_at: timestamp,
-          })
-          .or(`id.eq.${bookingCode},id.eq.${reference}`);
+          });
+          if (insErr) {
+            console.warn("[Payments Warning] Supabase insert failed:", insErr.message);
+          } else {
+            console.log(`[Payments] Created new confirmed booking ${effectiveBookingCode} in Supabase`);
+          }
+        }
+
+        // Mark vehicle as reserved in Supabase
+        if (resolvedVehicleId) {
+          await supabase
+            .from("vehicles")
+            .update({ status: "reserved" })
+            .eq("id", resolvedVehicleId);
+          console.log(`[Payments] Marked vehicle ${resolvedVehicleId} as reserved`);
+        }
       } catch (dbErr: any) {
-        console.warn("[Payments Warning] Supabase update bypassed:", dbErr.message);
+        console.warn("[Payments Warning] Supabase upsert bypassed:", dbErr.message);
       }
 
       console.log(`\x1b[32m[Paystack Verified]\x1b[0m ₦${Number(paidAmount).toLocaleString()} for ${customerName || email} (Ref: ${reference})`);
@@ -361,6 +459,49 @@ paymentsRouter.get("/logs", async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/payments/my-bookings
+ * Securely fetch bookings for a client by ID, email, or booking reference
+ */
+paymentsRouter.get("/my-bookings", async (req: Request, res: Response) => {
+  try {
+    const { userId, email, bookingCode } = req.query;
+
+    let query = supabase
+      .from("bookings")
+      .select(`
+        *,
+        vehicles:vehicle_id (*),
+        drivers:driver_id (*)
+      `)
+      .order("created_at", { ascending: false });
+
+    if (bookingCode) {
+      const code = String(bookingCode).replace("#", "");
+      query = query.or(`booking_reference.eq.${code},booking_reference.eq.#${code}`);
+    } else if (userId && email) {
+      query = query.or(`client_id.eq.${userId},special_instructions.ilike.%${email}%`);
+    } else if (userId) {
+      query = query.eq("client_id", String(userId));
+    } else if (email) {
+      query = query.ilike("special_instructions", `%${email}%`);
+    } else {
+      return res.status(400).json({ error: "userId, email, or bookingCode required" });
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return res.json({
+      success: true,
+      bookings: data || [],
+    });
+  } catch (err: any) {
+    console.error("[Payments] My Bookings error:", err.message);
+    return res.status(500).json({ error: err.message, bookings: [] });
   }
 });
 

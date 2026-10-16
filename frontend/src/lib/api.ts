@@ -133,4 +133,24 @@ export const backendApi = {
       return { success: false, error: err.message };
     }
   },
+
+  /**
+   * Fetch live bookings for a user by id, email, or booking code
+   */
+  async getUserBookings(params: { userId?: string; email?: string; bookingCode?: string }) {
+    try {
+      const q = new URLSearchParams();
+      if (params.userId) q.set("userId", params.userId);
+      if (params.email) q.set("email", params.email);
+      if (params.bookingCode) q.set("bookingCode", params.bookingCode);
+
+      const res = await fetch(`${BACKEND_URL}/api/payments/my-bookings?${q.toString()}`, {
+        cache: "no-store",
+        headers: BASE_HEADERS,
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message, bookings: [] };
+    }
+  },
 };

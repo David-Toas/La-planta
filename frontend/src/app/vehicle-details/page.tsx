@@ -204,12 +204,35 @@ function VehicleDetailsContent() {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-8 mb-10 bg-gradient-to-r from-transparent via-surface-container-low to-transparent p-6 rounded-2xl">
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-3">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm uppercase tracking-wider font-semibold shadow-sm">
-                    <span className="material-symbols-outlined text-xs">
-                      star
+                  {vehicle?.status === "reserved" ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-label-sm text-label-sm uppercase tracking-wider font-bold border border-amber-300 shadow-sm">
+                      <span className="material-symbols-outlined text-xs">
+                        lock
+                      </span>
+                      Currently Reserved
                     </span>
-                    Flagship Luxury • Driver Included
-                  </span>
+                  ) : vehicle?.status === "in_transit" ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-900 font-label-sm text-label-sm uppercase tracking-wider font-bold border border-blue-300 shadow-sm">
+                      <span className="material-symbols-outlined text-xs">
+                        directions_car
+                      </span>
+                      Currently On Charter
+                    </span>
+                  ) : vehicle?.status === "maintenance" ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-100 text-stone-800 font-label-sm text-label-sm uppercase tracking-wider font-bold border border-stone-300 shadow-sm">
+                      <span className="material-symbols-outlined text-xs">
+                        build
+                      </span>
+                      In Routine Service
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm uppercase tracking-wider font-semibold shadow-sm">
+                      <span className="material-symbols-outlined text-xs">
+                        star
+                      </span>
+                      Flagship Luxury • Driver Included
+                    </span>
+                  )}
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-highest text-on-surface font-label-sm text-label-sm uppercase tracking-wider">
                     Model Year {vehicleYear}
                   </span>
@@ -237,16 +260,51 @@ function VehicleDetailsContent() {
                     </span>
                   </div>
 
-                  <button
-                    onClick={() => handleReserve()}
-                    className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-primary text-white font-label-md text-sm uppercase tracking-wider font-semibold shadow-md hover:bg-secondary transition-all duration-300 group cursor-pointer active:scale-95 shrink-0"
-                    type="button"
-                  >
-                    <span>Proceed to Reservation</span>
-                    <span className="material-symbols-outlined text-base group-hover:translate-x-1 transition-transform">
-                      arrow_forward
-                    </span>
-                  </button>
+                  {vehicle?.status === "reserved" ? (
+                    <button
+                      disabled
+                      className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-amber-100 text-amber-800 font-label-md text-sm uppercase tracking-wider font-semibold border border-amber-300 cursor-not-allowed shrink-0"
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined text-base">
+                        lock
+                      </span>
+                      <span>Currently Reserved</span>
+                    </button>
+                  ) : vehicle?.status === "in_transit" ? (
+                    <button
+                      disabled
+                      className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-blue-100 text-blue-800 font-label-md text-sm uppercase tracking-wider font-semibold border border-blue-300 cursor-not-allowed shrink-0"
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined text-base">
+                        directions_car
+                      </span>
+                      <span>Currently On Charter</span>
+                    </button>
+                  ) : vehicle?.status === "maintenance" ? (
+                    <button
+                      disabled
+                      className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-stone-100 text-stone-600 font-label-md text-sm uppercase tracking-wider font-semibold border border-stone-300 cursor-not-allowed shrink-0"
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined text-base">
+                        build
+                      </span>
+                      <span>In Routine Service</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleReserve()}
+                      className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-primary text-white font-label-md text-sm uppercase tracking-wider font-semibold shadow-md hover:bg-secondary transition-all duration-300 group cursor-pointer active:scale-95 shrink-0"
+                      type="button"
+                    >
+                      <span>Proceed to Reservation</span>
+                      <span className="material-symbols-outlined text-base group-hover:translate-x-1 transition-transform">
+                        arrow_forward
+                      </span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -660,16 +718,51 @@ function VehicleDetailsContent() {
                       </div>
                       <span className="font-label-sm text-xs text-on-surface-variant">/ day</span>
                     </div>
-                    <button
-                      onClick={() => handleReserve()}
-                      className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-primary text-white font-label-md text-sm uppercase tracking-wider font-semibold shadow-md hover:bg-secondary transition-all duration-300 group cursor-pointer active:scale-95"
-                      type="button"
-                    >
-                      <span>Proceed to Reservation</span>
-                      <span className="material-symbols-outlined text-base group-hover:translate-x-1 transition-transform">
-                        arrow_forward
-                      </span>
-                    </button>
+                    {vehicle?.status === "reserved" ? (
+                      <button
+                        disabled
+                        className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-amber-100 text-amber-800 font-label-md text-sm uppercase tracking-wider font-semibold border border-amber-300 cursor-not-allowed"
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-base">
+                          lock
+                        </span>
+                        <span>Currently Reserved</span>
+                      </button>
+                    ) : vehicle?.status === "in_transit" ? (
+                      <button
+                        disabled
+                        className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-blue-100 text-blue-800 font-label-md text-sm uppercase tracking-wider font-semibold border border-blue-300 cursor-not-allowed"
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-base">
+                          directions_car
+                        </span>
+                        <span>Currently On Charter</span>
+                      </button>
+                    ) : vehicle?.status === "maintenance" ? (
+                      <button
+                        disabled
+                        className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-stone-100 text-stone-600 font-label-md text-sm uppercase tracking-wider font-semibold border border-stone-300 cursor-not-allowed"
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-base">
+                          build
+                        </span>
+                        <span>In Routine Service</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleReserve()}
+                        className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-primary text-white font-label-md text-sm uppercase tracking-wider font-semibold shadow-md hover:bg-secondary transition-all duration-300 group cursor-pointer active:scale-95"
+                        type="button"
+                      >
+                        <span>Proceed to Reservation</span>
+                        <span className="material-symbols-outlined text-base group-hover:translate-x-1 transition-transform">
+                          arrow_forward
+                        </span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -690,16 +783,45 @@ function VehicleDetailsContent() {
             <span className="text-[10px] text-stone-400">/day</span>
           </div>
         </div>
-        <button
-          onClick={() => handleReserve()}
-          type="button"
-          className="px-6 py-2.5 rounded-xl bg-secondary hover:bg-secondary/90 text-primary font-bold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 flex items-center gap-1.5"
-        >
-          <span>Reserve Now</span>
-          <span className="material-symbols-outlined text-sm">
-            arrow_forward
-          </span>
-        </button>
+        {vehicle?.status === "reserved" ? (
+          <button
+            disabled
+            type="button"
+            className="px-6 py-2.5 rounded-xl bg-amber-200/90 text-amber-900 font-bold text-xs uppercase tracking-wider cursor-not-allowed flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-sm">lock</span>
+            <span>Reserved</span>
+          </button>
+        ) : vehicle?.status === "in_transit" ? (
+          <button
+            disabled
+            type="button"
+            className="px-6 py-2.5 rounded-xl bg-blue-200/90 text-blue-900 font-bold text-xs uppercase tracking-wider cursor-not-allowed flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-sm">directions_car</span>
+            <span>On Charter</span>
+          </button>
+        ) : vehicle?.status === "maintenance" ? (
+          <button
+            disabled
+            type="button"
+            className="px-6 py-2.5 rounded-xl bg-stone-200/90 text-stone-800 font-bold text-xs uppercase tracking-wider cursor-not-allowed flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-sm">build</span>
+            <span>In Service</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => handleReserve()}
+            type="button"
+            className="px-6 py-2.5 rounded-xl bg-secondary hover:bg-secondary/90 text-primary font-bold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 flex items-center gap-1.5"
+          >
+            <span>Reserve Now</span>
+            <span className="material-symbols-outlined text-sm">
+              arrow_forward
+            </span>
+          </button>
+        )}
       </div>
 
       <Footer />

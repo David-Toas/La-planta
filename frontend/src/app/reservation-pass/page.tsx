@@ -116,7 +116,10 @@ const DEFAULT_BOOKING: BookingPassData = {
 
 function ReservationPassContent() {
   const searchParams = useSearchParams();
-  const urlCode = searchParams.get("code") || searchParams.get("id");
+  const urlCode =
+    searchParams.get("booking") ||
+    searchParams.get("code") ||
+    searchParams.get("id");
 
   const [booking, setBooking] = useState<BookingPassData>(DEFAULT_BOOKING);
   const [loading, setLoading] = useState(false);

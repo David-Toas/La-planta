@@ -564,43 +564,7 @@ export interface BookingRequest {
   adminNotes?: string;
 }
 
-const memoryBookingRequests: BookingRequest[] = [
-  {
-    id: "req-cxl-8842",
-    bookingCode: "#LP-8842",
-    vehicleName: "Range Rover Autobiography LWB",
-    guestName: "Dr. Adekunle Balogun",
-    guestEmail: "a.balogun@executivecorp.ng",
-    guestPhone: "+234 802 345 6789",
-    vipTier: "VIP Executive",
-    type: "cancellation",
-    status: "pending",
-    reason: "Executive board meeting rescheduled to London headquarters",
-    refundBank: "Zenith Bank Plc",
-    refundAccount: "1029384756",
-    refundAccountName: "Dr. Adekunle Balogun",
-    refundAmount: 1350000,
-    refundAmountFormatted: "₦1,350,000",
-    notes: "Client requests manual wire refund to primary account. Chauffeur not yet dispatched from Ikoyi staging.",
-    createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "req-ext-8850",
-    bookingCode: "#LP-8850",
-    vehicleName: "Toyota Land Cruiser 300 VXR",
-    guestName: "Chief O. Fernandez",
-    guestEmail: "o.fernandez@diplomaticgroup.org",
-    guestPhone: "+234 803 912 3456",
-    vipTier: "VIP Diplomatic",
-    type: "extension",
-    status: "pending",
-    extraDays: 2,
-    newReturnDate: "Nov 20, 2024 (18:00 WAT)",
-    reason: "FCT Presidential Villa hearings extended by 48 hours",
-    notes: "Requires assigned chauffeur Segun Alabi to remain on active airside protocol.",
-    createdAt: new Date(Date.now() - 55 * 60 * 1000).toISOString(),
-  },
-];
+const memoryBookingRequests: BookingRequest[] = [];
 
 /**
  * GET /api/admin/requests

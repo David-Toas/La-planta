@@ -12,7 +12,11 @@ import { GoogleTrackingMap } from "@/components/google-tracking-map";
 
 function LiveTrackingContent() {
   const searchParams = useSearchParams();
-  const vehicleIdParam = searchParams?.get("vehicleId") || searchParams?.get("id") || "a1b2c3d4-e5f6-7890-abcd-111111111111";
+  const vehicleIdParam =
+    searchParams?.get("vehicleId") ||
+    searchParams?.get("vehicle") ||
+    searchParams?.get("id") ||
+    "a1b2c3d4-e5f6-7890-abcd-111111111111";
   const { session } = useAuth();
   const [backendHealth, setBackendHealth] = useState<{
     status: string;

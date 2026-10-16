@@ -244,11 +244,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Google OAuth Sign In
   const signInWithGoogle = async (): Promise<AuthResponse> => {
     try {
-      const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+      // Resolve current origin dynamically (supports Vercel preview, test production, and localhost)
+      const origin =
+        typeof window !== "undefined" && window.location.origin
+          ? window.location.origin
+          : process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
+      const callbackUrl = `${origin.replace(/\/$/, "")}/auth/callback`;
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${origin}/auth/callback`,
+          redirectTo: callbackUrl,
           queryParams: {
             access_type: "offline",
             prompt: "consent",

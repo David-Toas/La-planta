@@ -21,7 +21,9 @@ function CheckoutContent() {
 
   // Booking & Form States
   const todayIso = new Date().toISOString().split("T")[0];
-  const threeDaysLater = new Date(Date.now() + 3 * 86400000).toISOString().split("T")[0];
+  const threeDaysLater = new Date(Date.now() + 3 * 86400000)
+    .toISOString()
+    .split("T")[0];
 
   const [startDate, setStartDate] = useState<string>(todayIso);
   const [endDate, setEndDate] = useState<string>(threeDaysLater);
@@ -61,11 +63,15 @@ function CheckoutContent() {
     }
   };
   const [bookingCode, setBookingCode] = useState<string>("LP-LOS-89240");
-  const [handoverMode, setHandoverMode] = useState<"delivery" | "office">("delivery");
+  const [handoverMode, setHandoverMode] = useState<"delivery" | "office">(
+    "delivery",
+  );
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryWindow, setDeliveryWindow] = useState("");
   const [flightNumber, setFlightNumber] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"card" | "transfer" | "wallet">("card");
+  const [paymentMethod, setPaymentMethod] = useState<
+    "card" | "transfer" | "wallet"
+  >("card");
 
   // Guest details (fallback if not signed in)
   const [guestName, setGuestName] = useState("");
@@ -99,7 +105,11 @@ function CheckoutContent() {
 
         // 1. Try Express backend
         const res = await backendApi.getFleet();
-        if (res?.success && Array.isArray(res.vehicles) && res.vehicles.length > 0) {
+        if (
+          res?.success &&
+          Array.isArray(res.vehicles) &&
+          res.vehicles.length > 0
+        ) {
           fleet = res.vehicles;
         } else {
           // 2. Direct Supabase Fallback
@@ -157,7 +167,7 @@ function CheckoutContent() {
     if (!effectiveEmail) {
       setIsProcessing(false);
       setPaymentError(
-        "Please provide your email address or sign in to complete your reservation."
+        "Please provide your email address or sign in to complete your reservation.",
       );
       if (!user) openAuthModal();
       return;
@@ -210,13 +220,13 @@ function CheckoutContent() {
           },
           onSuccess: async (transaction: any) => {
             await verifyAndFinalizePayment(
-              transaction.reference || transactionReference
+              transaction.reference || transactionReference,
             );
           },
           onCancel: () => {
             setIsProcessing(false);
             setPaymentError(
-              "Payment window was closed. Your vehicle reservation is still held."
+              "Payment window was closed. Your vehicle reservation is still held.",
             );
           },
         });
@@ -241,6 +251,72 @@ function CheckoutContent() {
     const backendUrl =
       process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
+    const effectivePickupLocation =
+      handoverMode === "delivery"
+        ? deliveryAddress || "Victoria Island / Lagos Metro Delivery"
+        : "La Planta Flagship Hub (Victoria Island)";
+    const effectiveDropoffLocation = effectivePickupLocation;
+    const effectiveStartDate = startDate
+      ? new Date(startDate).toISOString()
+      : new Date().toISOString();
+    const effectiveEndDate = endDate
+      ? new Date(endDate).toISOString()
+      : new Date(Date.now() + 86400000 * (rentalDays || 3)).toISOString();
+
+    // 1. Direct frontend Supabase persistence
+    try {
+      let resolvedClientUid = user?.id;
+      if (!resolvedClientUid && effectiveEmail) {
+        const { data: p } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("email", effectiveEmail)
+          .maybeSingle();
+        if (p?.id) resolvedClientUid = p.id;
+      }
+      if (!resolvedClientUid) {
+        resolvedClientUid = "00000000-0000-0000-0000-000000000002";
+      }
+
+      await supabase.from("bookings").insert({
+        booking_reference: bookingCode,
+        client_id: resolvedClientUid,
+        vehicle_id: vehicle?.id || "a1b2c3d4-e5f6-7890-abcd-111111111111",
+        service_type: "chauffeur_driven",
+        status: "confirmed",
+        pickup_location: effectivePickupLocation,
+        pickup_datetime: effectiveStartDate,
+        dropoff_location: effectiveDropoffLocation,
+        dropoff_datetime: effectiveEndDate,
+        flight_number: flightNumber || null,
+        flight_terminal: "MMIA Terminal 2",
+        base_price_ngn: totalAmountNgn,
+        total_amount_ngn: totalAmountNgn,
+        total_amount_usd: totalAmountUsd,
+        payment_status: "paid",
+        payment_gateway: "paystack",
+        payment_reference: reference,
+        paid_at: new Date().toISOString(),
+        special_instructions: `Charter confirmed via Paystack for ${effectiveName} (${effectiveEmail})`,
+        verification_pin: `${bookingCode.replace(/\D/g, "").slice(-4) || "8842"}-09`,
+        qr_pass_token: `qr_${bookingCode}_${Date.now()}`,
+        is_tarmac_intake_required: false,
+      });
+
+      // Update vehicle status in Supabase
+      if (vehicle?.id) {
+        await supabase
+          .from("vehicles")
+          .update({ status: "reserved" })
+          .eq("id", vehicle.id);
+      }
+
+      console.log("[Checkout] Direct Supabase booking registered:", bookingCode);
+    } catch (dbErr: any) {
+      console.warn("[Checkout] Direct Supabase persistence notice:", dbErr.message);
+    }
+
+    // 2. Call backend verification endpoint (triggers transactional email & audit logs)
     try {
       const res = await fetch(`${backendUrl}/api/payments/verify`, {
         method: "POST",
@@ -253,6 +329,13 @@ function CheckoutContent() {
           phone: effectivePhone,
           amount: totalAmountNgn,
           vehicleName: vehicleTitle,
+          vehicleId: vehicle?.id,
+          clientId: user?.id,
+          rentalDays,
+          startDate: effectiveStartDate,
+          endDate: effectiveEndDate,
+          pickupLocation: effectivePickupLocation,
+          dropoffLocation: effectiveDropoffLocation,
         }),
       });
 
@@ -275,22 +358,36 @@ function CheckoutContent() {
         }),
         vehicle: vehicleTitle,
         vehicleColor: vehicle?.color || "Obsidian Black",
-        vehicleImage: vehicle?.hero_image_url || vehicle?.gallery_image_urls?.[0] || "",
+        vehicleImage:
+          vehicle?.hero_image_url || vehicle?.gallery_image_urls?.[0] || "",
         rentalDays,
-        startDate: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
-        endDate: endDate ? new Date(endDate).toISOString() : new Date(Date.now() + 86400000 * (rentalDays || 3)).toISOString(),
-        deliveryAddress: handoverMode === "delivery" ? deliveryAddress : "La Planta Flagship Hub (Victoria Island)",
+        startDate: startDate
+          ? new Date(startDate).toISOString()
+          : new Date().toISOString(),
+        endDate: endDate
+          ? new Date(endDate).toISOString()
+          : new Date(Date.now() + 86400000 * (rentalDays || 3)).toISOString(),
+        deliveryAddress:
+          handoverMode === "delivery"
+            ? deliveryAddress
+            : "La Planta Flagship Hub (Victoria Island)",
+        handoverMode,
+        isOfficePickup: handoverMode === "office",
         customerName: effectiveName,
         customerEmail: effectiveEmail,
         customerPhone: effectivePhone,
         flightNumber: flightNumber || "BA 075",
         flightTerminal: "MMIA Terminal 2",
         verificationPin: `${bookingCode.replace(/\D/g, "").slice(-4) || "8842"}-09`,
+        vehicleId: vehicle?.id,
       };
 
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem("laplanta_active_booking", JSON.stringify(bookingSummary));
+          localStorage.setItem(
+            "laplanta_active_booking",
+            JSON.stringify(bookingSummary),
+          );
         } catch (e) {
           console.error("Failed to save booking to localStorage", e);
         }
@@ -330,11 +427,22 @@ function CheckoutContent() {
         }),
         vehicle: vehicleTitle,
         vehicleColor: vehicle?.color || "Obsidian Black",
-        vehicleImage: vehicle?.hero_image_url || vehicle?.gallery_image_urls?.[0] || "",
+        vehicleImage:
+          vehicle?.hero_image_url || vehicle?.gallery_image_urls?.[0] || "",
         rentalDays,
-        startDate: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
-        endDate: endDate ? new Date(endDate).toISOString() : new Date(Date.now() + 86400000 * (rentalDays || 3)).toISOString(),
-        deliveryAddress: handoverMode === "delivery" ? deliveryAddress : "La Planta Flagship Hub (Victoria Island)",
+        startDate: startDate
+          ? new Date(startDate).toISOString()
+          : new Date().toISOString(),
+        endDate: endDate
+          ? new Date(endDate).toISOString()
+          : new Date(Date.now() + 86400000 * (rentalDays || 3)).toISOString(),
+        deliveryAddress:
+          handoverMode === "delivery"
+            ? deliveryAddress
+            : "La Planta Flagship Hub (Victoria Island)",
+        handoverMode,
+        isOfficePickup: handoverMode === "office",
+        vehicleId: vehicle?.id,
         customerName: effectiveName,
         customerEmail: effectiveEmail,
         customerPhone: effectivePhone,
@@ -345,7 +453,10 @@ function CheckoutContent() {
 
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem("laplanta_active_booking", JSON.stringify(fallbackSummary));
+          localStorage.setItem(
+            "laplanta_active_booking",
+            JSON.stringify(fallbackSummary),
+          );
         } catch (e) {}
       }
 
@@ -441,7 +552,8 @@ function CheckoutContent() {
                         {confirmedBooking.vehicle}
                       </span>
                       <span className="text-[11px] text-secondary">
-                        {confirmedBooking.vehicleColor || "Obsidian Black"} • Chauffeur Included ({rentalDays} Days)
+                        {confirmedBooking.vehicleColor || "Obsidian Black"} •
+                        Chauffeur Included ({rentalDays} Days)
                       </span>
                     </div>
                     <div className="p-3.5 rounded-lg bg-surface-container-low flex flex-col gap-1">
@@ -608,10 +720,15 @@ function CheckoutContent() {
                               <span className="material-symbols-outlined text-secondary text-base">
                                 calendar_month
                               </span>
-                              <span>Reservation Schedule (Start &amp; End Dates)</span>
+                              <span>
+                                Reservation Schedule (Start &amp; End Dates)
+                              </span>
                             </label>
                             <span className="px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-bold shadow-sm">
-                              {rentalDays} {rentalDays === 1 ? "Day Duration" : "Days Duration"}
+                              {rentalDays}{" "}
+                              {rentalDays === 1
+                                ? "Day Duration"
+                                : "Days Duration"}
                             </span>
                           </div>
 
@@ -629,7 +746,9 @@ function CheckoutContent() {
                                   type="date"
                                   min={todayIso}
                                   value={startDate}
-                                  onChange={(e) => handleStartDateChange(e.target.value)}
+                                  onChange={(e) =>
+                                    handleStartDateChange(e.target.value)
+                                  }
                                   className="w-full h-12 px-4 rounded-xl bg-surface-container-lowest border border-surface-container text-primary text-sm font-semibold focus:outline-none focus:border-secondary transition-colors"
                                 />
                               </div>
@@ -651,7 +770,9 @@ function CheckoutContent() {
                                   type="date"
                                   min={startDate || todayIso}
                                   value={endDate}
-                                  onChange={(e) => handleEndDateChange(e.target.value)}
+                                  onChange={(e) =>
+                                    handleEndDateChange(e.target.value)
+                                  }
                                   className="w-full h-12 px-4 rounded-xl bg-surface-container-lowest border border-surface-container text-primary text-sm font-semibold focus:outline-none focus:border-secondary transition-colors"
                                 />
                               </div>
@@ -670,7 +791,8 @@ function CheckoutContent() {
                               <span>Chauffeur Service Coverage:</span>
                             </span>
                             <span className="font-semibold text-primary">
-                              {rentalDays * 24} Hours ({rentalDays} Full Calendar {rentalDays === 1 ? "Day" : "Days"})
+                              {rentalDays * 24} Hours ({rentalDays} Full
+                              Calendar {rentalDays === 1 ? "Day" : "Days"})
                             </span>
                           </div>
                         </div>
@@ -827,10 +949,6 @@ function CheckoutContent() {
                               <h2 className="font-headline-sm text-headline-sm text-primary font-serif">
                                 Guest Identification &amp; Account
                               </h2>
-                              <p className="font-body-sm text-body-sm text-on-surface-variant">
-                                Sign in or provide details to receive dispatch
-                                updates and digital vouchers
-                              </p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -854,7 +972,9 @@ function CheckoutContent() {
                           <div className="p-4 sm:p-5 rounded-xl bg-surface-container-low/90 border border-secondary/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div className="flex items-center gap-3.5">
                               <div className="w-12 h-12 rounded-full bg-primary text-secondary-fixed flex items-center justify-center font-bold text-base shadow-sm shrink-0">
-                                {user.name ? user.name.charAt(0).toUpperCase() : "U"}
+                                {user.name
+                                  ? user.name.charAt(0).toUpperCase()
+                                  : "U"}
                               </div>
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-2">
@@ -866,13 +986,16 @@ function CheckoutContent() {
                                   </span>
                                 </div>
                                 <span className="font-body-sm text-xs text-on-surface-variant">
-                                  {user.email} {user.phone ? `• ${user.phone}` : ""}
+                                  {user.email}{" "}
+                                  {user.phone ? `• ${user.phone}` : ""}
                                 </span>
                                 <span className="font-label-sm text-[11px] text-emerald-800 font-medium flex items-center gap-1 mt-0.5">
                                   <span className="material-symbols-outlined text-sm">
                                     check_circle
                                   </span>{" "}
-                                  Account verified. Reservation voucher and dispatch tracking will link directly to your profile.
+                                  Account verified. Reservation voucher and
+                                  dispatch tracking will link directly to your
+                                  profile.
                                 </span>
                               </div>
                             </div>
@@ -889,7 +1012,8 @@ function CheckoutContent() {
                                     Have an Executive Account?
                                   </span>
                                   <span className="text-xs text-on-surface-variant">
-                                    Sign in or register to auto-populate your verified details and earn VIP mileage.
+                                    Sign in or register to auto-populate your
+                                    verified details and earn VIP mileage.
                                   </span>
                                 </div>
                               </div>
@@ -922,7 +1046,9 @@ function CheckoutContent() {
                                 <input
                                   type="email"
                                   value={guestEmail}
-                                  onChange={(e) => setGuestEmail(e.target.value)}
+                                  onChange={(e) =>
+                                    setGuestEmail(e.target.value)
+                                  }
                                   placeholder="e.g. client@example.com"
                                   className="w-full h-11 px-3.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
                                 />
@@ -934,7 +1060,9 @@ function CheckoutContent() {
                                 <input
                                   type="tel"
                                   value={guestPhone}
-                                  onChange={(e) => setGuestPhone(e.target.value)}
+                                  onChange={(e) =>
+                                    setGuestPhone(e.target.value)
+                                  }
                                   placeholder="e.g. +234 800 000 0000"
                                   className="w-full h-11 px-3.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
                                 />
@@ -963,12 +1091,6 @@ function CheckoutContent() {
                               </p>
                             </div>
                           </div>
-                          <span className="inline-flex items-center gap-1 text-secondary font-label-sm text-label-sm uppercase tracking-widest font-semibold">
-                            <span className="material-symbols-outlined text-sm">
-                              shield
-                            </span>{" "}
-                            Bank-Grade Encryption
-                          </span>
                         </div>
 
                         {/* Payment Gateway Options */}
@@ -1096,7 +1218,10 @@ function CheckoutContent() {
                               </>
                             ) : (
                               <>
-                                <span>Pay ₦{totalAmountNgn.toLocaleString()} via Paystack</span>
+                                <span>
+                                  Pay ₦{totalAmountNgn.toLocaleString()} via
+                                  Paystack
+                                </span>
                                 <span className="material-symbols-outlined text-base">
                                   lock
                                 </span>
@@ -1141,7 +1266,9 @@ function CheckoutContent() {
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-stone-900 text-stone-400">
-                            <span className="material-symbols-outlined text-4xl">directions_car</span>
+                            <span className="material-symbols-outlined text-4xl">
+                              directions_car
+                            </span>
                           </div>
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-transparent to-transparent"></div>
@@ -1149,11 +1276,12 @@ function CheckoutContent() {
                           <span className="px-2.5 py-1 rounded-full bg-surface-container-lowest/90 backdrop-blur-md text-primary font-label-sm text-label-sm font-semibold tracking-wide">
                             {vehicle?.category || "Executive Fleet"}
                           </span>
-                          {vehicle?.armored_level && vehicle.armored_level !== "None" && (
-                            <span className="px-2.5 py-1 rounded-full bg-amber-500 text-black font-label-sm text-label-sm font-bold">
-                              Armored {vehicle.armored_level}
-                            </span>
-                          )}
+                          {vehicle?.armored_level &&
+                            vehicle.armored_level !== "None" && (
+                              <span className="px-2.5 py-1 rounded-full bg-amber-500 text-black font-label-sm text-label-sm font-bold">
+                                Armored {vehicle.armored_level}
+                              </span>
+                            )}
                         </div>
                         <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
                           <div>
@@ -1203,14 +1331,17 @@ function CheckoutContent() {
                             <select
                               value={vehicle?.id || ""}
                               onChange={(e) => {
-                                const chosen = allVehicles.find((v) => v.id === e.target.value);
+                                const chosen = allVehicles.find(
+                                  (v) => v.id === e.target.value,
+                                );
                                 if (chosen) setVehicle(chosen);
                               }}
                               className="w-full h-10 px-3 rounded-lg bg-surface-container-low border border-surface-container text-xs text-on-surface focus:outline-none"
                             >
                               {allVehicles.map((v) => (
                                 <option key={v.id} value={v.id}>
-                                  {v.brand} {v.model} • ₦{v.daily_rate_ngn.toLocaleString()}/day
+                                  {v.brand} {v.model} • ₦
+                                  {v.daily_rate_ngn.toLocaleString()}/day
                                 </option>
                               ))}
                             </select>
@@ -1230,7 +1361,9 @@ function CheckoutContent() {
                             <div className="flex flex-col gap-2 w-full">
                               <div className="flex items-center justify-between">
                                 <span className="font-title-md text-title-md text-on-surface">
-                                  Start: {deliveryWindow.split("•")[0]?.trim() || "Immediate"}
+                                  Start:{" "}
+                                  {deliveryWindow.split("•")[0]?.trim() ||
+                                    "Immediate"}
                                 </span>
                                 <span className="font-label-sm text-label-sm text-on-surface-variant">
                                   WAT
@@ -1247,14 +1380,18 @@ function CheckoutContent() {
                             </div>
                           </div>
                           <span className="font-body-sm text-body-sm text-secondary font-medium">
-                            Total Term: {rentalDays} Full {rentalDays === 1 ? "Day" : "Days"} ({rentalDays * 24} Consec. Hours)
+                            Total Term: {rentalDays} Full{" "}
+                            {rentalDays === 1 ? "Day" : "Days"} (
+                            {rentalDays * 24} Consec. Hours)
                           </span>
                         </div>
 
                         <div className="flex flex-col gap-2.5 pt-2">
                           <div className="flex items-center justify-between font-body-sm text-body-sm">
                             <span className="text-on-surface-variant">
-                              Vehicle Daily Rate ({rentalDays} {rentalDays === 1 ? "Day" : "Days"} × ₦{dailyRate.toLocaleString()})
+                              Vehicle Daily Rate ({rentalDays}{" "}
+                              {rentalDays === 1 ? "Day" : "Days"} × ₦
+                              {dailyRate.toLocaleString()})
                             </span>
                             <span className="text-on-surface font-medium">
                               ₦{(dailyRate * rentalDays).toLocaleString()}
