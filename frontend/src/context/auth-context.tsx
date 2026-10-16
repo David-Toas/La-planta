@@ -48,11 +48,20 @@ const formatTier = (rawTier?: string | null): string => {
   return rawTier;
 };
 
+// Security Inactivity Configuration
+const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 Minutes
+const WARNING_WINDOW_MS = 60 * 1000; // 60 Seconds warning window
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<GuestUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Security: Inactivity Tracker States
+  const [showInactivityWarning, setShowInactivityWarning] = useState(false);
+  const [inactivitySecondsLeft, setInactivitySecondsLeft] = useState(60);
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState(false);
 
   // Sync Supabase auth user with public.profiles table
   const syncUserProfile = useCallback(async (sbUser: SupabaseUser, currentSession?: Session) => {
@@ -159,16 +168,138 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Sign out from Supabase & clear state
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await supabase.auth.signOut();
     } catch {}
     setUser(null);
     setSession(null);
+    setShowInactivityWarning(false);
     try {
       localStorage.removeItem("laPlanta_guest");
+      localStorage.removeItem("laPlanta_last_activity");
     } catch {}
-  };
+    // If currently on a protected route like /account, navigate to /
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/account")) {
+      window.location.href = "/";
+    }
+  }, []);
+
+  const resetInactivityTimer = useCallback(() => {
+    try {
+      localStorage.setItem("laPlanta_last_activity", Date.now().toString());
+    } catch {}
+    setShowInactivityWarning(false);
+  }, []);
+
+  // Auto-dismiss session expired notice after 8 seconds
+  useEffect(() => {
+    if (sessionExpiredNotice) {
+      const timer = setTimeout(() => setSessionExpiredNotice(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [sessionExpiredNotice]);
+
+  // 10-Minute Inactivity Auto-Logout Security Watcher
+  useEffect(() => {
+    if (!user) {
+      setShowInactivityWarning(false);
+      return;
+    }
+
+    // Set initial activity time
+    try {
+      const existing = localStorage.getItem("laPlanta_last_activity");
+      if (!existing) {
+        localStorage.setItem("laPlanta_last_activity", Date.now().toString());
+      }
+    } catch {}
+
+    let lastThrottle = Date.now();
+    const registerUserActivity = () => {
+      const now = Date.now();
+      // Throttle localStorage writes to once every 2 seconds
+      if (now - lastThrottle > 2000) {
+        lastThrottle = now;
+        try {
+          localStorage.setItem("laPlanta_last_activity", now.toString());
+        } catch {}
+      }
+      // If warning modal was open, user activity automatically resets it
+      setShowInactivityWarning(false);
+    };
+
+    const userActivityEvents = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "scroll",
+      "click",
+    ];
+
+    userActivityEvents.forEach((evt) => {
+      window.addEventListener(evt, registerUserActivity, { passive: true });
+    });
+
+    // Check inactivity every second
+    const interval = setInterval(() => {
+      let lastActive = Date.now();
+      try {
+        const stored = localStorage.getItem("laPlanta_last_activity");
+        if (stored) {
+          const parsed = parseInt(stored, 10);
+          if (!isNaN(parsed)) lastActive = parsed;
+        }
+      } catch {}
+
+      const elapsed = Date.now() - lastActive;
+      const remainingMs = INACTIVITY_TIMEOUT_MS - elapsed;
+
+      if (remainingMs <= 0) {
+        // Exceeded 10 minutes: Terminate session
+        setShowInactivityWarning(false);
+        setSessionExpiredNotice(true);
+        logout();
+      } else if (remainingMs <= WARNING_WINDOW_MS) {
+        // Under 60 seconds left: display countdown warning modal
+        const secondsLeft = Math.ceil(remainingMs / 1000);
+        setInactivitySecondsLeft(secondsLeft);
+        setShowInactivityWarning(true);
+      } else {
+        setShowInactivityWarning(false);
+      }
+    }, 1000);
+
+    // Also check immediately when window / tab gains focus (e.g. laptop opened after 10 min)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        let lastActive = Date.now();
+        try {
+          const stored = localStorage.getItem("laPlanta_last_activity");
+          if (stored) {
+            const parsed = parseInt(stored, 10);
+            if (!isNaN(parsed)) lastActive = parsed;
+          }
+        } catch {}
+
+        if (Date.now() - lastActive >= INACTIVITY_TIMEOUT_MS) {
+          setShowInactivityWarning(false);
+          setSessionExpiredNotice(true);
+          logout();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      userActivityEvents.forEach((evt) => {
+        window.removeEventListener(evt, registerUserActivity);
+      });
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, [user, logout]);
 
   // Email / Password Sign In
   const signInWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
@@ -333,6 +464,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+
+      {/* Security: 10-Minute Inactivity Warning Modal (Shown in the last 60 seconds) */}
+      {showInactivityWarning && (
+        <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#0c0f17] border border-amber-500/40 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-[0_25px_70px_rgba(0,0,0,0.9)] text-white flex flex-col items-center text-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+              <span className="material-symbols-outlined text-3xl animate-pulse">
+                lock_clock
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400">
+                Security Protocol
+              </span>
+              <h3 className="font-serif text-2xl font-bold text-white">
+                Session Timeout Warning
+              </h3>
+              <p className="text-xs text-stone-300 leading-relaxed max-w-sm mt-1">
+                For your account privacy and financial security, your active session will terminate due to 10 minutes of inactivity in:
+              </p>
+            </div>
+
+            <div className="w-full py-4 px-6 rounded-2xl bg-white/[0.04] border border-amber-500/20 flex items-center justify-center gap-3">
+              <span className="font-mono text-3xl font-bold text-amber-400 tracking-wider">
+                00:{inactivitySecondsLeft.toString().padStart(2, "0")}
+              </span>
+              <span className="text-xs text-stone-400 font-medium uppercase tracking-wider">
+                seconds
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full pt-1">
+              <button
+                onClick={resetInactivityTimer}
+                type="button"
+                className="w-full py-3.5 px-5 rounded-xl bg-secondary hover:bg-secondary/90 text-primary font-bold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-base">check_circle</span>
+                <span>Stay Signed In</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowInactivityWarning(false);
+                  logout();
+                }}
+                type="button"
+                className="w-full sm:w-auto py-3.5 px-5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-stone-300 text-xs font-semibold uppercase tracking-wider transition-colors shrink-0 cursor-pointer"
+              >
+                Logout Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Logout Notification Banner */}
+      {sessionExpiredNotice && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[10000] max-w-md w-[92%] p-4 rounded-2xl bg-[#0c0f17]/95 border border-amber-500/40 text-white shadow-2xl backdrop-blur-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-xl">lock_clock</span>
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="text-xs font-semibold text-white">Session Terminated</span>
+              <span className="text-[11px] text-stone-300">
+                Signed out after 10 minutes of inactivity.
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setSessionExpiredNotice(false);
+              openAuthModal();
+            }}
+            className="px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/90 text-primary font-bold text-xs uppercase tracking-wider shrink-0 transition-colors cursor-pointer"
+          >
+            Sign In
+          </button>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 }

@@ -95,9 +95,55 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     setAdminUser(null);
     try {
       localStorage.removeItem("laPlanta_adminUser");
+      localStorage.removeItem("laPlanta_admin_last_activity");
     } catch {}
     router.push("/login");
   };
+
+  // 10-Minute Inactivity Auto-Logout Security Watcher
+  useEffect(() => {
+    if (!adminUser) return;
+
+    try {
+      if (!localStorage.getItem("laPlanta_admin_last_activity")) {
+        localStorage.setItem("laPlanta_admin_last_activity", Date.now().toString());
+      }
+    } catch {}
+
+    let lastThrottle = Date.now();
+    const handleActivity = () => {
+      const now = Date.now();
+      if (now - lastThrottle > 2000) {
+        lastThrottle = now;
+        try {
+          localStorage.setItem("laPlanta_admin_last_activity", now.toString());
+        } catch {}
+      }
+    };
+
+    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "click"];
+    events.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
+
+    const interval = setInterval(() => {
+      let lastActive = Date.now();
+      try {
+        const stored = localStorage.getItem("laPlanta_admin_last_activity");
+        if (stored) {
+          const parsed = parseInt(stored, 10);
+          if (!isNaN(parsed)) lastActive = parsed;
+        }
+      } catch {}
+
+      if (Date.now() - lastActive >= 10 * 60 * 1000) {
+        logout();
+      }
+    }, 2000);
+
+    return () => {
+      events.forEach((evt) => window.removeEventListener(evt, handleActivity));
+      clearInterval(interval);
+    };
+  }, [adminUser]);
 
   return (
     <AdminAuthContext.Provider
