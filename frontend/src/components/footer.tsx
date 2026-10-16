@@ -81,17 +81,6 @@ export function Footer() {
                   Digital QR Handover Voucher
                 </Link>
               </li>
-              <li>
-                <a
-                  href={process.env.NEXT_PUBLIC_ADMIN_URL || "http://localhost:3001"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#fedeb2] font-medium hover:underline inline-flex items-center gap-1"
-                >
-                  <span>Fleet Operations Admin Console</span>
-                  <span className="material-symbols-outlined text-[13px]">open_in_new</span>
-                </a>
-              </li>
             </ul>
           </div>
 
