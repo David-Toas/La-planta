@@ -8,6 +8,7 @@ import { Footer } from "@/components/footer";
 import { backendApi } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/auth-context";
+import { AuthGuard } from "@/components/auth-guard";
 import { GoogleTrackingMap } from "@/components/google-tracking-map";
 
 function LiveTrackingContent() {
@@ -1219,7 +1220,12 @@ export default function LiveTrackingPage() {
         </div>
       }
     >
-      <LiveTrackingContent />
+      <AuthGuard
+        fallbackTitle="VIP Telematics Tracking Portal"
+        fallbackDescription="Real-time telemetry and GPS vehicle radar tracking is reserved for authenticated clients with an active itinerary."
+      >
+        <LiveTrackingContent />
+      </AuthGuard>
     </Suspense>
   );
 }

@@ -114,9 +114,9 @@ export default function AdminDashboardPage() {
   const [requestFilter, setRequestFilter] = useState<
     "pending" | "cancellation" | "extension" | "all"
   >("pending");
-  const [processingRequestId, setProcessingRequestId] = useState<
-    string | null
-  >(null);
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(
+    null,
+  );
   const [refundActionModal, setRefundActionModal] = useState<any | null>(null);
   const [refundWireReference, setRefundWireReference] = useState("");
   const [refundInternalNotes, setRefundInternalNotes] = useState("");
@@ -125,7 +125,9 @@ export default function AdminDashboardPage() {
   >(null);
 
   // Driver Assignment State
-  const [assigningBookingId, setAssigningBookingId] = useState<string | null>(null);
+  const [assigningBookingId, setAssigningBookingId] = useState<string | null>(
+    null,
+  );
 
   // Shadcn Delete Confirmation Dialog State
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -245,14 +247,14 @@ export default function AdminDashboardPage() {
         { event: "*", schema: "public", table: "vehicles" },
         () => {
           reloadFleetAndKpis();
-        }
+        },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "drivers" },
         () => {
           reloadDrivers();
-        }
+        },
       )
       .on(
         "postgres_changes",
@@ -261,7 +263,7 @@ export default function AdminDashboardPage() {
           reloadRequests();
           reloadFleetAndKpis();
           reloadBookings();
-        }
+        },
       )
       .subscribe();
 
@@ -469,7 +471,8 @@ export default function AdminDashboardPage() {
         (v.features || []).join(", ") ||
         "Starlink Wi-Fi, Executive Rear Seating",
       tracker_code: v.tracker_code || resolvedTracker?.device_code || "",
-      tracker_sim_phone: v.tracker_sim_phone || resolvedTracker?.sim_phone_number || "",
+      tracker_sim_phone:
+        v.tracker_sim_phone || resolvedTracker?.sim_phone_number || "",
     });
     setVehicleFormError(null);
     setImageUploadError(null);
@@ -736,7 +739,9 @@ export default function AdminDashboardPage() {
     status: string,
     driverName: string,
   ) => {
-    const res = await adminApi.updateDriver(driverId, { current_status: status });
+    const res = await adminApi.updateDriver(driverId, {
+      current_status: status,
+    });
     if (res?.success) {
       const label =
         status === "not_available"
@@ -799,7 +804,11 @@ export default function AdminDashboardPage() {
     let assetLabel = "";
 
     // Guard against React ClickEvent being passed as target
-    if (target && typeof target === "object" && ("nativeEvent" in target || "currentTarget" in target)) {
+    if (
+      target &&
+      typeof target === "object" &&
+      ("nativeEvent" in target || "currentTarget" in target)
+    ) {
       target = undefined;
     }
 
@@ -864,8 +873,12 @@ export default function AdminDashboardPage() {
       const matchBrand = (v.brand || v.make || "").toLowerCase().includes(q);
       const matchModel = (v.model || "").toLowerCase().includes(q);
       const matchName = (v.name || "").toLowerCase().includes(q);
-      const matchPlate = (v.license_plate || v.plate_number || "").toLowerCase().includes(q);
-      const matchHub = (v.current_location_name || v.current_hub || "").toLowerCase().includes(q);
+      const matchPlate = (v.license_plate || v.plate_number || "")
+        .toLowerCase()
+        .includes(q);
+      const matchHub = (v.current_location_name || v.current_hub || "")
+        .toLowerCase()
+        .includes(q);
       return matchBrand || matchModel || matchName || matchPlate || matchHub;
     }
 
@@ -1254,7 +1267,6 @@ export default function AdminDashboardPage() {
               </span>
               <span>{isPinging ? "Pinging :4000..." : "Test SIM Ping"}</span>
             </button>
-
           </div>
         </header>
 
@@ -1301,7 +1313,8 @@ export default function AdminDashboardPage() {
                       </strong>
                       <span className="text-[11px] text-amber-900/80">
                         Guests have requested charter cancellations (manual wire
-                        refunds required) or extensions. Review and contact guests.
+                        refunds required) or extensions. Review and contact
+                        guests.
                       </span>
                     </div>
                   </div>
@@ -1614,8 +1627,8 @@ export default function AdminDashboardPage() {
                     Executive Fleet Register ({fleetList.length} Units)
                   </h3>
                   <p className="text-xs text-on-surface-variant mt-0.5">
-                    Register new vehicles, set daily charter rates, manage
-                    armored specifications, and track fleet availability.
+                    Register new vehicles, set daily rates, manage
+                    specifications, and track fleet availability.
                   </p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -1933,7 +1946,9 @@ export default function AdminDashboardPage() {
                     onClick={reloadBookings}
                     className="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary transition-colors flex items-center gap-1"
                   >
-                    <span className="material-symbols-outlined text-sm">sync</span>
+                    <span className="material-symbols-outlined text-sm">
+                      sync
+                    </span>
                     Refresh
                   </button>
                 </div>
@@ -1948,7 +1963,10 @@ export default function AdminDashboardPage() {
                     No Active Handover Inspections
                   </h4>
                   <p className="text-xs text-on-surface-variant max-w-md">
-                    New client reservations confirmed via the public booking portal will automatically sync here for chauffeur dispatch, digital QR pass issuance, and pre-departure inspection sign-off.
+                    New client reservations confirmed via the public booking
+                    portal will automatically sync here for chauffeur dispatch,
+                    digital QR pass issuance, and pre-departure inspection
+                    sign-off.
                   </p>
                 </div>
               ) : (
@@ -1994,7 +2012,9 @@ export default function AdminDashboardPage() {
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="text-sm text-primary font-semibold">
-                                  Booking #{b.booking_reference || b.id.slice(0, 8).toUpperCase()}
+                                  Booking #
+                                  {b.booking_reference ||
+                                    b.id.slice(0, 8).toUpperCase()}
                                 </span>
                                 <span
                                   className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusClass}`}
@@ -2046,11 +2066,14 @@ export default function AdminDashboardPage() {
                                 disabled={assigningBookingId === b.id}
                                 className="w-full h-7 px-2 rounded-lg bg-surface-container-low border border-surface-container text-[11px] font-medium text-primary focus:outline-none focus:border-secondary cursor-pointer disabled:opacity-50"
                               >
-                                <option value="">-- No Driver Assigned --</option>
+                                <option value="">
+                                  -- No Driver Assigned --
+                                </option>
                                 {driverList.map((d) => (
                                   <option key={d.id} value={d.id}>
                                     {d.full_name} ({d.badge_number || "CH"}) •{" "}
-                                    {d.current_status === "available" || d.is_available
+                                    {d.current_status === "available" ||
+                                    d.is_available
                                       ? "Available"
                                       : d.current_status === "on_trip"
                                         ? "On Trip"
@@ -2065,7 +2088,9 @@ export default function AdminDashboardPage() {
                               📍 {b.pickup_location || "Operations Hub"}
                             </span>
                             <span className="text-secondary font-semibold">
-                              ₦{Number(b.total_amount_ngn || 0).toLocaleString()} Paid
+                              ₦
+                              {Number(b.total_amount_ngn || 0).toLocaleString()}{" "}
+                              Paid
                             </span>
                           </div>
                         </div>
@@ -2159,14 +2184,16 @@ export default function AdminDashboardPage() {
                     No Drivers On Roster
                   </h4>
                   <p className="text-xs text-on-surface-variant">
-                    Click '+ Add Driver' to enroll and vet your first executive chauffeur.
+                    Click '+ Add Driver' to enroll and vet your first executive
+                    chauffeur.
                   </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {driverList.map((d) => {
                     const rawStatus =
-                      d.current_status || (d.is_available ? "available" : "not_available");
+                      d.current_status ||
+                      (d.is_available ? "available" : "not_available");
                     const normalizedStatus =
                       rawStatus === "off_duty" ? "not_available" : rawStatus;
 
@@ -2201,7 +2228,9 @@ export default function AdminDashboardPage() {
                             </span>
                           </div>
                           <button
-                            onClick={() => handleDeleteDriver(d.id, d.full_name)}
+                            onClick={() =>
+                              handleDeleteDriver(d.id, d.full_name)
+                            }
                             className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-on-surface-variant hover:text-red-700 hover:bg-red-50 transition-all"
                             title="Remove Driver"
                           >
@@ -2219,7 +2248,11 @@ export default function AdminDashboardPage() {
                           <select
                             value={normalizedStatus}
                             onChange={(e) =>
-                              handleUpdateDriverStatus(d.id, e.target.value, d.full_name)
+                              handleUpdateDriverStatus(
+                                d.id,
+                                e.target.value,
+                                d.full_name,
+                              )
                             }
                             className={`h-7 px-2 rounded-md text-xs font-bold uppercase transition-colors border cursor-pointer ${
                               normalizedStatus === "available"
@@ -2231,7 +2264,9 @@ export default function AdminDashboardPage() {
                           >
                             <option value="available">● Available</option>
                             <option value="on_trip">● On Trip</option>
-                            <option value="not_available">● Not Available</option>
+                            <option value="not_available">
+                              ● Not Available
+                            </option>
                           </select>
                         </div>
 
@@ -2347,7 +2382,8 @@ export default function AdminDashboardPage() {
                             {u.email}
                           </td>
                           <td className="py-3.5 px-4">
-                            {currentTier === "standard" || currentTier === "member" ? (
+                            {currentTier === "standard" ||
+                            currentTier === "member" ? (
                               <span className="text-xs text-on-surface-variant font-medium">
                                 Member
                               </span>
@@ -2383,7 +2419,9 @@ export default function AdminDashboardPage() {
                                 }
                                 className="h-8 px-2.5 rounded-lg bg-surface-container-low border border-surface-container text-xs font-semibold text-primary focus:outline-none focus:border-secondary cursor-pointer disabled:opacity-50"
                               >
-                                <option value="standard">Member (No Badge)</option>
+                                <option value="standard">
+                                  Member (No Badge)
+                                </option>
                                 <option value="executive">
                                   Executive (Black Badge)
                                 </option>
@@ -2588,7 +2626,10 @@ export default function AdminDashboardPage() {
                       Concierge Operations Desk
                     </span>
                     <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-800 text-[10px] font-bold">
-                      {bookingRequests.filter((r) => r.status === "pending").length}{" "}
+                      {
+                        bookingRequests.filter((r) => r.status === "pending")
+                          .length
+                      }{" "}
                       Pending Review
                     </span>
                   </div>
@@ -2601,7 +2642,9 @@ export default function AdminDashboardPage() {
                     onClick={reloadRequests}
                     className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary transition-colors flex items-center gap-1.5"
                   >
-                    <span className="material-symbols-outlined text-sm">sync</span>
+                    <span className="material-symbols-outlined text-sm">
+                      sync
+                    </span>
                     Refresh Queue
                   </button>
                 </div>
@@ -2645,8 +2688,7 @@ export default function AdminDashboardPage() {
                   <span className="text-2xl font-bold font-mono text-blue-950">
                     {
                       bookingRequests.filter(
-                        (r) =>
-                          r.status === "pending" && r.type === "extension",
+                        (r) => r.status === "pending" && r.type === "extension",
                       ).length
                     }
                   </span>
@@ -2666,7 +2708,10 @@ export default function AdminDashboardPage() {
                         (r) =>
                           r.status === "pending" && r.type === "cancellation",
                       )
-                      .reduce((sum, r) => sum + (Number(r.refundAmount) || 0), 0)
+                      .reduce(
+                        (sum, r) => sum + (Number(r.refundAmount) || 0),
+                        0,
+                      )
                       .toLocaleString()}
                   </span>
                   <span className="text-[11px] text-on-surface-variant">
@@ -2698,7 +2743,8 @@ export default function AdminDashboardPage() {
                   }`}
                 >
                   Pending Action (
-                  {bookingRequests.filter((r) => r.status === "pending").length})
+                  {bookingRequests.filter((r) => r.status === "pending").length}
+                  )
                 </button>
                 <button
                   onClick={() => setRequestFilter("cancellation")}
@@ -2709,7 +2755,10 @@ export default function AdminDashboardPage() {
                   }`}
                 >
                   Cancellations Only (
-                  {bookingRequests.filter((r) => r.type === "cancellation").length}
+                  {
+                    bookingRequests.filter((r) => r.type === "cancellation")
+                      .length
+                  }
                   )
                 </button>
                 <button
@@ -2721,7 +2770,8 @@ export default function AdminDashboardPage() {
                   }`}
                 >
                   Extensions Only (
-                  {bookingRequests.filter((r) => r.type === "extension").length})
+                  {bookingRequests.filter((r) => r.type === "extension").length}
+                  )
                 </button>
                 <button
                   onClick={() => setRequestFilter("all")}
@@ -2738,7 +2788,8 @@ export default function AdminDashboardPage() {
               {/* Requests List */}
               {(() => {
                 const displayedRequests = bookingRequests.filter((r) => {
-                  if (requestFilter === "pending") return r.status === "pending";
+                  if (requestFilter === "pending")
+                    return r.status === "pending";
                   if (requestFilter === "cancellation")
                     return r.type === "cancellation";
                   if (requestFilter === "extension")
@@ -2756,9 +2807,9 @@ export default function AdminDashboardPage() {
                         No Requests Awaiting Review
                       </h4>
                       <p className="text-xs text-on-surface-variant max-w-md">
-                        All guest cancellation requests have been settled and all
-                        itinerary extensions have been resolved by the operations
-                        desk.
+                        All guest cancellation requests have been settled and
+                        all itinerary extensions have been resolved by the
+                        operations desk.
                       </p>
                     </div>
                   );
@@ -2769,7 +2820,10 @@ export default function AdminDashboardPage() {
                     {displayedRequests.map((req) => {
                       const isPending = req.status === "pending";
                       const isCancellation = req.type === "cancellation";
-                      const cleanPhone = (req.guestPhone || "").replace(/\D/g, "");
+                      const cleanPhone = (req.guestPhone || "").replace(
+                        /\D/g,
+                        "",
+                      );
 
                       return (
                         <div
@@ -2839,10 +2893,13 @@ export default function AdminDashboardPage() {
                               </div>
 
                               <div className="text-right text-[11px] text-on-surface-variant shrink-0">
-                                {new Date(req.createdAt).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
+                                {new Date(req.createdAt).toLocaleTimeString(
+                                  [],
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )}
                               </div>
                             </div>
 
@@ -2966,7 +3023,9 @@ export default function AdminDashboardPage() {
                               <a
                                 href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
                                   `Hello ${req.guestName}, this is La Planta Prime VIP Concierge reaching out regarding your ${
-                                    isCancellation ? "cancellation" : "extension"
+                                    isCancellation
+                                      ? "cancellation"
+                                      : "extension"
                                   } request for booking ${req.bookingCode}.`,
                                 )}`}
                                 target="_blank"
@@ -3501,7 +3560,9 @@ export default function AdminDashboardPage() {
                   </span>
                 </div>
                 <p className="text-[11px] text-on-surface-variant">
-                  Each vehicle has its own dedicated hardware GPS tracker SIM card. The system dispatches automated cellular &amp; SMS ping commands directly to this SIM.
+                  Each vehicle has its own dedicated hardware GPS tracker SIM
+                  card. The system dispatches automated cellular &amp; SMS ping
+                  commands directly to this SIM.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
                   <div className="flex flex-col gap-1">
@@ -4030,7 +4091,8 @@ export default function AdminDashboardPage() {
                 </strong>
                 &bull; Vehicle availability is released back to active fleet.
                 <br />
-                &bull; Booking record updated to &lsquo;cancelled / refunded&rsquo;.
+                &bull; Booking record updated to &lsquo;cancelled /
+                refunded&rsquo;.
                 <br />
                 &bull; VIP Cancellation &amp; Refund Notice email dispatched to{" "}
                 <span className="font-mono text-primary font-semibold">
@@ -4100,7 +4162,9 @@ export default function AdminDashboardPage() {
                       {previewingEmail.type}
                     </span>
                     <span>&bull;</span>
-                    <span className="font-mono">{previewingEmail.provider}</span>
+                    <span className="font-mono">
+                      {previewingEmail.provider}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -4131,10 +4195,13 @@ export default function AdminDashboardPage() {
         <DialogContent className="sm:max-w-md bg-surface-container-lowest border border-surface-container rounded-2xl p-6">
           <DialogHeader>
             <DialogTitle className="font-serif text-lg text-primary font-bold">
-              Confirm {deleteConfirm?.type === "driver" ? "Driver" : "Vehicle"} Deletion
+              Confirm {deleteConfirm?.type === "driver" ? "Driver" : "Vehicle"}{" "}
+              Deletion
             </DialogTitle>
             <DialogDescription className="text-xs text-on-surface-variant mt-2 leading-relaxed">
-              Are you sure you want to remove <strong>{deleteConfirm?.name}</strong>? This action cannot be undone and will permanently remove this{" "}
+              Are you sure you want to remove{" "}
+              <strong>{deleteConfirm?.name}</strong>? This action cannot be
+              undone and will permanently remove this{" "}
               {deleteConfirm?.type === "driver"
                 ? "driver from the active roster"
                 : "vehicle from the fleet inventory"}

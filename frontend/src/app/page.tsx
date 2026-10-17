@@ -115,6 +115,22 @@ export default function HomePage() {
     "Lagos (VI, Ikoyi, Lekki & Airport)",
   );
 
+  const handleHandoverChange = (mode: "office" | "delivery") => {
+    setPickupType(mode);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("laPlanta_handover_mode", mode);
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = sessionStorage.getItem("laPlanta_handover_mode");
+      if (saved === "delivery" || saved === "office") {
+        setPickupType(saved);
+      }
+    }
+  }, []);
+
   const [pickupDateTime, setPickupDateTime] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -148,11 +164,26 @@ export default function HomePage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>(FALLBACK_VEHICLES);
   const [isLoadingVehicles, setIsLoadingVehicles] = useState(true);
 
-  // Fetch real-time vehicles from backend / Supabase
+  // Fetch real-time available vehicles from backend / Supabase
   useEffect(() => {
     let isMounted = true;
     async function loadFeaturedVehicles() {
       try {
+        // Query active/confirmed bookings to ensure reserved/chartered cars are hidden
+        const { data: activeBookings } = await supabase
+          .from("bookings")
+          .select("vehicle_id, status")
+          .in("status", ["confirmed", "in_transit", "pending"]);
+
+        const bookedVehicleIds = new Set(
+          (activeBookings || []).map((b) => b.vehicle_id).filter(Boolean),
+        );
+
+        const filterAvailable = (list: Vehicle[]) =>
+          list.filter(
+            (v) => v.status === "available" && !bookedVehicleIds.has(v.id),
+          );
+
         // 1. Try Express Backend API
         const res = await backendApi.getFleet();
         if (
@@ -161,7 +192,10 @@ export default function HomePage() {
           Array.isArray(res.vehicles) &&
           res.vehicles.length > 0
         ) {
-          setVehicles(res.vehicles);
+          const available = filterAvailable(res.vehicles);
+          setVehicles(
+            available.length > 0 ? available : filterAvailable(FALLBACK_VEHICLES),
+          );
           setIsLoadingVehicles(false);
           return;
         }
@@ -170,10 +204,16 @@ export default function HomePage() {
         const { data, error } = await supabase
           .from("vehicles")
           .select("*")
+          .eq("status", "available")
           .order("created_at", { ascending: false });
 
         if (isMounted && !error && data && data.length > 0) {
-          setVehicles(data as Vehicle[]);
+          const available = filterAvailable(data as Vehicle[]);
+          setVehicles(
+            available.length > 0 ? available : filterAvailable(FALLBACK_VEHICLES),
+          );
+        } else if (isMounted) {
+          setVehicles(filterAvailable(FALLBACK_VEHICLES));
         }
       } catch (err) {
         console.error("[Homepage] Error fetching featured vehicles:", err);
@@ -256,7 +296,7 @@ export default function HomePage() {
                 {/* Segmented Handover Tabs */}
                 <div className="inline-flex p-1 bg-surface-container-low rounded-lg">
                   <button
-                    onClick={() => setPickupType("office")}
+                    onClick={() => handleHandoverChange("office")}
                     className={`px-5 py-2 rounded-md text-xs uppercase tracking-wider font-semibold transition-all ${
                       pickupType === "office"
                         ? "bg-surface-container-lowest text-on-surface shadow-sm"
@@ -267,7 +307,7 @@ export default function HomePage() {
                     Office Pickup
                   </button>
                   <button
-                    onClick={() => setPickupType("delivery")}
+                    onClick={() => handleHandoverChange("delivery")}
                     className={`px-5 py-2 rounded-md text-xs uppercase tracking-wider font-semibold transition-all ${
                       pickupType === "delivery"
                         ? "bg-surface-container-lowest text-on-surface shadow-sm"
@@ -357,7 +397,8 @@ export default function HomePage() {
 
                 <div className="flex flex-col justify-center gap-2">
                   <Link
-                    href="/fleet"
+                    href={`/fleet?handover=${pickupType}`}
+                    onClick={() => handleHandoverChange(pickupType)}
                     className="w-full h-12 rounded-lg bg-primary text-white hover:bg-secondary font-semibold text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2"
                   >
                     <span>Find Your Vehicle</span>
@@ -462,9 +503,12 @@ export default function HomePage() {
                   <VehicleCard
                     key={vehicle.id}
                     vehicle={vehicle}
-                    onReserve={(id) =>
-                      handleReserve(`/checkout?vehicleId=${id}`)
-                    }
+                    onReserve={(id) => {
+                      handleHandoverChange(pickupType);
+                      handleReserve(
+                        `/checkout?vehicleId=${id}&handover=${pickupType}`,
+                      );
+                    }}
                   />
                 ))}
             </div>
@@ -472,7 +516,8 @@ export default function HomePage() {
             {/* See More Fleet Button */}
             <div className="flex flex-col items-center justify-center pt-2 gap-3">
               <Link
-                href="/fleet"
+                href={`/fleet?handover=${pickupType}`}
+                onClick={() => handleHandoverChange(pickupType)}
                 className="inline-flex items-center gap-2.5 px-8 py-3.5 rounded-full bg-primary hover:bg-secondary text-white text-xs font-semibold uppercase tracking-widest transition-all duration-300 shadow-md hover:shadow-xl hover:scale-[1.02] cursor-pointer"
               >
                 <span>See More</span>
@@ -613,7 +658,7 @@ export default function HomePage() {
                 <div className="grid grid-cols-2 p-1 bg-black/60 rounded-xl border border-white/[0.08]">
                   <button
                     type="button"
-                    onClick={() => setPickupType("office")}
+                    onClick={() => handleHandoverChange("office")}
                     className={`py-1.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all ${
                       pickupType === "office"
                         ? "bg-[#d4af37] text-black font-bold shadow-md"
@@ -624,7 +669,7 @@ export default function HomePage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPickupType("delivery")}
+                    onClick={() => handleHandoverChange("delivery")}
                     className={`py-1.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all ${
                       pickupType === "delivery"
                         ? "bg-[#d4af37] text-black font-bold shadow-md"
@@ -666,6 +711,7 @@ export default function HomePage() {
                   </button>
                   <Link
                     href={`/fleet?handover=${pickupType}`}
+                    onClick={() => handleHandoverChange(pickupType)}
                     className="flex-1 py-2 px-3 rounded-xl bg-[#d4af37] hover:bg-[#fedeb2] text-black font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1 transition-all shadow-md active:scale-95"
                   >
                     <span>View Cars</span>

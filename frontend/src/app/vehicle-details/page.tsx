@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { useAuth } from "@/context/auth-context";
+import { AuthGuard } from "@/components/auth-guard";
 import { supabase, Vehicle } from "@/lib/supabase";
 import { backendApi } from "@/lib/api";
 
@@ -843,7 +844,12 @@ export default function VehicleDetailsPage() {
         </div>
       }
     >
-      <VehicleDetailsContent />
+      <AuthGuard
+        fallbackTitle="VIP Fleet Portfolio Access"
+        fallbackDescription="Vehicle technical specifications and concierge reservation suites are reserved for authenticated private clients."
+      >
+        <VehicleDetailsContent />
+      </AuthGuard>
     </Suspense>
   );
 }

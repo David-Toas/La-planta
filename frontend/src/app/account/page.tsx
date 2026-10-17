@@ -8,6 +8,7 @@ import { useAuth } from "@/context/auth-context";
 import { backendApi } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { AuthGuard } from "@/components/auth-guard";
 
 interface InvoiceData {
   id: string;
@@ -574,7 +575,11 @@ export default function AccountPage() {
     <div className="min-h-screen bg-surface flex flex-col">
       <Navbar />
 
-      <main className="w-full pt-16 lg:pt-20 bg-surface flex-1">
+      <AuthGuard
+        fallbackTitle="Client Account Portal"
+        fallbackDescription="Your VIP profile, charter history, active itineraries, and invoices are accessible exclusively to authenticated clients. Please sign in to manage your account."
+      >
+        <main className="w-full pt-16 lg:pt-20 bg-surface flex-1">
         {/* TOP PROFILE BANNER */}
         <section className="w-full bg-surface-container-lowest shadow-sm border-b border-black/[0.04] py-8 lg:py-10">
           <div className="max-w-7xl mx-auto px-6 lg:px-12">
@@ -2132,6 +2137,7 @@ export default function AccountPage() {
           </div>
         </div>
       )}
+      </AuthGuard>
 
       <Footer />
     </div>

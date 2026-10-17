@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { useAuth } from "@/context/auth-context";
+import { AuthGuard } from "@/components/auth-guard";
 import { backendApi } from "@/lib/api";
 import { supabase, Vehicle } from "@/lib/supabase";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -13,6 +14,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 function CheckoutContent() {
   const searchParams = useSearchParams();
   const vehicleIdParam = searchParams.get("vehicleId");
+  const handoverParam = searchParams.get("handover");
   const { user, openAuthModal } = useAuth();
 
   // Fleet & Vehicle Selection State
@@ -65,14 +67,31 @@ function CheckoutContent() {
   };
   const [bookingCode, setBookingCode] = useState<string>("LP-LOS-89240");
   const [handoverMode, setHandoverMode] = useState<"delivery" | "office">(
-    "delivery",
+    () => {
+      if (handoverParam === "delivery" || handoverParam === "office") {
+        return handoverParam;
+      }
+      if (typeof window !== "undefined") {
+        const saved = sessionStorage.getItem("laPlanta_handover_mode");
+        if (saved === "delivery" || saved === "office") return saved;
+      }
+      return "delivery";
+    },
   );
+  const [includeChauffeur, setIncludeChauffeur] = useState<boolean>(true);
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [addressError, setAddressError] = useState(false);
   const [deliveryWindow, setDeliveryWindow] = useState("");
   const [flightNumber, setFlightNumber] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<
     "card" | "transfer" | "wallet"
   >("card");
+
+  useEffect(() => {
+    if (handoverParam === "delivery" || handoverParam === "office") {
+      setHandoverMode(handoverParam);
+    }
+  }, [handoverParam]);
 
   // Guest details (fallback if not signed in)
   const [guestName, setGuestName] = useState("");
@@ -164,6 +183,18 @@ function CheckoutContent() {
   const handlePayWithPaystack = async () => {
     setIsProcessing(true);
     setPaymentError(null);
+    setAddressError(false);
+
+    if (handoverMode === "delivery" && (!deliveryAddress || !deliveryAddress.trim())) {
+      setIsProcessing(false);
+      setAddressError(true);
+      setPaymentError(
+        "Please provide your destination delivery address before proceeding to payment.",
+      );
+      const addrInput = document.getElementById("delivery-address-input");
+      if (addrInput) addrInput.focus();
+      return;
+    }
 
     if (!effectiveEmail) {
       setIsProcessing(false);
@@ -283,7 +314,10 @@ function CheckoutContent() {
         booking_reference: bookingCode,
         client_id: resolvedClientUid,
         vehicle_id: vehicle?.id || "a1b2c3d4-e5f6-7890-abcd-111111111111",
-        service_type: "chauffeur_driven",
+        service_type:
+          handoverMode === "delivery" && !includeChauffeur
+            ? "self_drive"
+            : "chauffeur_driven",
         status: "confirmed",
         pickup_location: effectivePickupLocation,
         pickup_datetime: effectiveStartDate,
@@ -298,7 +332,13 @@ function CheckoutContent() {
         payment_gateway: "paystack",
         payment_reference: reference,
         paid_at: new Date().toISOString(),
-        special_instructions: `Charter confirmed via Paystack for ${effectiveName} (${effectiveEmail})`,
+        special_instructions: `Charter confirmed via Paystack for ${effectiveName} (${effectiveEmail}) • ${
+          handoverMode === "delivery"
+            ? includeChauffeur
+              ? "Direct Delivery with Chauffeur"
+              : "Direct Delivery (Self-Drive)"
+            : "Office Pickup"
+        }`,
         verification_pin: `${bookingCode.replace(/\D/g, "").slice(-4) || "8842"}-09`,
         qr_pass_token: `qr_${bookingCode}_${Date.now()}`,
         is_tarmac_intake_required: false,
@@ -380,6 +420,12 @@ function CheckoutContent() {
             : "La Planta Flagship Hub (Victoria Island)",
         handoverMode,
         isOfficePickup: handoverMode === "office",
+        includeChauffeur:
+          handoverMode === "delivery" ? includeChauffeur : true,
+        serviceType:
+          handoverMode === "delivery" && !includeChauffeur
+            ? "self_drive"
+            : "chauffeur_driven",
         customerName: effectiveName,
         customerEmail: effectiveEmail,
         customerPhone: effectivePhone,
@@ -449,6 +495,12 @@ function CheckoutContent() {
             : "La Planta Flagship Hub (Victoria Island)",
         handoverMode,
         isOfficePickup: handoverMode === "office",
+        includeChauffeur:
+          handoverMode === "delivery" ? includeChauffeur : true,
+        serviceType:
+          handoverMode === "delivery" && !includeChauffeur
+            ? "self_drive"
+            : "chauffeur_driven",
         vehicleId: vehicle?.id,
         customerName: effectiveName,
         customerEmail: effectiveEmail,
@@ -559,8 +611,11 @@ function CheckoutContent() {
                         {confirmedBooking.vehicle}
                       </span>
                       <span className="text-[11px] text-secondary">
-                        {confirmedBooking.vehicleColor || "Obsidian Black"} •
-                        Chauffeur Included ({rentalDays} Days)
+                        {confirmedBooking.vehicleColor || "Obsidian Black"} •{" "}
+                        {handoverMode === "delivery" && !includeChauffeur
+                          ? "Self-Drive (Delivery Only)"
+                          : "Chauffeur Included"}{" "}
+                        ({rentalDays} Days)
                       </span>
                     </div>
                     <div className="p-3.5 rounded-lg bg-surface-container-low flex flex-col gap-1">
@@ -744,7 +799,7 @@ function CheckoutContent() {
                             <div className="flex flex-col gap-1.5">
                               <span className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
                                 <span className="material-symbols-outlined text-xs text-secondary">
-                                  flight_land
+                                  event
                                 </span>
                                 Commencement (Pickup Date)
                               </span>
@@ -765,7 +820,7 @@ function CheckoutContent() {
                             <div className="flex flex-col gap-1.5">
                               <span className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
                                 <span className="material-symbols-outlined text-xs text-secondary">
-                                  flight_takeoff
+                                  event_available
                                 </span>
                                 Conclusion (Return Date)
                               </span>
@@ -789,7 +844,11 @@ function CheckoutContent() {
                               <span className="material-symbols-outlined text-secondary text-sm">
                                 schedule
                               </span>
-                              <span>Chauffeur Service Coverage:</span>
+                              <span>
+                                {handoverMode === "delivery" && !includeChauffeur
+                                  ? "Rental Coverage:"
+                                  : "Chauffeur Service Coverage:"}
+                              </span>
                             </span>
                             <span className="font-semibold text-primary">
                               {rentalDays * 24} Hours ({rentalDays} Full
@@ -866,25 +925,117 @@ function CheckoutContent() {
                           </div>
                         </div>
 
+                        {/* Direct Delivery Chauffeur Preference */}
+                        {handoverMode === "delivery" && (
+                          <div className="flex flex-col gap-3 p-4 sm:p-5 rounded-2xl bg-surface-container-low border border-surface-container animate-in fade-in duration-200">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <span className="font-label-sm text-xs uppercase tracking-wider text-on-surface font-semibold flex items-center gap-2">
+                                <span className="material-symbols-outlined text-secondary text-base">
+                                  person
+                                </span>
+                                <span>Chauffeur Service Inclusion</span>
+                              </span>
+                              <span className="px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed text-[11px] font-bold">
+                                {includeChauffeur
+                                  ? "Chauffeur Included"
+                                  : "Self-Drive (Delivery Only)"}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setIncludeChauffeur(true)}
+                                className={`p-4 rounded-xl border text-left flex flex-col gap-1.5 transition-all ${
+                                  includeChauffeur
+                                    ? "bg-surface-container-lowest border-secondary shadow-sm ring-1 ring-secondary/30"
+                                    : "bg-surface-container-lowest/60 border-transparent hover:bg-surface-container-lowest"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-semibold text-primary">
+                                    Chauffeur Service Included
+                                  </span>
+                                  <span className="text-[10px] uppercase font-bold text-secondary">
+                                    Full Service
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-on-surface-variant leading-relaxed">
+                                  A vetted executive driver will drive you around for the entire duration of your rental.
+                                </span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setIncludeChauffeur(false)}
+                                className={`p-4 rounded-xl border text-left flex flex-col gap-1.5 transition-all ${
+                                  !includeChauffeur
+                                    ? "bg-surface-container-lowest border-secondary shadow-sm ring-1 ring-secondary/30"
+                                    : "bg-surface-container-lowest/60 border-transparent hover:bg-surface-container-lowest"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-semibold text-primary">
+                                    Vehicle Delivery Only
+                                  </span>
+                                  <span className="text-[10px] uppercase font-bold text-on-surface-variant">
+                                    Self-Drive
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-on-surface-variant leading-relaxed">
+                                  The driver delivers the car to your destination only; you drive yourself.
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                           <div className="flex flex-col gap-1.5 md:col-span-3">
-                            <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
-                              Delivery Address
+                            <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant flex items-center justify-between">
+                              <span>
+                                Delivery Address{" "}
+                                {handoverMode === "delivery" && (
+                                  <span className="text-red-500 font-bold">*</span>
+                                )}
+                              </span>
+                              {handoverMode === "delivery" && (
+                                <span className="text-[10px] text-secondary font-semibold uppercase">
+                                  Required for Direct Delivery
+                                </span>
+                              )}
                             </label>
                             <div className="relative flex items-center">
                               <input
-                                className="w-full h-12 px-4 pl-11 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:outline-none"
+                                id="delivery-address-input"
+                                className={`w-full h-12 px-4 pl-11 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:outline-none transition-all ${
+                                  addressError
+                                    ? "ring-2 ring-red-500 border border-red-500 bg-red-50/10"
+                                    : "focus:ring-1 focus:ring-secondary"
+                                }`}
                                 value={deliveryAddress}
-                                onChange={(e) =>
-                                  setDeliveryAddress(e.target.value)
-                                }
-                                placeholder="Enter destination hotel, private address, or airport terminal"
+                                onChange={(e) => {
+                                  setDeliveryAddress(e.target.value);
+                                  if (addressError && e.target.value.trim()) {
+                                    setAddressError(false);
+                                  }
+                                }}
+                                placeholder="Enter destination hotel, private address, or airport terminal *"
                                 type="text"
+                                required={handoverMode === "delivery"}
                               />
                               <span className="material-symbols-outlined absolute left-3.5 text-secondary text-lg">
                                 location_on
                               </span>
                             </div>
+                            {addressError && (
+                              <span className="text-xs text-red-600 font-medium flex items-center gap-1 mt-0.5">
+                                <span className="material-symbols-outlined text-xs">
+                                  error
+                                </span>
+                                Destination delivery address is required before proceeding to checkout.
+                              </span>
+                            )}
                           </div>
 
                           <div className="flex flex-col gap-1.5 md:col-span-2">
@@ -1299,14 +1450,18 @@ function CheckoutContent() {
                               ₦{(dailyRate * rentalDays).toLocaleString()}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between font-body-sm text-body-sm">
-                            <span className="text-on-surface-variant">
-                              Executive Chauffeur Service
-                            </span>
-                            <span className="text-secondary font-medium uppercase font-label-sm text-label-sm">
-                              Complimentary
-                            </span>
-                          </div>
+                          {/* Chauffeur Service line item shown only when included */}
+                          {((handoverMode === "delivery" && includeChauffeur) ||
+                            handoverMode === "office") && (
+                            <div className="flex items-center justify-between font-body-sm text-body-sm">
+                              <span className="text-on-surface-variant">
+                                Executive Chauffeur Service
+                              </span>
+                              <span className="text-secondary font-medium uppercase font-label-sm text-label-sm">
+                                Complimentary
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         <div className="pt-4 flex flex-col gap-1 bg-surface-container-low p-4 rounded-xl">
@@ -1393,7 +1548,12 @@ export default function CheckoutPage() {
         </div>
       }
     >
-      <CheckoutContent />
+      <AuthGuard
+        fallbackTitle="Sign In to Reserve Vehicle"
+        fallbackDescription="To proceed to checkout and secure your vehicle reservation, please sign in with your executive credentials or register an account."
+      >
+        <CheckoutContent />
+      </AuthGuard>
     </Suspense>
   );
 }

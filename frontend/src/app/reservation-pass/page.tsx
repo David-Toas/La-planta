@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
+import { useAuth } from "@/context/auth-context";
+import { AuthGuard } from "@/components/auth-guard";
 import { supabase } from "@/lib/supabase";
 import { downloadVIPPassPDF } from "@/components/vip-pass-pdf";
 import { backendApi } from "@/lib/api";
@@ -42,6 +44,7 @@ interface BookingPassData {
     avatar: string;
     bio: string;
     tags: string[];
+    isAssigned: boolean;
   };
   itinerary: {
     pickupDate: string;
@@ -49,70 +52,11 @@ interface BookingPassData {
     duration: string;
     pickupLocation: string;
     pickupAddress: string;
-    flightNumber: string;
-    flightRoute: string;
-    flightStatus: string;
+    flightNumber?: string;
+    flightRoute?: string;
+    flightStatus?: string;
   };
 }
-
-const DEFAULT_BOOKING: BookingPassData = {
-  bookingCode: "LP-8842",
-  reference: "LP_BK_8842_LAGOS",
-  verificationPin: "8842-09",
-  status: "confirmed",
-  serviceTier: "Executive First Class",
-  amountFormatted: "₦1,860,000",
-  paidAt: "17:30 WAT",
-  paidDate: "Today",
-  customerName: "VIP Charter Guest",
-  customerPhone: "+234 803 123 4567",
-  customerEmail: "guest@laplanta.com",
-  handoverProtocol: "Terminal & Forecourt Cleared",
-  vehicle: {
-    name: "Range Rover Autobiography LWB",
-    category: "Flagship First-Class SUV",
-    year: 2024,
-    color: "Santorini Black",
-    licensePlate: "LAG 892 XZ",
-    image:
-      "https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=1200&q=80",
-    amenities: [
-      { icon: "wifi", label: "High-Speed Starlink Wi-Fi" },
-      { icon: "wine_bar", label: "Chilled Refreshments & Water" },
-      { icon: "volume_off", label: "Acoustic Privacy Glazing" },
-      {
-        icon: "airline_seat_recline_extra",
-        label: "Executive Massaging Seats",
-      },
-    ],
-  },
-  driver: {
-    name: "Mr. Emmanuel Okafor",
-    badge: "CHAUFFEUR #409",
-    rating: 4.98,
-    trips: 340,
-    phone: "+23418885275",
-    avatar:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-    bio: "Senior Executive Chauffeur with 12 years of white-glove luxury hospitality service across premium Nigerian executive itineraries. Flawless protocol record.",
-    tags: [
-      "Master Chauffeur Certified",
-      "Executive Etiquette",
-      "Discreet & Bilingual (EN/FR)",
-      "Airside VIP Escort",
-    ],
-  },
-  itinerary: {
-    pickupDate: "Nov 14, 2026 at 17:30 WAT",
-    returnDate: "Nov 17, 2026 at 17:30 WAT",
-    duration: "3 Full Days Reserved",
-    pickupLocation: "The Wheatbaker Hotel",
-    pickupAddress: "4 Onitolo Rd, Ikoyi, Lagos (Valet Forecourt)",
-    flightNumber: "British Airways BA 075",
-    flightRoute: "LHR → LOS",
-    flightStatus: "On Schedule • Chauffeur at VIP Arrivals",
-  },
-};
 
 function ReservationPassContent() {
   const searchParams = useSearchParams();
@@ -121,158 +65,317 @@ function ReservationPassContent() {
     searchParams.get("code") ||
     searchParams.get("id");
 
-  const [booking, setBooking] = useState<BookingPassData>(DEFAULT_BOOKING);
-  const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
+  const [booking, setBooking] = useState<BookingPassData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [copiedPin, setCopiedPin] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
-  const [searchCodeInput, setSearchCodeInput] = useState("");
+  const [searchCodeInput, setSearchCodeInput] = useState(urlCode || "");
   const [showSearchDrawer, setShowSearchDrawer] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState<
     "pass" | "vehicle" | "itinerary" | "all"
   >("all");
   const [qrImgError, setQrImgError] = useState(false);
 
-  // Load from URL, LocalStorage or Supabase
+  const [originUrl, setOriginUrl] = useState("https://laplantaprime.com");
+
   useEffect(() => {
-    async function resolveBooking() {
-      const targetCode = urlCode || "LP-8842";
-      setSearchCodeInput(targetCode);
+    if (typeof window !== "undefined") {
+      setOriginUrl(window.location.origin);
+    }
+  }, []);
 
-      // Check localStorage first
-      if (typeof window !== "undefined") {
-        try {
-          const raw = localStorage.getItem("laplanta_active_booking");
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (!urlCode || parsed.bookingCode === urlCode) {
-              setBooking((prev) => ({
-                ...prev,
-                bookingCode: parsed.bookingCode || prev.bookingCode,
-                reference: parsed.reference || prev.reference,
-                verificationPin: parsed.verificationPin || prev.verificationPin,
-                amountFormatted: parsed.amountFormatted || prev.amountFormatted,
-                customerName: parsed.customerName || prev.customerName,
-                customerPhone: parsed.customerPhone || prev.customerPhone,
-                customerEmail: parsed.customerEmail || prev.customerEmail,
-                vehicle: {
-                  ...prev.vehicle,
-                  name: parsed.vehicle || prev.vehicle.name,
-                  color: parsed.vehicleColor || prev.vehicle.color,
-                  image: parsed.vehicleImage || prev.vehicle.image,
-                },
-                itinerary: {
-                  ...prev.itinerary,
-                  pickupAddress:
-                    parsed.deliveryAddress || prev.itinerary.pickupAddress,
-                  flightNumber:
-                    parsed.flightNumber || prev.itinerary.flightNumber,
-                  duration: `${parsed.rentalDays || 3} Full Days Reserved`,
-                },
-              }));
-            }
-          }
-        } catch (e) {
-          console.warn("Failed reading localStorage booking:", e);
-        }
-      }
+  // Live Supabase & LocalStorage Data Resolution
+  useEffect(() => {
+    let isMounted = true;
 
-      // Try fetching live record from Supabase
+    async function resolveLiveBooking() {
+      setLoading(true);
+      const targetCode = urlCode ? urlCode.trim() : null;
+
       try {
-        setLoading(true);
-        const { data: dbBooking, error } = await supabase
-          .from("bookings")
-          .select(
-            `
-            *,
-            vehicles:vehicle_id (*),
-            drivers:driver_id (*)
-          `,
-          )
-          .eq("booking_reference", targetCode)
-          .maybeSingle();
+        let dbRecord: any = null;
 
-        if (!error && dbBooking) {
-          const v = dbBooking.vehicles;
-          const d = dbBooking.drivers;
+        // 1. If explicit URL code is given, query Supabase by reference, ID, or payment ref
+        if (targetCode) {
+          const { data, error } = await supabase
+            .from("bookings")
+            .select("*, vehicles:vehicle_id (*), drivers:driver_id (*)")
+            .or(
+              `booking_reference.eq.${targetCode},id.eq.${targetCode},payment_reference.eq.${targetCode}`,
+            )
+            .maybeSingle();
 
-          setBooking((prev) => ({
-            ...prev,
-            bookingCode: dbBooking.booking_reference || prev.bookingCode,
-            reference: dbBooking.payment_reference || prev.reference,
-            verificationPin: dbBooking.verification_pin || prev.verificationPin,
-            amountFormatted: dbBooking.total_amount_ngn
-              ? `₦${Number(dbBooking.total_amount_ngn).toLocaleString()}`
-              : prev.amountFormatted,
+          if (!error && data) {
+            dbRecord = data;
+          }
+        }
+
+        // 2. If no record yet and user is authenticated, query user's latest booking
+        if (!dbRecord && user?.id) {
+          const { data, error } = await supabase
+            .from("bookings")
+            .select("*, vehicles:vehicle_id (*), drivers:driver_id (*)")
+            .eq("client_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!error && data) {
+            dbRecord = data;
+          }
+        }
+
+        // 3. Fallback to localStorage active booking if still not found
+        let localData: any = null;
+        if (typeof window !== "undefined") {
+          try {
+            const raw = localStorage.getItem("laplanta_active_booking");
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (
+                !targetCode ||
+                parsed.bookingCode === targetCode ||
+                parsed.reference === targetCode
+              ) {
+                localData = parsed;
+              }
+            }
+          } catch (e) {
+            console.warn("Failed reading localStorage booking:", e);
+          }
+        }
+
+        if (!isMounted) return;
+
+        // If we found a live Supabase record
+        if (dbRecord) {
+          const v = dbRecord.vehicles;
+          const d = dbRecord.drivers;
+
+          const hasAssignedDriver = !!(d && d.full_name);
+
+          const passData: BookingPassData = {
+            bookingCode: dbRecord.booking_reference || targetCode || "LP-PRIME",
+            reference: dbRecord.payment_reference || dbRecord.id || "LP_REF",
+            verificationPin: dbRecord.verification_pin || "8842-09",
+            status: dbRecord.status || "confirmed",
             serviceTier:
-              dbBooking.service_type === "diplomatic_escort"
+              dbRecord.service_type === "diplomatic_escort"
                 ? "Diplomatic Armored Escort"
-                : "Executive First Class",
-            vehicle: v
-              ? {
-                  id: v.id,
-                  name: `${v.brand} ${v.model}`,
-                  category: v.category || prev.vehicle.category,
-                  year: v.year || prev.vehicle.year,
-                  color: v.color || prev.vehicle.color,
-                  licensePlate: v.license_plate || prev.vehicle.licensePlate,
-                  image:
-                    v.hero_image_url ||
-                    v.gallery_image_urls?.[0] ||
-                    prev.vehicle.image,
-                  amenities: prev.vehicle.amenities,
-                }
-              : prev.vehicle,
-            driver: d
+                : dbRecord.service_type === "self_drive"
+                  ? "Executive Self-Drive"
+                  : "Executive First Class",
+            amountFormatted: dbRecord.total_amount_ngn
+              ? `₦${Number(dbRecord.total_amount_ngn).toLocaleString()}`
+              : "₦0",
+            paidAt: dbRecord.paid_at
+              ? new Date(dbRecord.paid_at).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }) + " WAT"
+              : "Confirmed",
+            paidDate: dbRecord.paid_at
+              ? new Date(dbRecord.paid_at).toLocaleDateString("en-NG", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : "Recent",
+            customerName:
+              user?.name || dbRecord.customer_name || "Executive Client",
+            customerPhone: user?.phone || dbRecord.customer_phone || "",
+            customerEmail: user?.email || dbRecord.customer_email || "",
+            handoverProtocol:
+              dbRecord.service_type === "self_drive"
+                ? "Direct Delivery (Self-Drive)"
+                : "VIP Handover & Escort Cleared",
+            vehicle: {
+              id: v?.id,
+              name: v ? `${v.brand} ${v.model}` : "Executive Fleet Vehicle",
+              category: v?.category || "First-Class Fleet",
+              year: v?.year || 2024,
+              color: v?.color || "Obsidian Black",
+              licensePlate: v?.license_plate || "LP-PRIME",
+              image:
+                v?.hero_image_url ||
+                v?.gallery_image_urls?.[0] ||
+                "https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=1200&q=80",
+              amenities: [
+                { icon: "wifi", label: "High-Speed Starlink Wi-Fi" },
+                { icon: "wine_bar", label: "Chilled Refreshments" },
+                { icon: "volume_off", label: "Acoustic Privacy Glazing" },
+                {
+                  icon: "airline_seat_recline_extra",
+                  label: "First-Class Executive Seating",
+                },
+              ],
+            },
+            driver: hasAssignedDriver
               ? {
                   id: d.id,
-                  name: d.full_name || prev.driver.name,
-                  badge: d.badge_number || prev.driver.badge,
-                  rating: d.rating || prev.driver.rating,
-                  trips: d.total_trips || prev.driver.trips,
-                  phone: d.phone || prev.driver.phone,
-                  avatar: d.avatar_url || prev.driver.avatar,
-                  bio: prev.driver.bio,
+                  name: d.full_name,
+                  badge: d.badge_number || `CHAUFFEUR #${d.id.slice(0, 4)}`,
+                  rating: d.rating || 5.0,
+                  trips: d.total_trips || 120,
+                  phone: d.phone || "+234 1 888 5275",
+                  avatar:
+                    d.avatar_url ||
+                    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
+                  bio: "Vetted Executive Chauffeur assigned to your reservation itinerary with flawless defensive driving and hospitality protocol.",
                   tags: d.certifications?.length
                     ? d.certifications
-                    : prev.driver.tags,
+                    : ["Vetted & Certified", "Discreet & Professional"],
+                  isAssigned: true,
                 }
-              : prev.driver,
+              : {
+                  name: "Chauffeur Allocation In Progress",
+                  badge: "ALLOCATION PENDING",
+                  rating: 5.0,
+                  trips: 0,
+                  phone: "+234 1 888 5275",
+                  avatar: "",
+                  bio: "A vetted executive chauffeur is currently being assigned to your itinerary. Details and contact channels will activate prior to scheduled departure.",
+                  tags: [
+                    "Allocation In Progress",
+                    "72-Point Inspection",
+                    "Vetted Chauffeur Network",
+                  ],
+                  isAssigned: false,
+                },
             itinerary: {
-              ...prev.itinerary,
+              pickupDate: dbRecord.pickup_datetime
+                ? new Date(dbRecord.pickup_datetime).toLocaleString("en-NG", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }) + " WAT"
+                : "Scheduled",
+              returnDate: dbRecord.dropoff_datetime
+                ? new Date(dbRecord.dropoff_datetime).toLocaleString("en-NG", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }) + " WAT"
+                : "Scheduled",
+              duration: "Full Term Reserved",
               pickupLocation:
-                dbBooking.pickup_location || prev.itinerary.pickupLocation,
+                dbRecord.pickup_location || "Victoria Island Flagship Hub",
               pickupAddress:
-                dbBooking.pickup_location || prev.itinerary.pickupAddress,
-              pickupDate: dbBooking.pickup_datetime
-                ? new Date(dbBooking.pickup_datetime).toLocaleString("en-NG", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  }) + " WAT"
-                : prev.itinerary.pickupDate,
-              returnDate: dbBooking.dropoff_datetime
-                ? new Date(dbBooking.dropoff_datetime).toLocaleString("en-NG", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  }) + " WAT"
-                : prev.itinerary.returnDate,
-              flightNumber:
-                dbBooking.flight_number || prev.itinerary.flightNumber,
+                dbRecord.pickup_location || "Victoria Island, Lagos",
+              flightNumber: dbRecord.flight_number || undefined,
+              flightRoute: dbRecord.flight_terminal || "MMIA Terminal 2",
+              flightStatus: dbRecord.flight_number
+                ? "Active Flight Tracking Linked"
+                : "Ground Dispatch",
             },
-          }));
+          };
+
+          setBooking(passData);
+        } else if (localData) {
+          // Fallback to active localStorage booking
+          const passData: BookingPassData = {
+            bookingCode: localData.bookingCode || targetCode || "LP-PRIME",
+            reference: localData.reference || "LP_REF",
+            verificationPin: localData.verificationPin || "8842-09",
+            status: "confirmed",
+            serviceTier:
+              localData.serviceType === "self_drive"
+                ? "Executive Self-Drive"
+                : "Executive First Class",
+            amountFormatted: localData.amountFormatted || "₦0",
+            paidAt: localData.paidAt || "Confirmed",
+            paidDate: localData.paidDate || "Recent",
+            customerName:
+              user?.name || localData.customerName || "Executive Client",
+            customerPhone: user?.phone || localData.customerPhone || "",
+            customerEmail: user?.email || localData.customerEmail || "",
+            handoverProtocol:
+              localData.handoverMode === "delivery"
+                ? localData.includeChauffeur
+                  ? "Direct Delivery with Chauffeur"
+                  : "Direct Delivery (Self-Drive)"
+                : "Office Pickup",
+            vehicle: {
+              name: localData.vehicle || "Executive Fleet Vehicle",
+              category: "First-Class Fleet",
+              year: 2024,
+              color: localData.vehicleColor || "Obsidian Black",
+              licensePlate: "LP-PRIME",
+              image:
+                localData.vehicleImage ||
+                "https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=1200&q=80",
+              amenities: [
+                { icon: "wifi", label: "High-Speed Starlink Wi-Fi" },
+                { icon: "wine_bar", label: "Chilled Refreshments" },
+                { icon: "volume_off", label: "Acoustic Privacy Glazing" },
+                {
+                  icon: "airline_seat_recline_extra",
+                  label: "First-Class Executive Seating",
+                },
+              ],
+            },
+            driver: {
+              name: "Chauffeur Allocation In Progress",
+              badge: "ALLOCATION PENDING",
+              rating: 5.0,
+              trips: 0,
+              phone: "+234 1 888 5275",
+              avatar: "",
+              bio: "A vetted executive chauffeur is currently being assigned to your itinerary. Details and contact channels will activate prior to scheduled departure.",
+              tags: [
+                "Allocation In Progress",
+                "72-Point Inspection",
+                "Vetted Chauffeur Network",
+              ],
+              isAssigned: false,
+            },
+            itinerary: {
+              pickupDate: localData.startDate
+                ? new Date(localData.startDate).toLocaleString("en-NG", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }) + " WAT"
+                : "Scheduled",
+              returnDate: localData.endDate
+                ? new Date(localData.endDate).toLocaleString("en-NG", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }) + " WAT"
+                : "Scheduled",
+              duration: `${localData.rentalDays || 3} Days Reserved`,
+              pickupLocation:
+                localData.deliveryAddress || "Victoria Island Flagship Hub",
+              pickupAddress:
+                localData.deliveryAddress || "Victoria Island, Lagos",
+              flightNumber: localData.flightNumber || undefined,
+              flightRoute: localData.flightTerminal || "MMIA Terminal 2",
+              flightStatus: localData.flightNumber
+                ? "Active Flight Tracking Linked"
+                : "Ground Dispatch",
+            },
+          };
+
+          setBooking(passData);
+        } else {
+          // No booking found anywhere
+          setBooking(null);
         }
       } catch (err) {
-        console.warn("Supabase booking lookup notice:", err);
+        console.error("[ReservationPass] Error resolving live booking:", err);
+        setBooking(null);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
-    resolveBooking();
-  }, [urlCode]);
+    resolveLiveBooking();
+    return () => {
+      isMounted = false;
+    };
+  }, [urlCode, user]);
 
   const handleCopyPin = () => {
-    if (typeof navigator !== "undefined") {
+    if (booking?.verificationPin && typeof navigator !== "undefined") {
       navigator.clipboard.writeText(booking.verificationPin);
       setCopiedPin(true);
       setTimeout(() => setCopiedPin(false), 2500);
@@ -311,6 +414,7 @@ function ReservationPassContent() {
   };
 
   const handleDownloadPdf = async () => {
+    if (!booking) return;
     try {
       setIsDownloadingPdf(true);
       await downloadVIPPassPDF(booking);
@@ -322,22 +426,105 @@ function ReservationPassContent() {
     }
   };
 
-  const [originUrl, setOriginUrl] = useState("https://laplantaprime.com");
+  const handoverInspectionUrl = booking
+    ? `${originUrl}/handover-inspection?code=${booking.bookingCode}&pin=${booking.verificationPin}`
+    : originUrl;
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setOriginUrl(window.location.origin);
-    }
-  }, []);
-
-  const handoverInspectionUrl = `${originUrl}/handover-inspection?code=${booking.bookingCode}&pin=${booking.verificationPin}`;
   const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data=${encodeURIComponent(
     handoverInspectionUrl,
   )}`;
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface flex flex-col font-sans">
+        <Navbar />
+        <main className="w-full pt-16 lg:pt-20 flex-1 flex flex-col items-center justify-center gap-4 py-24 px-4">
+          <div className="w-12 h-12 rounded-full border-2 border-secondary/30 border-t-secondary animate-spin" />
+          <p className="font-serif text-sm text-primary tracking-wide">
+            Retrieving Live VIP Reservation Pass...
+          </p>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // No active booking found state
+  if (!booking) {
+    return (
+      <div className="min-h-screen bg-surface flex flex-col font-sans text-on-surface">
+        <Navbar />
+        <main className="w-full pt-16 lg:pt-20 flex-1 flex items-center justify-center px-4 py-20">
+          <div className="max-w-md w-full bg-surface-container-lowest border border-black/[0.06] rounded-3xl p-8 sm:p-10 shadow-sm flex flex-col items-center text-center gap-6">
+            <div className="w-16 h-16 rounded-2xl bg-secondary-fixed/50 text-secondary flex items-center justify-center shadow-inner">
+              <span className="material-symbols-outlined text-3xl">
+                event_busy
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-[11px] uppercase tracking-widest font-bold text-secondary">
+                VIP Reservation Portal
+              </span>
+              <h1 className="font-serif text-2xl sm:text-3xl font-bold text-primary tracking-tight">
+                No Active Reservation Found
+              </h1>
+              <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed">
+                You do not currently have a confirmed vehicle charter or digital
+                pass under this profile. Reserve a vehicle from our curated fleet
+                or look up an existing itinerary reference code.
+              </p>
+            </div>
+
+            {/* Quick Code Lookup Form */}
+            <div className="w-full flex flex-col gap-2 pt-1">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={searchCodeInput}
+                  onChange={(e) =>
+                    setSearchCodeInput(e.target.value.toUpperCase())
+                  }
+                  placeholder="e.g. LP-LOS-12345"
+                  className="flex-1 h-11 px-3.5 rounded-xl bg-surface-container-low text-primary text-xs font-mono uppercase border border-surface-container focus:outline-none focus:ring-1 focus:ring-secondary"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (searchCodeInput.trim()) {
+                      window.location.href = `/reservation-pass?code=${encodeURIComponent(searchCodeInput.trim())}`;
+                    }
+                  }}
+                  className="h-11 px-4 rounded-xl bg-primary text-white hover:bg-secondary text-xs font-semibold uppercase tracking-wider transition-colors shrink-0"
+                >
+                  Lookup
+                </button>
+              </div>
+            </div>
+
+            <div className="w-full pt-2 border-t border-black/[0.04]">
+              <Link
+                href="/fleet"
+                className="w-full py-3.5 px-6 rounded-xl bg-secondary hover:bg-secondary/90 text-primary-fixed font-semibold text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">
+                  directions_car
+                </span>
+                <span>Explore Executive Fleet</span>
+              </Link>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Active Confirmed Booking Pass View (Warm Alabaster & White Luxury Light Theme)
   return (
-    <div className="min-h-screen bg-[#040505] text-stone-200 flex flex-col font-sans selection:bg-[#d4af37] selection:text-black">
-      {/* Print Specific CSS */}
+    <div className="min-h-screen bg-surface text-on-surface flex flex-col font-sans selection:bg-secondary-fixed selection:text-primary">
+      {/* Print Specific Clean CSS */}
       <style>{`
         @media print {
           body {
@@ -348,7 +535,7 @@ function ReservationPassContent() {
             display: none !important;
           }
           .print-clean {
-            border: 2px solid #000000 !important;
+            border: 1px solid #d4af37 !important;
             background: #ffffff !important;
             color: #000000 !important;
             box-shadow: none !important;
@@ -363,21 +550,23 @@ function ReservationPassContent() {
       <main className="w-full pt-16 lg:pt-20 pb-28 lg:pb-16 flex-1">
         <div className="max-w-[1280px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
           {/* Top Status Notification Banner */}
-          <div className="w-full rounded-2xl bg-[#0c1017] border border-white/[0.08] p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl backdrop-blur-xl">
+          <div className="w-full rounded-2xl bg-surface-container-lowest border border-black/[0.06] p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
             <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-start">
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold uppercase tracking-wider">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
                 Payment Settled (100%)
               </span>
-              <span className="text-stone-500 hidden sm:inline">•</span>
-              <span className="text-xs font-medium text-stone-300 flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-sm text-[#d4af37]">
+              <span className="text-outline-variant hidden sm:inline">•</span>
+              <span className="text-xs font-medium text-on-surface-variant flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm text-secondary">
                   badge
                 </span>
-                Chauffeur Scheduled
+                {booking.driver.isAssigned
+                  ? "Chauffeur Assigned"
+                  : "Chauffeur Allocation In Progress"}
               </span>
-              <span className="text-stone-500 hidden sm:inline">•</span>
-              <span className="text-xs font-mono text-[#fedeb2] bg-white/[0.04] px-2.5 py-1 rounded-md border border-white/[0.08]">
+              <span className="text-outline-variant hidden sm:inline">•</span>
+              <span className="text-xs font-mono text-secondary bg-surface-container-low px-2.5 py-1 rounded-md border border-surface-container font-semibold">
                 Pass #{booking.bookingCode}
               </span>
             </div>
@@ -386,15 +575,15 @@ function ReservationPassContent() {
               <button
                 onClick={() => setShowSearchDrawer(!showSearchDrawer)}
                 type="button"
-                className="no-print inline-flex items-center gap-1.5 text-xs text-stone-400 hover:text-white px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] transition-all"
+                className="no-print inline-flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-primary px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container border border-black/[0.04] transition-all"
               >
                 <span className="material-symbols-outlined text-sm">
                   search
                 </span>
                 <span>Switch Pass</span>
               </button>
-              <div className="flex items-center gap-1.5 text-xs text-stone-400">
-                <span className="material-symbols-outlined text-[#d4af37] text-base">
+              <div className="flex items-center gap-1.5 text-xs text-on-surface-variant">
+                <span className="material-symbols-outlined text-secondary text-base">
                   verified
                 </span>
                 <span className="hidden md:inline">
@@ -406,12 +595,12 @@ function ReservationPassContent() {
 
           {/* Quick Search Drawer (Collapsible) */}
           {showSearchDrawer && (
-            <div className="no-print p-4 rounded-xl bg-[#0c1017] border border-[#d4af37]/30 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+            <div className="no-print p-4 rounded-xl bg-surface-container-lowest border border-secondary/30 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center gap-2 w-full sm:w-auto">
-                <span className="material-symbols-outlined text-[#d4af37] text-lg">
+                <span className="material-symbols-outlined text-secondary text-lg">
                   manage_search
                 </span>
-                <span className="text-xs text-stone-300 font-medium">
+                <span className="text-xs text-on-surface font-medium">
                   Lookup Reservation Reference:
                 </span>
               </div>
@@ -422,8 +611,8 @@ function ReservationPassContent() {
                   onChange={(e) =>
                     setSearchCodeInput(e.target.value.toUpperCase())
                   }
-                  placeholder="e.g. LP-8842"
-                  className="px-3 py-1.5 rounded-lg bg-black/60 border border-white/20 text-white text-xs font-mono focus:outline-none focus:border-[#d4af37] w-full sm:w-44"
+                  placeholder="e.g. LP-LOS-12345"
+                  className="px-3 py-1.5 rounded-lg bg-surface-container-low border border-surface-container text-primary text-xs font-mono focus:outline-none focus:border-secondary w-full sm:w-44"
                 />
                 <button
                   type="button"
@@ -432,7 +621,7 @@ function ReservationPassContent() {
                       window.location.href = `/reservation-pass?code=${encodeURIComponent(searchCodeInput.trim())}`;
                     }
                   }}
-                  className="px-4 py-1.5 rounded-lg bg-[#d4af37] text-black font-bold text-xs uppercase tracking-wider hover:bg-[#fedeb2] transition-colors shrink-0"
+                  className="px-4 py-1.5 rounded-lg bg-primary text-white font-semibold text-xs uppercase tracking-wider hover:bg-secondary transition-colors shrink-0"
                 >
                   Load Pass
                 </button>
@@ -441,38 +630,38 @@ function ReservationPassContent() {
           )}
 
           {/* Editorial Page Header */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-2 border-b border-white/[0.06]">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-2 border-b border-black/[0.06]">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="material-symbols-outlined text-[#d4af37] text-base">
+                <span className="material-symbols-outlined text-secondary text-base">
                   hotel_class
                 </span>
-                <span className="text-[11px] uppercase tracking-widest text-[#d4af37] font-bold">
+                <span className="text-[11px] uppercase tracking-widest text-secondary font-bold">
                   VIP Guest Reservation
                 </span>
               </div>
-              <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl text-white tracking-tight font-bold">
+              <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl text-primary tracking-tight font-bold">
                 Booking Confirmation &amp; Digital Handover Pass
               </h1>
             </div>
             <div className="flex items-center gap-2 self-start md:self-auto">
-              <span className="text-xs uppercase tracking-wider text-stone-400">
+              <span className="text-xs uppercase tracking-wider text-on-surface-variant">
                 Service Tier:
               </span>
-              <span className="px-3 py-1 rounded-md bg-[#d4af37] text-black text-xs font-bold uppercase tracking-wider shadow-sm">
+              <span className="px-3 py-1 rounded-md bg-secondary-fixed text-on-secondary-fixed text-xs font-bold uppercase tracking-wider shadow-sm">
                 {booking.serviceTier}
               </span>
             </div>
           </div>
 
-          {/* Mobile Tab Switcher (Visible only on mobile/tablet) */}
-          <div className="lg:hidden no-print flex items-center justify-between p-1 bg-[#0c1017] rounded-xl border border-white/[0.08]">
+          {/* Mobile Tab Switcher */}
+          <div className="lg:hidden no-print flex items-center justify-between p-1 bg-surface-container-low rounded-xl border border-black/[0.06]">
             <button
               onClick={() => setActiveMobileTab("all")}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
                 activeMobileTab === "all"
-                  ? "bg-[#d4af37] text-black shadow-md font-bold"
-                  : "text-stone-400 hover:text-white"
+                  ? "bg-surface-container-lowest text-primary shadow-sm font-bold"
+                  : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
               All Overview
@@ -481,8 +670,8 @@ function ReservationPassContent() {
               onClick={() => setActiveMobileTab("pass")}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1 ${
                 activeMobileTab === "pass"
-                  ? "bg-[#d4af37] text-black shadow-md font-bold"
-                  : "text-stone-400 hover:text-white"
+                  ? "bg-surface-container-lowest text-primary shadow-sm font-bold"
+                  : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
               <span className="material-symbols-outlined text-sm">
@@ -494,8 +683,8 @@ function ReservationPassContent() {
               onClick={() => setActiveMobileTab("vehicle")}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1 ${
                 activeMobileTab === "vehicle"
-                  ? "bg-[#d4af37] text-black shadow-md font-bold"
-                  : "text-stone-400 hover:text-white"
+                  ? "bg-surface-container-lowest text-primary shadow-sm font-bold"
+                  : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
               <span className="material-symbols-outlined text-sm">
@@ -507,16 +696,18 @@ function ReservationPassContent() {
               onClick={() => setActiveMobileTab("itinerary")}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1 ${
                 activeMobileTab === "itinerary"
-                  ? "bg-[#d4af37] text-black shadow-md font-bold"
-                  : "text-stone-400 hover:text-white"
+                  ? "bg-surface-container-lowest text-primary shadow-sm font-bold"
+                  : "text-on-surface-variant hover:text-on-surface"
               }`}
             >
-              <span className="material-symbols-outlined text-sm">flight</span>
+              <span className="material-symbols-outlined text-sm">
+                calendar_month
+              </span>
               <span>Itinerary</span>
             </button>
           </div>
 
-          {/* Main 2-Column Responsive Layout (7 Cols / 5 Cols on desktop) */}
+          {/* Main 2-Column Responsive Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Left Column: Digital Scannable Pass, Quick Actions, Chauffeur Profile */}
             <div
@@ -530,43 +721,39 @@ function ReservationPassContent() {
             >
               {/* Luxury Boarding Pass Card */}
               {(activeMobileTab === "all" || activeMobileTab === "pass") && (
-                <div className="relative rounded-3xl bg-gradient-to-b from-[#101520] to-[#0a0d14] border border-white/[0.1] shadow-2xl p-6 sm:p-8 flex flex-col gap-6 overflow-hidden print-clean">
-                  {/* Subtle Luxury Top Accent Bar */}
-                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#d4af37] via-[#fedeb2] to-[#d4af37]"></div>
-
-                  {/* Perforated ticket cutouts (Left & Right) */}
-                  <div className="hidden sm:block absolute -left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[#040505] border-r border-white/[0.1]"></div>
-                  <div className="hidden sm:block absolute -right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[#040505] border-l border-white/[0.1]"></div>
+                <div className="relative rounded-3xl bg-surface-container-lowest border border-black/[0.08] shadow-sm p-6 sm:p-8 flex flex-col gap-6 overflow-hidden print-clean">
+                  {/* Luxury Top Accent Bar */}
+                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-secondary via-secondary-fixed to-secondary"></div>
 
                   {/* Header of the Pass */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-black/[0.06] pb-4">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] uppercase font-bold tracking-widest text-[#d4af37]">
+                        <span className="text-[10px] uppercase font-bold tracking-widest text-secondary">
                           VIP Handover Voucher
                         </span>
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#d4af37]"></span>
-                        <span className="text-[10px] text-stone-400 uppercase tracking-widest font-mono">
+                        <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                        <span className="text-[10px] text-on-surface-variant uppercase tracking-widest font-mono">
                           SEC-256 ENCRYPTED
                         </span>
                       </div>
-                      <h2 className="font-serif text-2xl text-white font-bold tracking-tight">
+                      <h2 className="font-serif text-2xl text-primary font-bold tracking-tight">
                         Digital Handover Voucher
                       </h2>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs text-stone-300">
-                      <span className="w-2 h-2 rounded-full bg-[#d4af37]"></span>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-low border border-surface-container text-xs text-on-surface font-medium">
+                      <span className="w-2 h-2 rounded-full bg-secondary"></span>
                       {booking.handoverProtocol}
                     </span>
                   </div>
 
                   {/* Digital Scannable QR Container */}
-                  <div className="rounded-2xl bg-black/50 border border-white/[0.08] p-5 sm:p-6 flex flex-col sm:flex-row items-center gap-6 relative">
-                    {/* QR Code Container with High-Contrast Background */}
+                  <div className="rounded-2xl bg-surface-container-low border border-surface-container p-5 sm:p-6 flex flex-col sm:flex-row items-center gap-6 relative">
+                    {/* QR Code Container */}
                     <div className="relative group shrink-0">
                       <div
                         onClick={() => setShowQrModal(true)}
-                        className="w-48 h-48 sm:w-52 sm:h-52 bg-white rounded-2xl p-3 flex flex-col items-center justify-center shadow-2xl cursor-pointer hover:ring-4 hover:ring-[#d4af37]/50 transition-all relative overflow-hidden"
+                        className="w-48 h-48 sm:w-52 sm:h-52 bg-white rounded-2xl p-3 flex flex-col items-center justify-center shadow-md border border-black/[0.06] cursor-pointer hover:ring-4 hover:ring-secondary/30 transition-all relative overflow-hidden"
                         title="Click to expand fullscreen for scanner"
                       >
                         {!qrImgError ? (
@@ -578,302 +765,18 @@ function ReservationPassContent() {
                             suppressHydrationWarning
                           />
                         ) : (
-                          /* High-Resolution SVG Fallback Pattern if offline */
-                          <svg
-                            className="w-full h-full text-black fill-current"
-                            viewBox="0 0 160 160"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <rect
-                              fill="#000000"
-                              height="46"
-                              rx="6"
-                              width="46"
-                              x="0"
-                              y="0"
-                            ></rect>
-                            <rect
-                              fill="#FFFFFF"
-                              height="32"
-                              rx="4"
-                              width="32"
-                              x="7"
-                              y="7"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="18"
-                              width="18"
-                              x="14"
-                              y="14"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="46"
-                              rx="6"
-                              width="46"
-                              x="114"
-                              y="0"
-                            ></rect>
-                            <rect
-                              fill="#FFFFFF"
-                              height="32"
-                              rx="4"
-                              width="32"
-                              x="121"
-                              y="7"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="18"
-                              width="18"
-                              x="128"
-                              y="14"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="46"
-                              rx="6"
-                              width="46"
-                              x="0"
-                              y="114"
-                            ></rect>
-                            <rect
-                              fill="#FFFFFF"
-                              height="32"
-                              rx="4"
-                              width="32"
-                              x="7"
-                              y="121"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="18"
-                              width="18"
-                              x="14"
-                              y="128"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="58"
-                              y="8"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="74"
-                              y="8"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="90"
-                              y="8"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="58"
-                              y="24"
-                            ></rect>
-                            <rect
-                              fill="#d4af37"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="74"
-                              y="24"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="90"
-                              y="24"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="8"
-                              y="58"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="24"
-                              y="58"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="40"
-                              y="58"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="56"
-                              y="58"
-                            ></rect>
-                            <rect
-                              fill="#d4af37"
-                              height="16"
-                              rx="3"
-                              width="16"
-                              x="72"
-                              y="58"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="94"
-                              y="58"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="110"
-                              y="58"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="126"
-                              y="58"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="142"
-                              y="58"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="8"
-                              y="74"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="24"
-                              y="74"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="40"
-                              y="74"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="94"
-                              y="74"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="110"
-                              y="74"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="142"
-                              y="74"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="8"
-                              y="90"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="24"
-                              y="90"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="56"
-                              y="90"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="72"
-                              y="90"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="88"
-                              y="90"
-                            ></rect>
-                            <rect
-                              fill="#000000"
-                              height="10"
-                              rx="2"
-                              width="10"
-                              x="126"
-                              y="90"
-                            ></rect>
-                          </svg>
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-stone-500">
+                            <span className="material-symbols-outlined text-5xl">
+                              qr_code_2
+                            </span>
+                            <span className="text-[10px] font-mono">
+                              QR OFFLINE READY
+                            </span>
+                          </div>
                         )}
 
                         {/* Center Monogram Emblem */}
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black text-[#d4af37] border-2 border-[#d4af37] flex items-center justify-center font-serif font-black text-xs shadow-md">
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-primary text-secondary-fixed border-2 border-secondary flex items-center justify-center font-serif font-black text-xs shadow-md">
                           LP
                         </div>
                       </div>
@@ -882,9 +785,9 @@ function ReservationPassContent() {
                       <button
                         type="button"
                         onClick={() => setShowQrModal(true)}
-                        className="no-print w-full mt-2 py-1 px-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-stone-300 text-[11px] flex items-center justify-center gap-1 transition-colors"
+                        className="no-print w-full mt-2 py-1 px-2 rounded-lg bg-surface-container-lowest hover:bg-surface-container-high border border-black/[0.06] text-on-surface text-[11px] font-medium flex items-center justify-center gap-1 transition-colors"
                       >
-                        <span className="material-symbols-outlined text-xs text-[#d4af37]">
+                        <span className="material-symbols-outlined text-xs text-secondary">
                           fullscreen
                         </span>
                         <span>Tap to Enlarge QR</span>
@@ -893,16 +796,16 @@ function ReservationPassContent() {
 
                     {/* PIN & Security Protocol Details */}
                     <div className="flex flex-col gap-3 text-center sm:text-left flex-1">
-                      <span className="text-[10px] uppercase tracking-widest text-[#d4af37] font-bold">
+                      <span className="text-[10px] uppercase tracking-widest text-secondary font-bold">
                         Reservation QR &amp; Verification PIN
                       </span>
 
                       <div className="flex flex-col sm:flex-row items-center gap-3">
-                        <div className="inline-flex items-center gap-2 bg-[#141b26] border border-white/[0.1] px-4 py-2 rounded-xl shadow-inner">
-                          <span className="font-mono text-2xl font-bold text-white tracking-widest">
+                        <div className="inline-flex items-center gap-2 bg-surface-container-lowest border border-secondary/30 px-4 py-2 rounded-xl shadow-sm">
+                          <span className="font-mono text-2xl font-bold text-primary tracking-widest">
                             #{booking.bookingCode}
                           </span>
-                          <span className="material-symbols-outlined text-[#d4af37] text-lg">
+                          <span className="material-symbols-outlined text-secondary text-lg">
                             qr_code_scanner
                           </span>
                         </div>
@@ -911,34 +814,34 @@ function ReservationPassContent() {
                         <button
                           type="button"
                           onClick={handleCopyPin}
-                          className="px-3 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.1] text-xs font-mono text-stone-200 flex items-center gap-1.5 transition-colors group"
+                          className="px-3 py-2 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-surface-container text-xs font-mono text-primary flex items-center gap-1.5 transition-colors group shadow-sm"
                           title="Click to copy Verification PIN"
                         >
-                          <span className="text-[#d4af37] font-bold">PIN:</span>
-                          <span className="font-bold text-white">
+                          <span className="text-secondary font-bold">PIN:</span>
+                          <span className="font-bold text-primary">
                             {booking.verificationPin}
                           </span>
-                          <span className="material-symbols-outlined text-sm text-stone-400 group-hover:text-white">
+                          <span className="material-symbols-outlined text-sm text-on-surface-variant group-hover:text-primary">
                             {copiedPin ? "check" : "content_copy"}
                           </span>
                         </button>
                       </div>
 
                       {copiedPin && (
-                        <p className="text-xs text-emerald-400 font-medium animate-in fade-in">
+                        <p className="text-xs text-emerald-700 font-medium animate-in fade-in">
                           ✓ Verification PIN copied to clipboard
                         </p>
                       )}
 
-                      <p className="text-xs text-stone-400 leading-relaxed">
+                      <p className="text-xs text-on-surface-variant leading-relaxed">
                         Present this QR pass upon arrival at the hotel forecourt
                         or private airport terminal. Your assigned chauffeur
                         will scan the token at vehicle handover to authenticate
                         your itinerary.
                       </p>
 
-                      <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 text-[11px] text-stone-400">
-                        <span className="material-symbols-outlined text-emerald-400 text-sm">
+                      <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 text-[11px] text-on-surface-variant">
+                        <span className="material-symbols-outlined text-emerald-700 text-sm">
                           verified_user
                         </span>
                         <span>
@@ -952,20 +855,20 @@ function ReservationPassContent() {
                   <div className="no-print grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                     <Link
                       href={`/live-tracking?code=${booking.bookingCode}`}
-                      className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#d4af37] hover:bg-[#fedeb2] text-black font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-[#d4af37]/15 active:scale-95"
+                      className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-primary hover:bg-secondary text-white font-semibold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95"
                     >
                       <span className="material-symbols-outlined text-base">
                         near_me
                       </span>
-                      <span>Track Chauffeur Live</span>
+                      <span>Track Live Telematics</span>
                     </Link>
                     <button
                       type="button"
                       onClick={handleDownloadPdf}
                       disabled={isDownloadingPdf}
-                      className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/40 text-[#fedeb2] hover:text-white font-semibold text-xs transition-all disabled:opacity-50 active:scale-95 shadow-sm"
+                      className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-black/[0.08] text-primary font-semibold text-xs transition-all disabled:opacity-50 active:scale-95 shadow-sm"
                     >
-                      <span className="material-symbols-outlined text-base text-[#d4af37]">
+                      <span className="material-symbols-outlined text-base text-secondary">
                         {isDownloadingPdf ? "sync" : "picture_as_pdf"}
                       </span>
                       <span>
@@ -978,9 +881,9 @@ function ReservationPassContent() {
 
                   {/* Real-time Ping Alert Banner */}
                   {pingNotice && (
-                    <div className="no-print mt-3 p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-medium flex items-center justify-between gap-3 shadow-lg">
+                    <div className="no-print mt-3 p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-medium flex items-center justify-between gap-3 shadow-sm">
                       <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-base text-emerald-400 animate-pulse">
+                        <span className="material-symbols-outlined text-base text-emerald-700 animate-pulse">
                           satellite_alt
                         </span>
                         <span>{pingNotice}</span>
@@ -988,7 +891,7 @@ function ReservationPassContent() {
                       <button
                         type="button"
                         onClick={() => setPingNotice(null)}
-                        className="text-emerald-400 hover:text-white text-xs font-bold"
+                        className="text-emerald-800 hover:text-black text-xs font-bold"
                       >
                         ✕
                       </button>
@@ -999,84 +902,135 @@ function ReservationPassContent() {
 
               {/* Assigned Professional Chauffeur Profile Card */}
               {(activeMobileTab === "all" || activeMobileTab === "vehicle") && (
-                <div className="rounded-3xl bg-[#0c1017] border border-white/[0.08] p-6 sm:p-7 shadow-xl flex flex-col gap-5">
-                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                <div className="rounded-3xl bg-surface-container-lowest border border-black/[0.08] p-6 sm:p-7 shadow-sm flex flex-col gap-5">
+                  <div className="flex items-center justify-between border-b border-black/[0.06] pb-3">
                     <div className="flex flex-col">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#d4af37]">
-                        Assigned Professional Chauffeur
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-secondary">
+                        Chauffeur Allocation Status
                       </span>
-                      <h2 className="font-serif text-xl sm:text-2xl text-white font-bold">
-                        Executive Chauffeur Profile
+                      <h2 className="font-serif text-xl sm:text-2xl text-primary font-bold">
+                        {booking.driver.isAssigned
+                          ? "Executive Chauffeur Profile"
+                          : "Chauffeur Allocation In Progress"}
                       </h2>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                        booking.driver.isAssigned
+                          ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+                          : "bg-secondary-fixed/50 border border-secondary/30 text-secondary"
+                      }`}
+                    >
                       <span className="material-symbols-outlined text-xs">
-                        verified
+                        {booking.driver.isAssigned ? "verified" : "schedule"}
                       </span>
-                      ON SCHEDULE
+                      {booking.driver.isAssigned
+                        ? "ON SCHEDULE"
+                        : "IN PROGRESS"}
                     </span>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 pt-1">
-                    <div className="relative shrink-0">
-                      <img
-                        src={booking.driver.avatar}
-                        alt={booking.driver.name}
-                        className="w-28 h-36 sm:w-32 sm:h-40 rounded-2xl object-cover shadow-xl border border-white/[0.1]"
-                      />
-                      <span className="absolute -bottom-2 -right-2 bg-black text-[#d4af37] text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border border-[#d4af37]/40 shadow-lg">
-                        {booking.driver.badge}
-                      </span>
-                    </div>
+                  {booking.driver.isAssigned ? (
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 pt-1">
+                      <div className="relative shrink-0">
+                        <img
+                          src={booking.driver.avatar}
+                          alt={booking.driver.name}
+                          className="w-28 h-36 sm:w-32 sm:h-40 rounded-2xl object-cover shadow-md border border-black/[0.06]"
+                        />
+                        <span className="absolute -bottom-2 -right-2 bg-primary text-secondary-fixed text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full shadow-md">
+                          {booking.driver.badge}
+                        </span>
+                      </div>
 
-                    <div className="flex flex-col gap-2 flex-1 text-center sm:text-left">
-                      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
-                        <h3 className="font-serif text-lg sm:text-xl text-white font-bold">
-                          {booking.driver.name}
-                        </h3>
-                        <div className="flex items-center justify-center sm:justify-start gap-1 text-[#d4af37]">
-                          <span
-                            className="material-symbols-outlined text-sm"
-                            style={{ fontVariationSettings: "'FILL' 1" }}
-                          >
-                            star
-                          </span>
-                          <span className="font-bold text-white text-xs">
-                            {booking.driver.rating}
-                          </span>
-                          <span className="text-stone-400 text-xs">
-                            ({booking.driver.trips}+ completed trips)
+                      <div className="flex flex-col gap-2 flex-1 text-center sm:text-left">
+                        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                          <h3 className="font-serif text-lg sm:text-xl text-primary font-bold">
+                            {booking.driver.name}
+                          </h3>
+                          <div className="flex items-center justify-center sm:justify-start gap-1 text-secondary">
+                            <span
+                              className="material-symbols-outlined text-sm"
+                              style={{ fontVariationSettings: "'FILL' 1" }}
+                            >
+                              star
+                            </span>
+                            <span className="font-bold text-primary text-xs">
+                              {booking.driver.rating}
+                            </span>
+                            <span className="text-on-surface-variant text-xs">
+                              ({booking.driver.trips}+ completed trips)
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-on-surface-variant leading-relaxed">
+                          {booking.driver.bio}
+                        </p>
+
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-2">
+                          {booking.driver.tags.map((tag, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2.5 py-1 rounded-full bg-surface-container-low border border-surface-container text-[11px] text-on-surface-variant font-medium"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Elegant Allocation In Progress Card */
+                    <div className="p-5 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+                      <div className="w-14 h-14 rounded-2xl bg-secondary-fixed/50 text-secondary flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-2xl animate-spin">
+                          progress_activity
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <h4 className="font-serif text-base font-bold text-primary">
+                          Assigning Your Executive Chauffeur
+                        </h4>
+                        <p className="text-xs text-on-surface-variant leading-relaxed">
+                          {booking.driver.bio}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2 pt-1 justify-center sm:justify-start">
+                          <span className="text-[11px] text-secondary font-semibold flex items-center gap-1">
+                            <span className="material-symbols-outlined text-xs">
+                              verified
+                            </span>
+                            Background-checked &amp; vetted driver protocol
                           </span>
                         </div>
                       </div>
-
-                      <p className="text-xs text-stone-400 leading-relaxed">
-                        {booking.driver.bio}
-                      </p>
-
-                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-2">
-                        {booking.driver.tags.map((tag, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-stone-300"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="no-print pt-2 flex flex-col sm:flex-row gap-3">
-                    <a
-                      href={`tel:${booking.driver.phone}`}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-white font-semibold text-xs transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-sm text-[#d4af37]">
-                        call
-                      </span>
-                      <span>Call Chauffeur Directly</span>
-                    </a>
+                    {booking.driver.isAssigned ? (
+                      <a
+                        href={`tel:${booking.driver.phone}`}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-black/[0.06] text-primary font-semibold text-xs transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-sm text-secondary">
+                          call
+                        </span>
+                        <span>Call Chauffeur Directly</span>
+                      </a>
+                    ) : (
+                      <a
+                        href="https://wa.me/23418885275"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-black/[0.06] text-primary font-semibold text-xs transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-sm text-secondary">
+                          support_agent
+                        </span>
+                        <span>Contact Executive Dispatch Desk</span>
+                      </a>
+                    )}
                   </div>
                 </div>
               )}
@@ -1094,39 +1048,34 @@ function ReservationPassContent() {
             >
               {/* Designated Fleet Asset Card */}
               {(activeMobileTab === "all" || activeMobileTab === "vehicle") && (
-                <div className="rounded-3xl bg-[#0c1017] border border-white/[0.08] p-6 shadow-xl flex flex-col gap-4">
-                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                <div className="rounded-3xl bg-surface-container-lowest border border-black/[0.08] p-6 shadow-sm flex flex-col gap-4">
+                  <div className="flex items-center justify-between border-b border-black/[0.06] pb-3">
                     <div className="flex flex-col">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-[#d4af37]">
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-secondary">
                         Designated Fleet Asset
                       </span>
-                      <Link
-                        href="/vehicle-details"
-                        className="hover:text-[#d4af37] transition-colors"
-                      >
-                        <h2 className="font-serif text-lg sm:text-xl text-white font-bold">
-                          {booking.vehicle.name}
-                        </h2>
-                      </Link>
+                      <h2 className="font-serif text-lg sm:text-xl text-primary font-bold">
+                        {booking.vehicle.name}
+                      </h2>
                     </div>
-                    <span className="px-2.5 py-1 rounded-md bg-[#d4af37]/15 border border-[#d4af37]/30 text-[#d4af37] text-[10px] font-bold uppercase tracking-wider">
+                    <span className="px-2.5 py-1 rounded-md bg-secondary-fixed text-on-secondary-fixed text-[10px] font-bold uppercase tracking-wider">
                       FIRST CLASS SPEC
                     </span>
                   </div>
 
                   {/* Vehicle Picture Reference */}
-                  <div className="relative w-full h-52 sm:h-56 rounded-2xl overflow-hidden shadow-lg border border-white/[0.06] group">
+                  <div className="relative w-full h-52 sm:h-56 rounded-2xl overflow-hidden shadow-sm border border-black/[0.06] group">
                     <img
                       src={booking.vehicle.image}
                       alt={booking.vehicle.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-                      <div className="bg-black/75 backdrop-blur-md px-3 py-1 rounded-lg text-white text-xs border border-white/10 font-mono">
+                    <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
+                      <div className="bg-primary/80 backdrop-blur-md px-3 py-1 rounded-lg text-white text-xs border border-white/10 font-mono">
                         {booking.vehicle.color} • {booking.vehicle.licensePlate}
                       </div>
-                      <span className="text-[10px] text-stone-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded-md uppercase font-semibold">
+                      <span className="text-[10px] text-white bg-black/40 backdrop-blur-md px-2 py-1 rounded-md uppercase font-semibold">
                         Model {booking.vehicle.year}
                       </span>
                     </div>
@@ -1134,16 +1083,16 @@ function ReservationPassContent() {
 
                   {/* Cabin Amenities Grid */}
                   <div className="flex flex-col gap-2 pt-1">
-                    <span className="text-[10px] uppercase tracking-wider text-stone-400 font-bold">
+                    <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
                       Executive In-Cabin Amenities
                     </span>
                     <div className="grid grid-cols-2 gap-2">
                       {booking.vehicle.amenities.map((item, idx) => (
                         <div
                           key={idx}
-                          className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05] text-stone-300 text-xs"
+                          className="flex items-center gap-2 p-2.5 rounded-xl bg-surface-container-low border border-surface-container text-on-surface text-xs"
                         >
-                          <span className="material-symbols-outlined text-[#d4af37] text-base shrink-0">
+                          <span className="material-symbols-outlined text-secondary text-base shrink-0">
                             {item.icon}
                           </span>
                           <span className="truncate">{item.label}</span>
@@ -1157,78 +1106,80 @@ function ReservationPassContent() {
               {/* Reservation & Trip Summary Card */}
               {(activeMobileTab === "all" ||
                 activeMobileTab === "itinerary") && (
-                <div className="rounded-3xl bg-[#0c1017] border border-white/[0.08] p-6 shadow-xl flex flex-col gap-5">
-                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-                    <h2 className="font-serif text-lg sm:text-xl text-white font-bold">
+                <div className="rounded-3xl bg-surface-container-lowest border border-black/[0.08] p-6 shadow-sm flex flex-col gap-5">
+                  <div className="flex items-center justify-between border-b border-black/[0.06] pb-3">
+                    <h2 className="font-serif text-lg sm:text-xl text-primary font-bold">
                       Reservation &amp; Trip Summary
                     </h2>
-                    <span className="material-symbols-outlined text-[#d4af37]">
-                      flight_land
+                    <span className="material-symbols-outlined text-secondary">
+                      calendar_month
                     </span>
                   </div>
 
                   <div className="flex flex-col gap-4 text-xs">
                     {/* Dates / Timeline */}
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                      <div className="p-2 rounded-lg bg-[#d4af37]/15 text-[#d4af37] shrink-0">
+                    <div className="flex items-start gap-3 p-3.5 rounded-xl bg-surface-container-low border border-surface-container">
+                      <div className="p-2 rounded-lg bg-secondary-fixed/50 text-secondary shrink-0">
                         <span className="material-symbols-outlined text-base">
                           calendar_today
                         </span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[10px] text-stone-400 uppercase tracking-wider font-semibold">
+                        <span className="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">
                           Handover Schedule
                         </span>
-                        <span className="text-sm font-semibold text-white">
+                        <span className="text-sm font-semibold text-primary">
                           {booking.itinerary.pickupDate}
                         </span>
-                        <span className="text-[11px] text-[#fedeb2] mt-0.5">
+                        <span className="text-[11px] text-secondary mt-0.5 font-medium">
                           Return: {booking.itinerary.returnDate} (
                           {booking.itinerary.duration})
                         </span>
                       </div>
                     </div>
 
-                    {/* Flight Details */}
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                      <div className="p-2 rounded-lg bg-emerald-500/15 text-emerald-400 shrink-0">
-                        <span className="material-symbols-outlined text-base">
-                          flight
-                        </span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-stone-400 uppercase tracking-wider font-semibold">
-                          Flight Arrival Connection
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-white">
-                            {booking.itinerary.flightNumber}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full bg-white/[0.08] text-[10px] text-stone-300 font-mono">
-                            {booking.itinerary.flightRoute}
+                    {/* Flight Details (if applicable) */}
+                    {booking.itinerary.flightNumber && (
+                      <div className="flex items-start gap-3 p-3.5 rounded-xl bg-surface-container-low border border-surface-container">
+                        <div className="p-2 rounded-lg bg-emerald-100 text-emerald-800 shrink-0">
+                          <span className="material-symbols-outlined text-base">
+                            flight
                           </span>
                         </div>
-                        <span className="text-[11px] text-emerald-400 mt-0.5">
-                          {booking.itinerary.flightStatus}
-                        </span>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">
+                            Flight Arrival Connection
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-primary">
+                              {booking.itinerary.flightNumber}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-[10px] text-on-surface font-mono">
+                              {booking.itinerary.flightRoute}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-emerald-800 mt-0.5 font-medium">
+                            {booking.itinerary.flightStatus}
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Delivery Destination */}
-                    <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                      <div className="p-2 rounded-lg bg-amber-500/15 text-amber-400 shrink-0">
+                    <div className="flex items-start gap-3 p-3.5 rounded-xl bg-surface-container-low border border-surface-container">
+                      <div className="p-2 rounded-lg bg-amber-100 text-amber-800 shrink-0">
                         <span className="material-symbols-outlined text-base">
                           location_on
                         </span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[10px] text-stone-400 uppercase tracking-wider font-semibold">
+                        <span className="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">
                           Handover Destination
                         </span>
-                        <span className="text-sm font-semibold text-white">
+                        <span className="text-sm font-semibold text-primary">
                           {booking.itinerary.pickupLocation}
                         </span>
-                        <span className="text-[11px] text-stone-400 mt-0.5">
+                        <span className="text-[11px] text-on-surface-variant mt-0.5">
                           {booking.itinerary.pickupAddress}
                         </span>
                       </div>
@@ -1236,16 +1187,18 @@ function ReservationPassContent() {
                   </div>
 
                   {/* 24/7 Concierge Support Callout */}
-                  <div className="p-4 rounded-2xl bg-black/50 border border-white/[0.08] flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-stone-300 text-xs">
-                      <span className="material-symbols-outlined text-[#d4af37] text-base">
+                  <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-on-surface text-xs">
+                      <span className="material-symbols-outlined text-secondary text-base">
                         support_agent
                       </span>
                       <span>Need changes to your itinerary?</span>
                     </div>
                     <a
-                      href="tel:+23418885275"
-                      className="text-[#d4af37] hover:text-[#fedeb2] font-semibold text-xs whitespace-nowrap"
+                      href="https://wa.me/23418885275"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-secondary hover:text-primary font-semibold text-xs whitespace-nowrap"
                     >
                       +234 1 888 5275
                     </a>
@@ -1257,13 +1210,13 @@ function ReservationPassContent() {
         </div>
       </main>
 
-      {/* Mobile Floating Bottom Quick Bar (Above Mobile Dock) */}
-      <div className="no-print fixed bottom-14 left-0 right-0 z-40 lg:hidden p-3 bg-[#0a0d14]/95 backdrop-blur-xl border-t border-white/[0.08] shadow-[0_-8px_20px_rgba(0,0,0,0.5)] flex items-center justify-between gap-3 px-4">
+      {/* Mobile Floating Bottom Quick Bar */}
+      <div className="no-print fixed bottom-0 left-0 right-0 z-40 lg:hidden p-3 bg-surface-container-lowest/95 backdrop-blur-xl border-t border-black/[0.06] shadow-lg flex items-center justify-between gap-3 px-4">
         <div className="flex flex-col">
-          <span className="text-[10px] uppercase font-bold tracking-widest text-[#d4af37]">
+          <span className="text-[10px] uppercase font-bold tracking-widest text-secondary">
             Pass #{booking.bookingCode}
           </span>
-          <span className="text-xs text-stone-300 font-mono">
+          <span className="text-xs text-primary font-mono font-bold">
             PIN: {booking.verificationPin}
           </span>
         </div>
@@ -1271,16 +1224,16 @@ function ReservationPassContent() {
           <button
             onClick={() => setShowQrModal(true)}
             type="button"
-            className="px-3 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-white text-xs font-semibold flex items-center gap-1 active:scale-95"
+            className="px-3 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold flex items-center gap-1 active:scale-95"
           >
-            <span className="material-symbols-outlined text-sm text-[#d4af37]">
+            <span className="material-symbols-outlined text-sm text-secondary">
               qr_code_2
             </span>
             <span>QR Pass</span>
           </button>
           <Link
             href={`/live-tracking?code=${booking.bookingCode}`}
-            className="px-4 py-2 rounded-xl bg-[#d4af37] hover:bg-[#fedeb2] text-black font-bold text-xs uppercase tracking-wider flex items-center gap-1 shadow-md active:scale-95"
+            className="px-4 py-2 rounded-xl bg-primary hover:bg-secondary text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1 shadow-md active:scale-95"
           >
             <span className="material-symbols-outlined text-sm">near_me</span>
             <span>Track</span>
@@ -1294,46 +1247,45 @@ function ReservationPassContent() {
 
       {/* Fullscreen High-Contrast QR Scanner Modal */}
       {showQrModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-200">
-          <div className="relative w-full max-w-sm rounded-3xl bg-[#0c1017] border border-[#d4af37]/40 p-6 sm:p-8 flex flex-col items-center gap-5 shadow-2xl text-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-sm rounded-3xl bg-surface-container-lowest border border-black/[0.08] p-6 sm:p-8 flex flex-col items-center gap-5 shadow-2xl text-center">
             {/* Close Button */}
             <button
               onClick={() => setShowQrModal(false)}
-              className="absolute top-4 right-4 p-2 text-stone-400 hover:text-white rounded-full bg-white/[0.05]"
+              className="absolute top-4 right-4 p-2 text-on-surface-variant hover:text-primary rounded-full bg-surface-container-low"
             >
               <span className="material-symbols-outlined text-lg">close</span>
             </button>
 
-            <span className="text-[11px] uppercase tracking-widest text-[#d4af37] font-bold">
+            <span className="text-[11px] uppercase tracking-widest text-secondary font-bold">
               VIP Handover Terminal Scanner
             </span>
 
             {/* Oversized High-Contrast White Box */}
-            <div className="w-64 h-64 sm:w-72 sm:h-72 bg-white rounded-2xl p-4 shadow-2xl flex items-center justify-center relative">
+            <div className="w-64 h-64 sm:w-72 sm:h-72 bg-white rounded-2xl p-4 shadow-md border border-black/[0.06] flex items-center justify-center relative">
               <img
                 src={qrCodeApiUrl}
                 alt="Fullscreen Scannable Handover QR Code"
                 className="w-full h-full object-contain"
                 suppressHydrationWarning
               />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black text-[#d4af37] border-2 border-[#d4af37] flex items-center justify-center font-serif font-black text-sm shadow-xl">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-primary text-secondary-fixed border-2 border-secondary flex items-center justify-center font-serif font-black text-sm shadow-xl">
                 LP
               </div>
             </div>
 
             <div className="flex flex-col gap-1">
-              <div className="font-mono text-xl font-bold text-white tracking-widest">
+              <div className="font-mono text-xl font-bold text-primary tracking-widest">
                 #{booking.bookingCode}
               </div>
-              <div className="text-xs text-[#fedeb2] font-mono">
+              <div className="text-xs text-secondary font-mono font-bold">
                 Verification PIN: {booking.verificationPin}
               </div>
             </div>
 
-            <p className="text-xs text-stone-400 leading-relaxed max-w-xs">
+            <p className="text-xs text-on-surface-variant leading-relaxed max-w-xs">
               Present this high-contrast screen directly to your chauffeur or
-              security personnel. The code is optimized to scan through tinted
-              glass and in low light.
+              security personnel at handover.
             </p>
 
             <button
@@ -1350,127 +1302,10 @@ function ReservationPassContent() {
                   handleCopyPin();
                 }
               }}
-              className="w-full py-2.5 rounded-xl bg-[#d4af37] text-black font-bold text-xs uppercase tracking-wider hover:bg-[#fedeb2] transition-colors"
+              className="w-full py-2.5 rounded-xl bg-primary text-white font-semibold text-xs uppercase tracking-wider hover:bg-secondary transition-colors"
             >
               Share / Copy Pass Link
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Simulated Apple / Google Wallet Pass Preview Modal */}
-      {showWalletModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-200">
-          <div className="relative w-full max-w-sm rounded-3xl bg-[#0c1017] border border-white/[0.15] p-6 flex flex-col items-center gap-5 shadow-2xl">
-            <button
-              onClick={() => setShowWalletModal(false)}
-              className="absolute top-4 right-4 p-2 text-stone-400 hover:text-white rounded-full bg-white/[0.05]"
-            >
-              <span className="material-symbols-outlined text-lg">close</span>
-            </button>
-
-            {/* Apple Wallet Obsidian Pass Mockup */}
-            <div className="w-full rounded-2xl bg-gradient-to-br from-[#1c1d22] to-[#0c0d12] border border-[#d4af37]/30 p-5 shadow-2xl flex flex-col gap-4 text-white">
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-black text-[#d4af37] border border-[#d4af37] flex items-center justify-center font-serif text-xs font-bold">
-                    LP
-                  </div>
-                  <span className="font-serif text-xs font-bold text-white tracking-wider">
-                    LA PLANTA PRIME
-                  </span>
-                </div>
-                <span className="text-[10px] text-[#fedeb2] font-mono uppercase">
-                  VIP BOARDING PASS
-                </span>
-              </div>
-
-              <div className="flex justify-between items-start text-left">
-                <div>
-                  <div className="text-[9px] uppercase tracking-wider text-stone-400">
-                    VEHICLE ASSET
-                  </div>
-                  <div className="font-serif text-sm font-bold text-white truncate max-w-[170px]">
-                    {booking.vehicle.name}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[9px] uppercase tracking-wider text-stone-400">
-                    BOOKING CODE
-                  </div>
-                  <div className="font-mono text-sm font-bold text-[#d4af37]">
-                    #{booking.bookingCode}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-start text-left border-t border-white/[0.06] pt-2 text-xs">
-                <div>
-                  <div className="text-[9px] uppercase tracking-wider text-stone-400">
-                    CHAUFFEUR
-                  </div>
-                  <div className="text-white font-medium">
-                    {booking.driver.name}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[9px] uppercase tracking-wider text-stone-400">
-                    PIN CODE
-                  </div>
-                  <div className="font-mono text-white font-bold">
-                    {booking.verificationPin}
-                  </div>
-                </div>
-              </div>
-
-              {/* Barcode Strip */}
-              <div className="pt-2 flex flex-col items-center gap-1 border-t border-white/10">
-                <div className="w-32 h-14 bg-white rounded p-1 flex items-center justify-center">
-                  <img
-                    src={qrCodeApiUrl}
-                    alt="Wallet QR"
-                    className="w-full h-full object-contain"
-                    suppressHydrationWarning
-                  />
-                </div>
-                <span className="font-mono text-[9px] text-stone-400 tracking-widest">
-                  {booking.reference}
-                </span>
-              </div>
-            </div>
-
-            <div className="w-full flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  alert(
-                    "Digital Pass ready. In production, this generates a signed Apple .pkpass file for Apple Wallet.",
-                  );
-                  setShowWalletModal(false);
-                }}
-                className="w-full py-3 rounded-xl bg-black border border-white/20 text-white font-semibold text-xs flex items-center justify-center gap-2 hover:bg-white/10 transition-colors"
-              >
-                <span className="material-symbols-outlined text-base">
-                  phone_iphone
-                </span>
-                <span>Add to Apple Wallet</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  alert(
-                    "Digital Pass ready. In production, this links directly to Google Wallet via JWT token.",
-                  );
-                  setShowWalletModal(false);
-                }}
-                className="w-full py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-stone-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
-              >
-                <span className="material-symbols-outlined text-base">
-                  wallet
-                </span>
-                <span>Add to Google Wallet</span>
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -1482,17 +1317,22 @@ export default function ReservationPassPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#040505] text-white flex items-center justify-center">
+        <div className="min-h-screen bg-surface flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
-            <span className="w-8 h-8 border-2 border-[#d4af37] border-t-transparent rounded-full animate-spin"></span>
-            <span className="text-xs uppercase tracking-widest text-[#d4af37]">
+            <span className="w-8 h-8 border-2 border-secondary border-t-transparent rounded-full animate-spin"></span>
+            <span className="text-xs uppercase tracking-widest text-secondary font-semibold">
               Loading VIP Digital Pass...
             </span>
           </div>
         </div>
       }
     >
-      <ReservationPassContent />
+      <AuthGuard
+        fallbackTitle="Executive Itinerary Portal"
+        fallbackDescription="Please sign in or register with your executive credentials to view your digital handover voucher, assigned chauffeur, and itinerary."
+      >
+        <ReservationPassContent />
+      </AuthGuard>
     </Suspense>
   );
 }

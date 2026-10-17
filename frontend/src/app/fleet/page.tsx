@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { backendApi } from "@/lib/api";
@@ -11,13 +11,28 @@ import { useAuth } from "@/context/auth-context";
 import { VehicleCard } from "@/components/vehicle-card";
 import { cn } from "@/lib/utils";
 
-export default function FleetPage() {
+function FleetContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, openAuthModal } = useAuth();
 
-  // Handle Reserve with User Authentication Check
+  // Sync handover mode from query or sessionStorage
+  useEffect(() => {
+    const handover = searchParams?.get("handover");
+    if (handover && typeof window !== "undefined") {
+      sessionStorage.setItem("laPlanta_handover_mode", handover);
+    }
+  }, [searchParams]);
+
+  // Handle Reserve with User Authentication Check and Handover Sync
   const handleReserve = (vehicleId: string) => {
-    const destination = `/checkout?vehicleId=${vehicleId}`;
+    const handover =
+      searchParams?.get("handover") ||
+      (typeof window !== "undefined"
+        ? sessionStorage.getItem("laPlanta_handover_mode")
+        : null) ||
+      "office";
+    const destination = `/checkout?vehicleId=${vehicleId}&handover=${handover}`;
     if (user) {
       router.push(destination);
     } else {
@@ -52,11 +67,26 @@ export default function FleetPage() {
     setCurrentPage(1);
   }, [selectedCategory, selectedCapacity, maxPrice, sortBy]);
 
-  // Fetch Live Fleet Data
+  // Fetch Live Available Fleet Data (excluding reserved / booked units)
   useEffect(() => {
     const fetchFleet = async () => {
       setIsLoading(true);
       try {
+        // Query active/confirmed bookings to ensure reserved/chartered cars are hidden
+        const { data: activeBookings } = await supabase
+          .from("bookings")
+          .select("vehicle_id, status")
+          .in("status", ["confirmed", "in_transit", "pending"]);
+
+        const bookedVehicleIds = new Set(
+          (activeBookings || []).map((b) => b.vehicle_id).filter(Boolean),
+        );
+
+        const filterAvailable = (list: Vehicle[]) =>
+          list.filter(
+            (v) => v.status === "available" && !bookedVehicleIds.has(v.id),
+          );
+
         // 1. Try Express backend
         const res = await backendApi.getFleet();
         if (
@@ -64,7 +94,7 @@ export default function FleetPage() {
           Array.isArray(res.vehicles) &&
           res.vehicles.length > 0
         ) {
-          setVehicles(res.vehicles);
+          setVehicles(filterAvailable(res.vehicles));
           setIsLoading(false);
           return;
         }
@@ -73,10 +103,11 @@ export default function FleetPage() {
         const { data, error } = await supabase
           .from("vehicles")
           .select("*")
+          .eq("status", "available")
           .order("created_at", { ascending: false });
 
         if (!error && data && data.length > 0) {
-          setVehicles(data as Vehicle[]);
+          setVehicles(filterAvailable(data as Vehicle[]));
         }
       } catch (err) {
         console.error("[Fleet Error] Failed to fetch vehicles:", err);
@@ -662,5 +693,19 @@ export default function FleetPage() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function FleetPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-surface flex items-center justify-center">
+          <div className="w-10 h-10 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <FleetContent />
+    </Suspense>
   );
 }

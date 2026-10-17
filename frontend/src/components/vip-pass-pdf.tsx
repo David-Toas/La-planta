@@ -278,9 +278,9 @@ export interface VIPPassPDFProps {
       duration: string;
       pickupLocation: string;
       pickupAddress: string;
-      flightNumber: string;
-      flightRoute: string;
-      flightStatus: string;
+      flightNumber?: string;
+      flightRoute?: string;
+      flightStatus?: string;
     };
   };
   qrCodeUrl: string;
@@ -424,15 +424,17 @@ export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
                 <Text style={styles.fieldLabel}>Return Schedule</Text>
                 <Text style={styles.fieldValue}>{booking.itinerary.returnDate}</Text>
               </View>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Flight Arrival Connection</Text>
-                <Text style={styles.fieldValue}>
-                  {booking.itinerary.flightNumber} ({booking.itinerary.flightRoute})
-                </Text>
-                <Text style={{ ...styles.instructionText, color: "#10b981" }}>
-                  {booking.itinerary.flightStatus}
-                </Text>
-              </View>
+              {booking.itinerary.flightNumber ? (
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Flight Arrival Connection</Text>
+                  <Text style={styles.fieldValue}>
+                    {booking.itinerary.flightNumber} ({booking.itinerary.flightRoute || "Scheduled"})
+                  </Text>
+                  <Text style={{ ...styles.instructionText, color: "#10b981" }}>
+                    {booking.itinerary.flightStatus || "On Schedule"}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </View>
         </View>

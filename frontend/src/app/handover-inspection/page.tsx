@@ -3,10 +3,15 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
+import { AuthGuard } from "@/components/auth-guard";
 
 export default function HandoverInspectionPage() {
   return (
-    <div className="min-h-screen bg-surface flex flex-col">
+    <AuthGuard
+      fallbackTitle="Vehicle Handover Console"
+      fallbackDescription="This verification console is reserved for authorized clients and inspecting chauffeurs during active vehicle handovers."
+    >
+      <div className="min-h-screen bg-surface flex flex-col">
       <Navbar /><main className="w-full pt-16 lg:pt-20 bg-surface min-h-[calc(100vh-20rem)]"><div className="flex flex-col w-full">
 {/*  Status & Context Master Banner  */}
 <div className="w-full bg-surface-container-low py-space-sm px-margin">
@@ -341,5 +346,6 @@ export default function HandoverInspectionPage() {
 
 
     </div>
+    </AuthGuard>
   );
 }
