@@ -312,9 +312,15 @@ function CheckoutContent() {
           .eq("id", vehicle.id);
       }
 
-      console.log("[Checkout] Direct Supabase booking registered:", bookingCode);
+      console.log(
+        "[Checkout] Direct Supabase booking registered:",
+        bookingCode,
+      );
     } catch (dbErr: any) {
-      console.warn("[Checkout] Direct Supabase persistence notice:", dbErr.message);
+      console.warn(
+        "[Checkout] Direct Supabase persistence notice:",
+        dbErr.message,
+      );
     }
 
     // 2. Call backend verification endpoint (triggers transactional email & audit logs)
@@ -1078,112 +1084,13 @@ function CheckoutContent() {
                             </span>
                             <div>
                               <h2 className="font-headline-sm text-headline-sm text-primary font-serif">
-                                100% Upfront Online Payment (Paystack)
+                                100% Upfront Online Payment
                               </h2>
                               <p className="font-body-sm text-body-sm text-on-surface-variant">
-                                Secured via Paystack • Instant QR voucher and
-                                flight sync dispatch
+                                Secured via Paystack
                               </p>
                             </div>
                           </div>
-                        </div>
-
-                        {/* Payment Gateway Options */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                          <label
-                            onClick={() => setPaymentMethod("card")}
-                            className={`cursor-pointer relative p-4 rounded-xl shadow-sm flex flex-col justify-between gap-3 transition-transform hover:-translate-y-0.5 border-2 ${
-                              paymentMethod === "card"
-                                ? "bg-surface-container-high/60 border-secondary"
-                                : "bg-surface-container-low border-transparent"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-title-md text-title-md text-on-surface font-serif">
-                                Debit / Credit Card
-                              </span>
-                              <span
-                                className="material-symbols-outlined text-secondary text-lg"
-                                style={{ fontVariationSettings: "'FILL' 1" }}
-                              >
-                                {paymentMethod === "card"
-                                  ? "radio_button_checked"
-                                  : "radio_button_unchecked"}
-                              </span>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <span className="font-label-sm text-label-sm text-on-surface-variant">
-                                Paystack Inline
-                              </span>
-                              <div className="flex items-center gap-1.5 pt-1">
-                                <span className="px-1.5 py-0.5 rounded bg-surface-container-lowest text-on-surface font-label-sm text-[10px] font-bold">
-                                  VISA
-                                </span>
-                                <span className="px-1.5 py-0.5 rounded bg-surface-container-lowest text-on-surface font-label-sm text-[10px] font-bold">
-                                  MC
-                                </span>
-                                <span className="px-1.5 py-0.5 rounded bg-surface-container-lowest text-on-surface font-label-sm text-[10px] font-bold">
-                                  VERVE
-                                </span>
-                              </div>
-                            </div>
-                          </label>
-
-                          <label
-                            onClick={() => setPaymentMethod("transfer")}
-                            className={`cursor-pointer relative p-4 rounded-xl shadow-sm flex flex-col justify-between gap-3 transition-transform hover:-translate-y-0.5 border-2 ${
-                              paymentMethod === "transfer"
-                                ? "bg-surface-container-high/60 border-secondary"
-                                : "bg-surface-container-low border-transparent"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-title-md text-title-md text-on-surface font-serif">
-                                Bank Transfer
-                              </span>
-                              <span className="material-symbols-outlined text-secondary text-lg">
-                                {paymentMethod === "transfer"
-                                  ? "radio_button_checked"
-                                  : "radio_button_unchecked"}
-                              </span>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <span className="font-label-sm text-label-sm text-on-surface-variant">
-                                Instant Virtual Account
-                              </span>
-                              <span className="font-label-sm text-label-sm text-secondary font-medium">
-                                Auto-confirmed in 30s
-                              </span>
-                            </div>
-                          </label>
-
-                          <label
-                            onClick={() => setPaymentMethod("wallet")}
-                            className={`cursor-pointer relative p-4 rounded-xl shadow-sm flex flex-col justify-between gap-3 transition-transform hover:-translate-y-0.5 border-2 ${
-                              paymentMethod === "wallet"
-                                ? "bg-surface-container-high/60 border-secondary"
-                                : "bg-surface-container-low border-transparent"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-title-md text-title-md text-on-surface font-serif">
-                                Apple / Google Pay
-                              </span>
-                              <span className="material-symbols-outlined text-secondary text-lg">
-                                {paymentMethod === "wallet"
-                                  ? "radio_button_checked"
-                                  : "radio_button_unchecked"}
-                              </span>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <span className="font-label-sm text-label-sm text-on-surface-variant">
-                                One-Tap Checkout
-                              </span>
-                              <span className="font-label-sm text-label-sm text-on-surface-variant">
-                                USD / GBP / EUR Native
-                              </span>
-                            </div>
-                          </label>
                         </div>
 
                         {paymentError && (
@@ -1400,14 +1307,6 @@ function CheckoutContent() {
                               Complimentary
                             </span>
                           </div>
-                          <div className="flex items-center justify-between font-body-sm text-body-sm">
-                            <span className="text-on-surface-variant">
-                              Direct Delivery &amp; Meet-and-Greet
-                            </span>
-                            <span className="text-secondary font-medium uppercase font-label-sm text-label-sm">
-                              Complimentary
-                            </span>
-                          </div>
                         </div>
 
                         <div className="pt-4 flex flex-col gap-1 bg-surface-container-low p-4 rounded-xl">
@@ -1417,12 +1316,6 @@ function CheckoutContent() {
                             </span>
                             <span className="font-headline-md text-headline-md text-primary font-serif">
                               ₦{totalAmountNgn.toLocaleString()}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
-                            <span>100% Upfront Online Settlement:</span>
-                            <span className="font-semibold text-secondary">
-                              ${totalAmountUsd.toLocaleString()}.00 USD
                             </span>
                           </div>
                         </div>
@@ -1470,14 +1363,7 @@ function CheckoutContent() {
                         <span className="material-symbols-outlined text-sm text-secondary">
                           verified_user
                         </span>
-                        Airport VIP Pickup Available
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-sm text-secondary">
-                          encrypted
-                        </span>
-                        PCI-DSS Level 1
+                        Airport Pickup Available
                       </span>
                     </div>
                   </div>

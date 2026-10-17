@@ -1,7 +1,13 @@
 import { Router, Request, Response } from "express";
 import { supabase } from "../supabase";
-import { sendSmsToTracker } from "../services/smsGatewayService";
-import { sendCancellationNoticeEmail } from "../services/emailService";
+import {
+  sendCancellationNoticeEmail,
+  sendCancellationRequestReceivedEmail,
+  sendCancellationDeclinedEmail,
+  sendExtensionRequestReceivedEmail,
+  sendExtensionApprovedEmail,
+  sendExtensionDeclinedEmail,
+} from "../services/emailService";
 
 export const adminRouter = Router();
 
@@ -212,29 +218,6 @@ adminRouter.patch("/users/:id/tier", async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error("[Admin Error] Update VIP tier failed:", err);
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * POST /api/admin/broadcast
- * Broadcast emergency notice or instructions to active chauffeurs
- */
-adminRouter.post("/broadcast", async (req: Request, res: Response) => {
-  try {
-    const { message, corridor } = req.body;
-    if (!message) {
-      return res.status(400).json({ error: "Message content is required" });
-    }
-
-    console.log(`\x1b[33m[Admin Fleet Broadcast]\x1b[0m Corridor [${corridor || "ALL"}]: ${message}`);
-
-    return res.json({
-      success: true,
-      message: `Broadcast dispatched to 14 active chauffeurs across ${corridor || "all corridors"}`,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });
@@ -718,6 +701,34 @@ adminRouter.post("/requests", async (req: Request, res: Response) => {
     memoryBookingRequests.unshift(newReq);
     console.log(`\x1b[35m[New Concierge Request]\x1b[0m ${newReq.type.toUpperCase()} for ${newReq.bookingCode} by ${newReq.guestName}`);
 
+    // Dispatch real-time receipt notification to guest
+    if (newReq.type === "cancellation") {
+      sendCancellationRequestReceivedEmail({
+        clientName: newReq.guestName,
+        email: newReq.guestEmail,
+        bookingCode: newReq.bookingCode,
+        vehicleName: newReq.vehicleName,
+        refundAmountFormatted: newReq.refundAmountFormatted || "₦1,350,000",
+        refundBank: newReq.refundBank,
+        refundAccount: newReq.refundAccount,
+        reason: newReq.reason,
+      }).catch((e) =>
+        console.warn("[Email Warning] Cancellation received email failed:", e.message)
+      );
+    } else if (newReq.type === "extension") {
+      sendExtensionRequestReceivedEmail({
+        clientName: newReq.guestName,
+        email: newReq.guestEmail,
+        bookingCode: newReq.bookingCode,
+        vehicleName: newReq.vehicleName,
+        extraDays: newReq.extraDays || 1,
+        newReturnDate: newReq.newReturnDate,
+        reason: newReq.reason,
+      }).catch((e) =>
+        console.warn("[Email Warning] Extension received email failed:", e.message)
+      );
+    }
+
     return res.status(201).json({
       success: true,
       message: `${type === "cancellation" ? "Cancellation" : "Extension"} request logged for Concierge review.`,
@@ -770,10 +781,54 @@ adminRouter.patch("/requests/:id", async (req: Request, res: Response) => {
           refundAmountFormatted: currentReq.refundAmountFormatted || "₦1,350,000",
           refundBank: currentReq.refundBank,
           refundAccount: currentReq.refundAccount,
-          statusNote: adminNotes || `Your cancellation has been authorized by the operations director. Wire transfer of ${currentReq.refundAmountFormatted} has been executed to ${currentReq.refundBank || "your bank"}.`,
+          statusNote: adminNotes || `Your cancellation has been authorized by the operations director. Wire transfer of ${currentReq.refundAmountFormatted} has been executed to ${currentReq.refundBank || "your bank"}. Funds typically reflect within 1–2 business hours.`,
         });
       } catch (mailErr: any) {
         console.warn("[Email Warning] Cancellation email failed:", mailErr.message);
+      }
+    }
+    // 2. If Cancellation declined/rejected:
+    else if (status === "rejected" && currentReq.type === "cancellation") {
+      try {
+        await sendCancellationDeclinedEmail({
+          clientName: currentReq.guestName,
+          email: currentReq.guestEmail,
+          bookingCode: currentReq.bookingCode,
+          vehicleName: currentReq.vehicleName,
+          statusNote: adminNotes || "Operational and armored protocol commitments for this itinerary do not permit cancellation at this stage.",
+        });
+      } catch (mailErr: any) {
+        console.warn("[Email Warning] Cancellation declined email failed:", mailErr.message);
+      }
+    }
+    // 3. If Extension approved:
+    else if (status === "approved" && currentReq.type === "extension") {
+      try {
+        await sendExtensionApprovedEmail({
+          clientName: currentReq.guestName,
+          email: currentReq.guestEmail,
+          bookingCode: currentReq.bookingCode,
+          vehicleName: currentReq.vehicleName,
+          extraDays: currentReq.extraDays || 1,
+          newReturnDate: currentReq.newReturnDate,
+          statusNote: adminNotes || `Your itinerary extension of +${currentReq.extraDays || 1} day(s) has been approved. Chauffeur protocol retained.`,
+        });
+      } catch (mailErr: any) {
+        console.warn("[Email Warning] Extension approved email failed:", mailErr.message);
+      }
+    }
+    // 4. If Extension declined/rejected:
+    else if (status === "rejected" && currentReq.type === "extension") {
+      try {
+        await sendExtensionDeclinedEmail({
+          clientName: currentReq.guestName,
+          email: currentReq.guestEmail,
+          bookingCode: currentReq.bookingCode,
+          vehicleName: currentReq.vehicleName,
+          statusNote: adminNotes || "This vehicle has prior VIP commitments immediately following your charter.",
+        });
+      } catch (mailErr: any) {
+        console.warn("[Email Warning] Extension declined email failed:", mailErr.message);
       }
     }
 

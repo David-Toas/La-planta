@@ -4,6 +4,7 @@ dotenv.config();
 export const config = {
   port: parseInt(process.env.PORT || "4000", 10),
   telematicsPort: parseInt(process.env.PORT_TELEMATICS || "5000", 10),
+  clientUrl: (process.env.CLIENT_URL || process.env.FRONTEND_URL || "https://laplanta.ng").replace(/\/$/, ""),
   supabaseUrl: process.env.SUPABASE_URL || "https://placeholder-project.supabase.co",
   supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "placeholder-key",
   smsProvider: process.env.SMS_PROVIDER || "simulated",
@@ -23,7 +24,7 @@ export const config = {
   email: {
     provider: (process.env.EMAIL_PROVIDER || "resend") as "resend" | "smtp" | "simulated",
     resendApiKey: process.env.RESEND_API_KEY || "",
-    fromEmail: process.env.EMAIL_FROM || "concierge@laplantaprime.com",
+    fromEmail: process.env.EMAIL_FROM || "onboarding@resend.dev",
     fromName: process.env.EMAIL_FROM_NAME || "La Planta Prime VIP Concierge",
     smtp: {
       host: process.env.SMTP_HOST || "",

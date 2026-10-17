@@ -92,9 +92,9 @@ export default function AdminDashboardPage() {
   // Client URL for public site deep links
   const clientUrl =
     process.env.NEXT_PUBLIC_CLIENT_URL ||
-    (typeof window !== "undefined"
-      ? window.location.origin.replace(":3001", ":3000")
-      : "http://localhost:3000");
+    (typeof window !== "undefined" && window.location.port === "3001"
+      ? `${window.location.protocol}//${window.location.hostname}:3000`
+      : "https://laplanta.ng");
 
   // Live Data States
   const [overviewKpis, setOverviewKpis] = useState<any>(null);
@@ -150,14 +150,6 @@ export default function AdminDashboardPage() {
     id: string;
     text: string;
   } | null>(null);
-
-  // Broadcast Modal State
-  const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
-  const [broadcastMsg, setBroadcastMsg] = useState("");
-  const [broadcastCorridor, setBroadcastCorridor] = useState(
-    "Lagos & Abuja All Corridors",
-  );
-  const [broadcastSuccess, setBroadcastSuccess] = useState(false);
 
   // Initial Fetch & Live Polling
   useEffect(() => {
@@ -859,21 +851,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Fleet broadcast handler
-  const handleSendBroadcast = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!broadcastMsg.trim()) return;
-    const res = await adminApi.broadcastNotice(broadcastMsg, broadcastCorridor);
-    if (res?.success) {
-      setBroadcastSuccess(true);
-      setTimeout(() => {
-        setBroadcastSuccess(false);
-        setIsBroadcastModalOpen(false);
-        setBroadcastMsg("");
-      }, 2000);
-    }
-  };
-
   // Filtered fleet
   const displayedFleet = fleetList.filter((v) => {
     if (fleetFilter === "active") {
@@ -1177,9 +1154,7 @@ export default function AdminDashboardPage() {
                 External Links
               </span>
               <a
-                href={
-                  process.env.NEXT_PUBLIC_CLIENT_URL || "http://localhost:3000"
-                }
+                href={clientUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between px-3 py-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-low text-xs transition-colors"
@@ -1280,16 +1255,6 @@ export default function AdminDashboardPage() {
               <span>{isPinging ? "Pinging :4000..." : "Test SIM Ping"}</span>
             </button>
 
-            {/* Broadcast Button */}
-            <button
-              onClick={() => setIsBroadcastModalOpen(true)}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-primary hover:bg-secondary text-white text-xs font-semibold uppercase tracking-wider transition-all shadow-sm"
-            >
-              <span className="material-symbols-outlined text-sm">
-                campaign
-              </span>
-              <span>Broadcast</span>
-            </button>
           </div>
         </header>
 
@@ -2181,14 +2146,6 @@ export default function AdminDashboardPage() {
                       person_add
                     </span>
                     <span>+ Add Driver</span>
-                  </button>
-                  <button
-                    onClick={() => setIsBroadcastModalOpen(true)}
-                    className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold transition-colors flex items-center gap-1"
-                    title="Send an urgent announcement or corridor dispatch alert to all active drivers"
-                  >
-                    <span className="material-symbols-outlined text-sm">campaign</span>
-                    <span>Broadcast Notice</span>
                   </button>
                 </div>
               </div>
@@ -3187,87 +3144,6 @@ export default function AdminDashboardPage() {
           </div>
         </footer>
       </div>
-
-      {/* Broadcast Modal */}
-      {isBroadcastModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-          <div
-            className="fixed inset-0 bg-primary/70 backdrop-blur-sm"
-            onClick={() => setIsBroadcastModalOpen(false)}
-          />
-          <div className="relative w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-surface-container p-6 flex flex-col gap-5 z-10 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-surface-container">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-secondary">
-                  campaign
-                </span>
-                <h3 className="font-serif text-lg text-primary font-semibold">
-                  Fleet Chauffeur Broadcast
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsBroadcastModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface flex items-center justify-center"
-              >
-                <span className="material-symbols-outlined text-lg">close</span>
-              </button>
-            </div>
-
-            {broadcastSuccess ? (
-              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2 font-semibold">
-                <span className="material-symbols-outlined text-emerald-600">
-                  check_circle
-                </span>
-                <span>
-                  Broadcast message dispatched to 14 active chauffeurs!
-                </span>
-              </div>
-            ) : (
-              <form
-                onSubmit={handleSendBroadcast}
-                className="flex flex-col gap-4 text-xs"
-              >
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
-                    Target Operational Corridor
-                  </label>
-                  <select
-                    value={broadcastCorridor}
-                    onChange={(e) => setBroadcastCorridor(e.target.value)}
-                    className="w-full h-10 px-3 rounded-xl bg-surface-container-low border border-surface-container font-medium text-xs"
-                  >
-                    <option>Lagos &amp; Abuja All Corridors</option>
-                    <option>Lagos VI &amp; Lekki Corridor</option>
-                    <option>Lagos MMA Airport Corridor</option>
-                    <option>Abuja FCT Central Corridor</option>
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-on-surface-variant uppercase font-semibold text-[11px]">
-                    Broadcast Message / Advisory
-                  </label>
-                  <textarea
-                    rows={4}
-                    required
-                    value={broadcastMsg}
-                    onChange={(e) => setBroadcastMsg(e.target.value)}
-                    placeholder="e.g. VIP convoy staging at Wings Tower valet forecourt. Maintain defensive protocol..."
-                    className="w-full p-3 rounded-xl bg-surface-container-low border border-surface-container text-xs"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full h-11 bg-primary hover:bg-secondary text-white rounded-xl text-xs uppercase tracking-wider font-semibold transition-all shadow-md mt-2"
-                >
-                  Dispatch Advisory Notice
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Add / Edit Vehicle Modal */}
       {(isAddVehicleModalOpen || editingVehicle) && (

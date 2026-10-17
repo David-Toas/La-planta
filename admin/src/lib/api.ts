@@ -483,17 +483,6 @@ export const adminApi = {
   },
 
   /**
-   * Dispatch fleet broadcast alert
-   */
-  async broadcastNotice(message: string, corridor?: string) {
-    const res = await adminFetch("/api/admin/broadcast", {
-      method: "POST",
-      body: JSON.stringify({ message, corridor }),
-    });
-    return res || { success: false, error: "Failed to dispatch broadcast" };
-  },
-
-  /**
    * Dispatch encrypted ping to vehicle tracker SIM (Resolves target SIM dynamically from database)
    */
   async pingTracker(

@@ -22,7 +22,7 @@ authRouter.get("/google-config", (req: Request, res: Response) => {
     service: "La Planta Prime Google OAuth Integration",
     supabaseUrl: config.supabaseUrl,
     redirectUriCallback: `${config.supabaseUrl}/auth/v1/callback`,
-    clientFrontendCallback: "http://localhost:3000/auth/callback",
+    clientFrontendCallback: `${config.clientUrl}/auth/callback`,
     instructions: [
       "1. Open Google Cloud Console (console.cloud.google.com) -> APIs & Services -> Credentials",
       "2. Create an OAuth 2.0 Client ID for Web Application",

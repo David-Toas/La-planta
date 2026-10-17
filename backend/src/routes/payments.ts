@@ -289,8 +289,8 @@ paymentsRouter.post("/verify", async (req: Request, res: Response) => {
           amountFormatted: `₦${Number(paidAmount).toLocaleString()}`,
           chauffeurProtocol: "Dedicated Professional Driver Included",
           corridor: "Lagos & Abuja Executive Corridors",
-          passUrl: `http://localhost:3000/reservation-pass`,
-          trackingUrl: `http://localhost:3000/live-tracking`,
+          passUrl: `${config.clientUrl}/reservation-pass`,
+          trackingUrl: `${config.clientUrl}/live-tracking`,
         });
       } catch (mailErr: any) {
         console.warn("[Payments Warning] Email dispatch failed:", mailErr.message);
