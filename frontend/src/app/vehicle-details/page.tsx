@@ -844,12 +844,7 @@ export default function VehicleDetailsPage() {
         </div>
       }
     >
-      <AuthGuard
-        fallbackTitle="VIP Fleet Portfolio Access"
-        fallbackDescription="Vehicle technical specifications and concierge reservation suites are reserved for authenticated private clients."
-      >
-        <VehicleDetailsContent />
-      </AuthGuard>
+      <VehicleDetailsContent />
     </Suspense>
   );
 }

@@ -2,6 +2,7 @@ import { supabase } from "../supabase";
 import { ParsedLocation } from "../parsers/nmeaParser";
 
 export interface RecordPingInput {
+  imei?: string;
   deviceCode?: string;
   simPhoneNumber?: string;
   parsedLocation: ParsedLocation;
@@ -11,22 +12,50 @@ export interface RecordPingInput {
 
 export async function recordTelematicsPing(input: RecordPingInput) {
   try {
-    const { deviceCode, simPhoneNumber, parsedLocation, triggerType = "auto_periodic", geocodedAddress } = input;
+    const { imei, deviceCode, simPhoneNumber, parsedLocation, triggerType = "auto_periodic", geocodedAddress } = input;
 
     // 1. Locate tracker device in Supabase
-    let query = supabase.from("tracker_devices").select("id, assigned_vehicle_id, device_code");
-    if (deviceCode) {
-      query = query.eq("device_code", deviceCode);
-    } else if (simPhoneNumber) {
-      query = query.eq("sim_phone_number", simPhoneNumber);
-    } else {
-      throw new Error("Either deviceCode or simPhoneNumber must be provided.");
+    let tracker: { id: string; assigned_vehicle_id: string | null; device_code: string } | null = null;
+
+    if (imei) {
+      const { data } = await supabase
+        .from("tracker_devices")
+        .select("id, assigned_vehicle_id, device_code")
+        .eq("imei", imei)
+        .maybeSingle();
+      if (data) tracker = data;
     }
 
-    const { data: tracker, error: trackerErr } = await query.maybeSingle();
+    if (!tracker && deviceCode) {
+      const { data } = await supabase
+        .from("tracker_devices")
+        .select("id, assigned_vehicle_id, device_code")
+        .eq("device_code", deviceCode)
+        .maybeSingle();
+      if (data) tracker = data;
+    }
 
-    if (trackerErr || !tracker) {
-      console.warn(`[Telematics] Tracker device not found for input:`, { deviceCode, simPhoneNumber });
+    if (!tracker && simPhoneNumber) {
+      const { data } = await supabase
+        .from("tracker_devices")
+        .select("id, assigned_vehicle_id, device_code")
+        .eq("sim_phone_number", simPhoneNumber)
+        .maybeSingle();
+      if (data) tracker = data;
+    }
+
+    // Fallback: if single primary tracker exists
+    if (!tracker) {
+      const { data } = await supabase
+        .from("tracker_devices")
+        .select("id, assigned_vehicle_id, device_code")
+        .limit(1)
+        .maybeSingle();
+      if (data) tracker = data;
+    }
+
+    if (!tracker) {
+      console.warn(`[Telematics] Tracker device not found for input:`, { imei, deviceCode, simPhoneNumber });
       return { success: false, error: "Tracker device not found in database" };
     }
 

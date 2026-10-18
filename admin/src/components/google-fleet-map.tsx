@@ -247,17 +247,20 @@ export function GoogleFleetMap({ vehicles, onPingTracker }: GoogleFleetMapProps)
 
     filteredVehicles.forEach((vehicle, idx) => {
       const pos = getVehicleCoordinates(vehicle, idx);
-      const isTrip = vehicle.status === "rented" || (vehicle.status as any) === "on_trip";
+      const isTrip =
+        vehicle.status === "in_transit" ||
+        vehicle.status === "rented" ||
+        (vehicle.status as any) === "on_trip";
       const isMaint = vehicle.status === "maintenance";
 
-      // Color coding: Gold = active charter, Emerald = ready, Red/Amber = maintenance
-      const pinFill = isTrip ? "#d4af37" : isMaint ? "#f59e0b" : "#10b981";
+      // Color coding: Gold = active charter/in transit (1m), Emerald = in hub (10m), Red/Amber = maintenance (10m)
+      const pinFill = isTrip ? "#d4af37" : isMaint ? "#ef4444" : "#10b981";
       const pinLabel = (vehicle.model || vehicle.brand || "CAR").slice(0, 3).toUpperCase();
 
       const marker = new google.maps.Marker({
         position: pos,
         map,
-        title: `${vehicle.brand} ${vehicle.model} (${vehicle.license_plate || "Active"})`,
+        title: `${vehicle.brand} ${vehicle.model} (${vehicle.license_plate || "Active"}) • ${isTrip ? "In Transit (1-min ping)" : "In Hub (10-min ping)"}`,
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
           scale: isTrip ? 10 : 8,
@@ -283,24 +286,30 @@ export function GoogleFleetMap({ vehicles, onPingTracker }: GoogleFleetMapProps)
 
         const infoWindow = new google.maps.InfoWindow({
           content: `
-            <div style="background:#0c1017; color:#fff; padding:12px; border-radius:12px; font-family:sans-serif; max-width:280px; border:1px solid #725b38;">
+            <div style="background:#0c1017; color:#fff; padding:12px; border-radius:12px; font-family:system-ui,-apple-system,sans-serif; max-width:280px; border:1px solid #725b38; box-shadow:0 10px 25px rgba(0,0,0,0.8);">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                 <span style="font-size:10px; color:#d4af37; text-transform:uppercase; font-weight:bold; letter-spacing:1px;">
                   ${vehicle.category || "VIP Executive"}
                 </span>
                 <span style="background:${pinFill}; color:#fff; font-size:9px; padding:2px 6px; border-radius:10px; font-weight:bold; text-transform:uppercase;">
-                  ${vehicle.status || "Ready"}
+                  ${isTrip ? "In Transit / Delivery" : isMaint ? "Maintenance" : "Stationed in Hub"}
                 </span>
               </div>
               <div style="font-size:14px; font-weight:bold; color:#fff; margin-bottom:4px;">
                 ${vehicle.brand} ${vehicle.model}
               </div>
               <div style="font-size:11px; color:#9ca3af; margin-bottom:8px;">
-                Plate: <strong style="color:#e5e7eb;">${vehicle.license_plate || "LAG-892-XZ"}</strong> • Rate: ₦${Number(vehicle.daily_rate_ngn).toLocaleString()}/day
+                Plate: <strong style="color:#e5e7eb;">${vehicle.license_plate || "LAG-892-XZ"}</strong> • Rate: ₦${Number(vehicle.daily_rate_ngn || 0).toLocaleString()}/day
               </div>
-              <div style="display:flex; justify-content:space-between; font-size:10px; background:#1f2937; padding:6px 8px; border-radius:8px;">
-                <span>Telematics: <strong style="color:#10b981;">Online 4G</strong></span>
-                <span>Speed: <strong style="color:#d4af37;">${isTrip ? "48 km/h" : "0 km/h"}</strong></span>
+              <div style="display:flex; flex-direction:column; gap:4px; font-size:10px; background:#18202e; padding:6px 8px; border-radius:8px; border:1px solid #222c3d;">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:#9ca3af;">Telematics Cadence:</span>
+                  <strong style="color:${isTrip ? "#f59e0b" : "#10b981"};">${isTrip ? "1-Minute Active" : "10-Minute Standby"}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:#9ca3af;">Asset Status:</span>
+                  <strong style="color:#fff;">${isTrip ? "Cruising (48 km/h)" : "In Hub Station (0 km/h)"}</strong>
+                </div>
               </div>
             </div>
           `,

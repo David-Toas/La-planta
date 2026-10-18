@@ -11,36 +11,78 @@ import { useAuth } from "@/context/auth-context";
 import { AuthGuard } from "@/components/auth-guard";
 import { GoogleTrackingMap } from "@/components/google-tracking-map";
 
+interface ActiveDoorDeliveryBooking {
+  bookingCode: string;
+  reference: string;
+  status: "confirmed" | "in_transit" | "completed" | "pending";
+  isDoorDelivery: boolean;
+  deliveryAddress: string;
+  pickupLocation: string;
+  vehicle: {
+    id: string;
+    name: string;
+    category: string;
+    year: number;
+    color: string;
+    licensePlate: string;
+    image: string;
+    batteryFuelLevel: number;
+    lat: number;
+    lng: number;
+    trackerCode?: string;
+  };
+  driver: {
+    id?: string;
+    name: string;
+    badge: string;
+    rating: number;
+    trips: number;
+    phone: string;
+    avatar: string;
+    isAssigned: boolean;
+  } | null;
+}
+
 function LiveTrackingContent() {
   const searchParams = useSearchParams();
-  const vehicleIdParam =
-    searchParams?.get("vehicleId") ||
-    searchParams?.get("vehicle") ||
-    searchParams?.get("id") ||
-    "a1b2c3d4-e5f6-7890-abcd-111111111111";
-  const { session } = useAuth();
-  const [backendHealth, setBackendHealth] = useState<{
-    status: string;
-    uptime?: number;
-  } | null>(null);
+  const { user, session } = useAuth();
+
+  // Booking & Delivery State
+  const [loading, setLoading] = useState(true);
+  const [booking, setBooking] = useState<ActiveDoorDeliveryBooking | null>(null);
+  const [isOfficePickupOnly, setIsOfficePickupOnly] = useState(false);
+  const [officePickupCode, setOfficePickupCode] = useState<string>("");
+
   // Live telematics simulation state
   const [speed, setSpeed] = useState(42);
   const [etaMinutes, setEtaMinutes] = useState(17);
   const [etaSeconds, setEtaSeconds] = useState(48);
   const [realEtaMinutes, setRealEtaMinutes] = useState<number | null>(null);
   const [realDistanceKm, setRealDistanceKm] = useState<number | null>(null);
-  const [estimatedArrivalTime, setEstimatedArrivalTime] =
-    useState<string>("17:28 WAT");
+  const [estimatedArrivalTime, setEstimatedArrivalTime] = useState<string>("17:28 WAT");
   const [simPingCountdown, setSimPingCountdown] = useState(60);
   const [isPingingSim, setIsPingingSim] = useState(false);
-  const [lastPingTime, setLastPingTime] = useState("Just now (17:11:04 WAT)");
+  const [lastPingTime, setLastPingTime] = useState("Just now");
   const [gpsCoordinates, setGpsCoordinates] = useState({
     lat: "6.4475° N",
     lng: "3.4243° E",
   });
-  const [pingSuccessNotice, setPingSuccessNotice] = useState<string | null>(
-    null,
-  );
+  const [pingSuccessNotice, setPingSuccessNotice] = useState<string | null>(null);
+
+  // Modals state
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
+  const [isCallDriverModalOpen, setIsCallDriverModalOpen] = useState(false);
+
+  // Live hardware coordinates from Supabase & Telematics Backend
+  const [driverCoords, setDriverCoords] = useState<{
+    lat: number;
+    lng: number;
+  }>({
+    lat: 6.4352,
+    lng: 3.4219,
+  });
 
   const handleEtaUpdate = useCallback((mins: number, distance: number) => {
     setRealEtaMinutes(mins);
@@ -51,43 +93,155 @@ function LiveTrackingContent() {
     setEstimatedArrivalTime(timeStr);
   }, []);
 
-  // Map view & interactive states
-  const [mapMode, setMapMode] = useState<"vector" | "satellite" | "traffic">(
-    "vector",
-  );
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [isCentered, setIsCentered] = useState(true);
-  const [selectedWaypoint, setSelectedWaypoint] = useState<string | null>(
-    "falomo",
-  );
+  // 1. Fetch real active booking data from Supabase / LocalStorage
+  useEffect(() => {
+    let isMounted = true;
 
-  // Modals state
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
-  const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
-  const [isSimDiagnosticOpen, setIsSimDiagnosticOpen] = useState(false);
-  const [isCallDriverModalOpen, setIsCallDriverModalOpen] = useState(false);
+    async function loadActiveBooking() {
+      setLoading(true);
+      try {
+        const urlCode =
+          searchParams?.get("code") ||
+          searchParams?.get("pass") ||
+          searchParams?.get("id");
 
-  // Vehicle progress simulation along trajectory (0 = Wings Towers, 0.5 = Falomo, 1.0 = Wheatbaker)
-  const [progress, setProgress] = useState(0.48);
+        // 1. Query Supabase
+        let query = supabase
+          .from("bookings")
+          .select("*, vehicles(*), drivers(*)");
 
-  // Live hardware coordinates from Supabase & Telematics Backend
-  const [driverCoords, setDriverCoords] = useState<{
-    lat: number;
-    lng: number;
-  }>({
-    lat: 7.433688,
-    lng: 4.183283,
-  });
+        if (urlCode) {
+          query = query.or(`booking_reference.eq.${urlCode},id.eq.${urlCode}`);
+        } else if (user?.id) {
+          query = query.eq("client_id", user.id);
+        }
 
-  // Fetch live hardware coordinates from Telematics Backend & Supabase
+        const { data: dbBookings } = await query
+          .in("status", ["confirmed", "in_transit", "pending"])
+          .order("created_at", { ascending: false });
+
+        let matched = dbBookings && dbBookings.length > 0 ? dbBookings[0] : null;
+
+        // Fallback: check localStorage if user just finalized checkout
+        if (!matched && typeof window !== "undefined") {
+          try {
+            const stored = localStorage.getItem("laplanta_active_booking");
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              matched = parsed;
+            }
+          } catch {}
+        }
+
+        if (!isMounted) return;
+
+        if (!matched) {
+          setBooking(null);
+          setIsOfficePickupOnly(false);
+          setLoading(false);
+          return;
+        }
+
+        // Determine if this booking is Door Delivery
+        const isDelivery =
+          matched.handoverMode === "delivery" ||
+          matched.pickup_type === "delivery" ||
+          (matched.special_instructions &&
+            matched.special_instructions.toLowerCase().includes("direct delivery")) ||
+          (matched.pickup_location &&
+            !matched.pickup_location.toLowerCase().includes("flagship hub"));
+
+        const bCode =
+          matched.booking_reference || matched.bookingCode || "LP-RESERVED";
+
+        if (!isDelivery) {
+          setIsOfficePickupOnly(true);
+          setOfficePickupCode(bCode);
+          setBooking(null);
+          setLoading(false);
+          return;
+        }
+
+        // Resolve vehicle
+        const v = matched.vehicles || matched.vehicle || {};
+        const vehicleLat = v.current_latitude ? Number(v.current_latitude) : 6.4352;
+        const vehicleLng = v.current_longitude ? Number(v.current_longitude) : 3.4219;
+
+        // Resolve driver
+        const d = matched.drivers || matched.driver || null;
+
+        const resolvedBooking: ActiveDoorDeliveryBooking = {
+          bookingCode: bCode,
+          reference: matched.id || bCode,
+          status: matched.status || "confirmed",
+          isDoorDelivery: true,
+          deliveryAddress:
+            matched.deliveryAddress ||
+            matched.pickup_location ||
+            "Victoria Island Metro, Lagos",
+          pickupLocation: "La Planta Flagship Hub, The Wings Towers, Victoria Island",
+          vehicle: {
+            id: v.id || matched.vehicle_id || "v-1",
+            name: v.name || `${v.brand || "Range Rover"} ${v.model || "Autobiography"}`,
+            category: v.category || "VIP Executive Fleet",
+            year: v.year || 2024,
+            color: v.color || "Obsidian Black",
+            licensePlate: v.license_plate || "LAG-892-XZ",
+            image:
+              v.hero_image_url ||
+              "https://lh3.googleusercontent.com/aida-public/AB6AXuCJkYRdhTwQ3X1F8Z2ZGSdwfKFwBPuaHl6qrwbkJyoaRwK1WQPv6tPBoXiyUrjmYwpsEyNtVGIHlXjCoaIeErWu8OCjR96Ipmvt9_73IffGUA6X8Yxo-WNSICQ1BRdCjAIteK1aN-_igKwgSv70KxYSaAeigakxSTSQ6KLYK11UWwrtZLffHbnqYyNA876gtzoWZIC_Wkm9J6wngxIWdcVEISmIj1G9ZDPOR4hc-YcOsOOoxCjZ03Q9",
+            batteryFuelLevel: v.fuel_battery_level || 88,
+            lat: vehicleLat,
+            lng: vehicleLng,
+            trackerCode: "TRK-892-SIM",
+          },
+          driver: d
+            ? {
+                id: d.id,
+                name:
+                  d.name ||
+                  `${d.first_name || ""} ${d.last_name || ""}`.trim() ||
+                  "Assigned VIP Chauffeur",
+                badge: d.badge || "VIP Certified Lead",
+                rating: d.rating || 5.0,
+                trips: d.trips || 1240,
+                phone: d.phone || "+234 803 729 4810",
+                avatar:
+                  d.avatar_url ||
+                  "https://lh3.googleusercontent.com/aida-public/AB6AXuBKbjhRjrCmhkNlNkML6SVprykttgquwqWvriXkbf51jsmHySi6yGrZW7ZJSluSjBFkdDZ8NJ2TismICR836d98noMAJJdUUZZjpt0JxtEM9FxNzWymZH9c00BiE4llpKb4bXYsZuCuoikHPm85V8b8o3PtMiKGswUciXjbf9vpKSFsjNerRJ0f54oAOGAH-IAOK5c1Z6j0A2AlKQ8TETBHFXSM3YMTFoUIS7sSk1WZ4TEyd_pRdrRQ",
+                isAssigned: true,
+              }
+            : null,
+        };
+
+        setBooking(resolvedBooking);
+        setDriverCoords({ lat: vehicleLat, lng: vehicleLng });
+        setGpsCoordinates({
+          lat: `${vehicleLat.toFixed(4)}° N`,
+          lng: `${vehicleLng.toFixed(4)}° E`,
+        });
+      } catch (err) {
+        console.error("[LiveTracking] Error loading active booking:", err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    loadActiveBooking();
+    return () => {
+      isMounted = false;
+    };
+  }, [user, searchParams]);
+
+  // 2. Fetch live hardware coordinates from Telematics Backend & Supabase
   const fetchLiveTelemetry = useCallback(async () => {
+    if (!booking) return;
     try {
       // 1. Direct Supabase query to public.vehicles
       const { data: vehicleData } = await supabase
         .from("vehicles")
         .select("id, name, current_latitude, current_longitude, updated_at, assigned_tracker_id")
-        .eq("id", vehicleIdParam)
+        .eq("id", booking.vehicle.id)
         .maybeSingle();
 
       if (
@@ -104,8 +258,8 @@ function LiveTrackingContent() {
         });
       }
 
-      // 2. Fetch tracker status from backend API if assigned tracker exists or by default unit
-      let trackerCode = "TRK-892-SIM";
+      // 2. Fetch tracker status from backend API
+      let trackerCode = booking.vehicle.trackerCode || "TRK-892-SIM";
       if (vehicleData?.assigned_tracker_id) {
         const { data: t } = await supabase
           .from("tracker_devices")
@@ -142,12 +296,13 @@ function LiveTrackingContent() {
     } catch (err) {
       console.warn("[LiveTracking] Tracker fetch notice:", err);
     }
-  }, [vehicleIdParam]);
+  }, [booking]);
 
-  // Dispatch real SMS ping command ("WHERE#") to SIM tracker every 60 seconds
+  // Dispatch real SMS ping command ("WHERE#") to SIM tracker every 60 seconds (1-minute cadence for door delivery asset)
   const triggerAutoPing = useCallback(async () => {
+    if (!booking) return;
     try {
-      const response = await backendApi.pingTracker({ vehicleId: vehicleIdParam });
+      const response = await backendApi.pingTracker({ vehicleId: booking.vehicle.id });
       const now = new Date();
       const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} WAT`;
       if (response && response.success) {
@@ -157,15 +312,17 @@ function LiveTrackingContent() {
     } catch (e) {
       console.warn("Auto-ping dispatch error:", e);
     }
-  }, [fetchLiveTelemetry, vehicleIdParam]);
+  }, [fetchLiveTelemetry, booking]);
 
   const triggerAutoPingRef = useRef(triggerAutoPing);
   useEffect(() => {
     triggerAutoPingRef.current = triggerAutoPing;
   }, [triggerAutoPing]);
 
-  // Live countdown timer for ETA & auto-ping
+  // Live countdown timer for ETA & auto-ping (1-minute cadence for door delivery asset)
   useEffect(() => {
+    if (!booking) return;
+
     const timer = setInterval(() => {
       setEtaSeconds((prevSec) => {
         if (prevSec > 0) return prevSec - 1;
@@ -173,14 +330,14 @@ function LiveTrackingContent() {
         return 59;
       });
 
-      // Fluctuate speed realistically between 38 and 46 km/h
+      // Realistic speed fluctuation
       setSpeed((prev) => {
         const delta = (Math.random() - 0.48) * 3;
         const newSpeed = Math.round(prev + delta);
         return Math.min(Math.max(newSpeed, 36), 49);
       });
 
-      // Decrement SIM ping countdown & dispatch real GSM ping when cycle reaches zero
+      // Decrement SIM ping countdown & dispatch real GSM ping when cycle reaches zero (every 1 minute)
       setSimPingCountdown((prev) => {
         if (prev <= 1) {
           triggerAutoPingRef.current();
@@ -188,61 +345,20 @@ function LiveTrackingContent() {
         }
         return prev - 1;
       });
-
-      // Slowly advance car along the route
-      setProgress((prev) => {
-        if (prev >= 0.95) return 0.95;
-        return prev + 0.0008;
-      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [booking]);
 
-  // Compute vehicle SVG position on the quadratic bezier curve
-  // Curve: P0=(260, 520), P1=(340, 430), P2=(460, 340), P3=(680, 160)
-  // Simplified piecewise interpolation for smooth motion
-  const getVehicleCoordinates = (t: number) => {
-    // 0 to 0.5: (260, 520) -> (460, 340)
-    // 0.5 to 1: (460, 340) -> (680, 160)
-    let x, y;
-    if (t <= 0.5) {
-      const localT = t / 0.5;
-      // Quadratic Bezier from 260,520 through 340,430 to 460,340
-      x =
-        (1 - localT) * (1 - localT) * 260 +
-        2 * (1 - localT) * localT * 340 +
-        localT * localT * 460;
-      y =
-        (1 - localT) * (1 - localT) * 520 +
-        2 * (1 - localT) * localT * 430 +
-        localT * localT * 340;
-    } else {
-      const localT = (t - 0.5) / 0.5;
-      // Linear/Gentle curve to 680, 160
-      x = 460 + localT * (680 - 460);
-      y = 340 - localT * (340 - 160);
-    }
-    return { x, y };
-  };
-
-  const vehiclePos = getVehicleCoordinates(progress);
-
-  // Check Telematics Backend health, start 4s auto-poller, and subscribe to Supabase Realtime
+  // Supabase Realtime WebSocket listener for immediate coordinate updates
   useEffect(() => {
-    backendApi.getHealth().then((health) => {
-      setBackendHealth(health);
-    });
+    if (!booking) return;
 
-    // 1. Initial fetch & 4-second periodic auto-sync
     fetchLiveTelemetry();
-    const poller = setInterval(() => {
-      fetchLiveTelemetry();
-    }, 4000);
+    const poller = setInterval(fetchLiveTelemetry, 4000);
 
-    // 2. Realtime WebSocket listener for immediate coordinate updates
     const channel = supabase
-      .channel("live_telematics_sync")
+      .channel(`live_telematics_${booking.bookingCode}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "telematics_pings" },
@@ -273,33 +389,10 @@ function LiveTrackingContent() {
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "tracker_devices" },
-        (payload) => {
-          const device = (payload.new as any) || (payload.old as any);
-          if (device && device.last_latitude && device.last_longitude) {
-            setDriverCoords({
-              lat: Number(device.last_latitude),
-              lng: Number(device.last_longitude),
-            });
-            setGpsCoordinates({
-              lat: `${Number(device.last_latitude).toFixed(4)}° N`,
-              lng: `${Number(device.last_longitude).toFixed(4)}° E`,
-            });
-            if (device.last_speed_kmh) setSpeed(Number(device.last_speed_kmh));
-            setLastPingTime(`Real-Time Sync at Just Now`);
-          }
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "vehicles" },
+        { event: "*", schema: "public", table: "vehicles", filter: `id=eq.${booking.vehicle.id}` },
         (payload) => {
           const vehicle = (payload.new as any) || (payload.old as any);
-          if (
-            vehicle &&
-            vehicle.current_latitude &&
-            vehicle.current_longitude
-          ) {
+          if (vehicle && vehicle.current_latitude && vehicle.current_longitude) {
             setDriverCoords({
               lat: Number(vehicle.current_latitude),
               lng: Number(vehicle.current_longitude),
@@ -318,19 +411,17 @@ function LiveTrackingContent() {
       clearInterval(poller);
       supabase.removeChannel(channel);
     };
-  }, [fetchLiveTelemetry]);
+  }, [booking, fetchLiveTelemetry]);
 
-  // Manual trigger to ping SIM card tracker via Standalone Backend API
+  // Manual trigger to ping SIM card tracker
   const handlePingSimTracker = async () => {
-    if (isPingingSim) return;
+    if (isPingingSim || !booking) return;
     setIsPingingSim(true);
-    setPingSuccessNotice(
-      "Dispatching encrypted GSM ping to Telematics Backend (Port 4000)...",
-    );
+    setPingSuccessNotice("Dispatching encrypted GSM ping to Telematics Gateway...");
 
     try {
       const response = await backendApi.pingTracker(
-        "TRK-892-SIM",
+        booking.vehicle.trackerCode || "TRK-892-SIM",
         session?.access_token,
       );
 
@@ -340,22 +431,15 @@ function LiveTrackingContent() {
       if (response && response.success) {
         setLastPingTime(`Manual ping ACK at ${timeStr}`);
         setSimPingCountdown(60);
-
-        // Fetch latest telemetry record
         fetchLiveTelemetry();
-
         setPingSuccessNotice(
-          `✓ Backend ACK: ${response.message} • Provider: ${response.dispatch?.provider || "GSM SMS Gateway"}`,
+          `✓ Telematics ACK: Dispatched "WHERE#" to asset • ${response.dispatch?.provider || "GSM SMS Gateway"}`,
         );
       } else {
-        setPingSuccessNotice(
-          `Notice: ${response?.error || "Backend reached but response pending"}`,
-        );
+        setPingSuccessNotice(`Notice: ${response?.error || "Ping dispatched"}`);
       }
     } catch (err: any) {
-      setPingSuccessNotice(
-        `Backend communication notice: ${err.message || "Failed to reach Port 4000"}`,
-      );
+      setPingSuccessNotice(`Gateway notice: ${err.message || "Ping in flight"}`);
     } finally {
       setIsPingingSim(false);
       setTimeout(() => setPingSuccessNotice(null), 6000);
@@ -364,15 +448,121 @@ function LiveTrackingContent() {
 
   // Copy shareable live link
   const handleCopyShareLink = () => {
-    if (typeof window !== "undefined") {
-      navigator.clipboard.writeText(
-        "https://laplantaprime.com/live-tracking?pass=LP-8842&sec=auth_98c2f",
-      );
+    if (typeof window !== "undefined" && booking) {
+      const shareUrl = `${window.location.origin}/live-tracking?code=${encodeURIComponent(booking.bookingCode)}`;
+      navigator.clipboard.writeText(shareUrl);
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 3000);
     }
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface flex flex-col font-sans">
+        <Navbar />
+        <main className="w-full pt-16 lg:pt-20 flex-1 flex flex-col items-center justify-center gap-4 py-24 px-4">
+          <div className="w-12 h-12 rounded-full border-2 border-secondary/30 border-t-secondary animate-spin" />
+          <p className="font-serif text-sm text-primary tracking-wide">
+            Connecting to Live Telematics Gateway...
+          </p>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // 1. Office Pickup State (User booked office pickup, not door delivery)
+  if (isOfficePickupOnly) {
+    return (
+      <div className="min-h-screen bg-surface flex flex-col font-sans text-on-surface">
+        <Navbar />
+        <main className="w-full pt-16 lg:pt-20 flex-1 flex items-center justify-center px-4 py-20">
+          <div className="max-w-md w-full bg-surface-container-lowest border border-black/[0.06] rounded-3xl p-8 sm:p-10 shadow-sm flex flex-col items-center text-center gap-6">
+            <div className="w-16 h-16 rounded-2xl bg-secondary-fixed/50 text-secondary flex items-center justify-center shadow-inner">
+              <span className="material-symbols-outlined text-3xl">storefront</span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-[11px] uppercase tracking-widest font-bold text-secondary">
+                Flagship Hub Handover
+              </span>
+              <h1 className="font-serif text-2xl sm:text-3xl font-bold text-primary tracking-tight">
+                Hub Office Pickup Reservation
+              </h1>
+              <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed">
+                Your reservation <strong>#{officePickupCode}</strong> is scheduled for <strong>Office Pickup</strong>.
+                Your luxury vehicle is prepared and stationed at the La Planta Flagship Hub (The Wings Towers, Victoria Island).
+                Live on-road radar tracking is exclusive to Direct Door Delivery bookings.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full pt-2">
+              <Link
+                href={`/reservation-pass?code=${encodeURIComponent(officePickupCode)}`}
+                className="w-full sm:flex-1 py-3 px-5 rounded-xl bg-primary hover:bg-secondary text-secondary-fixed hover:text-white font-semibold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 text-center"
+              >
+                View Reservation Pass
+              </Link>
+              <Link
+                href="/fleet"
+                className="w-full sm:flex-1 py-3 px-5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-primary font-semibold text-xs uppercase tracking-wider transition-all text-center"
+              >
+                Browse Fleet
+              </Link>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // 2. Empty State (No active booking at all)
+  if (!booking) {
+    return (
+      <div className="min-h-screen bg-surface flex flex-col font-sans text-on-surface">
+        <Navbar />
+        <main className="w-full pt-16 lg:pt-20 flex-1 flex items-center justify-center px-4 py-20">
+          <div className="max-w-md w-full bg-surface-container-lowest border border-black/[0.06] rounded-3xl p-8 sm:p-10 shadow-sm flex flex-col items-center text-center gap-6">
+            <div className="w-16 h-16 rounded-2xl bg-secondary-fixed/50 text-secondary flex items-center justify-center shadow-inner">
+              <span className="material-symbols-outlined text-3xl">radar</span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-[11px] uppercase tracking-widest font-bold text-secondary">
+                VIP Telematics Radar
+              </span>
+              <h1 className="font-serif text-2xl sm:text-3xl font-bold text-primary tracking-tight">
+                No Active Door Delivery Charter
+              </h1>
+              <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed">
+                You do not currently have an active door-delivery vehicle en route. Real-time GPS telematics and vehicle radar become active immediately upon dispatch of your door-delivery charter.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full pt-2">
+              <Link
+                href="/fleet"
+                className="w-full sm:flex-1 py-3 px-6 rounded-xl bg-primary hover:bg-secondary text-secondary-fixed hover:text-white font-semibold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 text-center"
+              >
+                Explore Fleet
+              </Link>
+              <Link
+                href="/reservation-pass"
+                className="w-full sm:flex-1 py-3 px-6 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-primary font-semibold text-xs uppercase tracking-wider transition-all text-center"
+              >
+                Reservation Pass
+              </Link>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // 3. Active Door Delivery Tracking Page (Dynamic live booking data)
   return (
     <div className="min-h-screen bg-surface flex flex-col font-sans">
       <Navbar />
@@ -386,12 +576,10 @@ function LiveTrackingContent() {
               <div className="flex items-center gap-4 flex-wrap">
                 <Link
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors text-xs font-semibold text-on-surface border border-border"
-                  href="/reservation-pass"
+                  href={`/reservation-pass?code=${encodeURIComponent(booking.bookingCode)}`}
                 >
-                  <span className="material-symbols-outlined text-base">
-                    arrow_back
-                  </span>
-                  <span>Pass #LP-8842</span>
+                  <span className="material-symbols-outlined text-base">arrow_back</span>
+                  <span>Pass #{booking.bookingCode}</span>
                 </Link>
 
                 <div className="h-4 w-px bg-border hidden sm:block"></div>
@@ -402,7 +590,7 @@ function LiveTrackingContent() {
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                   </span>
                   <span className="text-xs uppercase tracking-widest text-primary font-bold">
-                    EN ROUTE • LIVE GPS TELEMATICS ACTIVE
+                    DOOR DELIVERY EN ROUTE • LIVE GPS RADAR ACTIVE
                   </span>
                 </div>
               </div>
@@ -412,9 +600,7 @@ function LiveTrackingContent() {
                 {/* ETA */}
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary">
-                    <span className="material-symbols-outlined text-lg">
-                      schedule
-                    </span>
+                    <span className="material-symbols-outlined text-lg">schedule</span>
                   </div>
                   <div className="flex flex-col text-left">
                     <span className="text-on-surface-variant text-[10px] uppercase font-semibold tracking-wider">
@@ -432,16 +618,33 @@ function LiveTrackingContent() {
                     </span>
                   </div>
                 </div>
+
+                {/* Auto Ping Countdown Pill (1-Minute Cadence) */}
+                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container border border-border">
+                  <span className="material-symbols-outlined text-xs text-secondary animate-spin">
+                    sync
+                  </span>
+                  <span className="text-on-surface-variant text-[11px]">
+                    GSM Ping in <strong className="text-primary font-mono">{simPingCountdown}s</strong>
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsShareModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary border border-border transition-colors"
+                >
+                  <span className="material-symbols-outlined text-sm">share</span>
+                  <span className="hidden sm:inline">Share</span>
+                </button>
               </div>
             </div>
           </div>
 
-          {/* SIM Ping Status Alert Banner (if recently triggered) */}
+          {/* SIM Ping Status Alert Banner */}
           {pingSuccessNotice && (
             <div className="bg-emerald-900 text-emerald-100 text-xs px-4 py-2 flex items-center justify-center gap-2 transition-all">
-              <span className="material-symbols-outlined text-sm text-emerald-300">
-                verified
-              </span>
+              <span className="material-symbols-outlined text-sm text-emerald-300">verified</span>
               <span className="font-medium">{pingSuccessNotice}</span>
               <button
                 onClick={() => setPingSuccessNotice(null)}
@@ -462,105 +665,67 @@ function LiveTrackingContent() {
                   <div className="flex items-center justify-between pb-2 border-b border-border/60">
                     <div className="flex flex-col">
                       <span className="text-xs uppercase tracking-wider text-secondary font-bold">
-                        Trip Progress
+                        Delivery Trajectory
                       </span>
                       <h2 className="text-lg font-serif font-bold text-primary">
-                        {realDistanceKm && realDistanceKm > 50
-                          ? "Inter-State Corridor"
-                          : "Falomo Passage"}
+                        Direct Door Handover
                       </h2>
                     </div>
                     <span className="px-2.5 py-1 rounded-full bg-secondary-container text-secondary font-bold text-xs">
-                      {realDistanceKm && realDistanceKm > 50
-                        ? "LONG-RANGE"
-                        : "STAGE 2 / 3"}
+                      LIVE RADAR
                     </span>
                   </div>
 
                   {/* Trip Stepper */}
                   <div className="relative pl-6 flex flex-col gap-5">
-                    {/* Continuous vertical track */}
                     <div className="absolute left-2.5 top-3 bottom-3 w-0.5 bg-stone-200"></div>
 
-                    {/* Step 1: Complete */}
-                    <div
-                      onClick={() => setSelectedWaypoint("wings")}
-                      className="relative flex items-start gap-3 cursor-pointer group"
-                    >
+                    {/* Step 1: Staged & Dispatched */}
+                    <div className="relative flex items-start gap-3">
                       <span className="absolute -left-6 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-white shadow-sm ring-4 ring-white">
-                        <span className="material-symbols-outlined text-xs">
-                          check
-                        </span>
+                        <span className="material-symbols-outlined text-xs">check</span>
                       </span>
                       <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-primary">
-                            16:45 WAT
-                          </span>
-                          <span className="text-on-surface-variant text-xs group-hover:text-secondary transition-colors">
-                            • The Wings Towers, Victoria Island
-                          </span>
-                        </div>
+                        <span className="text-xs font-bold text-primary">
+                          La Planta Flagship Hub
+                        </span>
                         <span className="text-xs text-on-surface-variant">
-                          Departure confirmed. White-glove pre-inspection
-                          complete.
+                          Vehicle sanitized, inspected &amp; dispatched for direct delivery.
                         </span>
                       </div>
                     </div>
 
-                    {/* Step 2: In-transit Active */}
-                    <div
-                      onClick={() => setSelectedWaypoint("falomo")}
-                      className="relative flex items-start gap-3 cursor-pointer group"
-                    >
+                    {/* Step 2: En Route */}
+                    <div className="relative flex items-start gap-3">
                       <span className="absolute -left-6 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-secondary text-white ring-4 ring-amber-100 shadow-sm animate-pulse">
-                        <span className="material-symbols-outlined text-xs">
-                          navigation
-                        </span>
+                        <span className="material-symbols-outlined text-xs">navigation</span>
                       </span>
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-secondary">
-                            17:11 WAT
+                            Live Corridor
                           </span>
-                          <span className="text-xs font-bold text-primary group-hover:text-secondary transition-colors">
-                            {realDistanceKm && realDistanceKm > 50
-                              ? `En Route • ${realDistanceKm} km to Destination`
-                              : "Falomo Bridge Crossing"}
+                          <span className="text-xs font-bold text-primary">
+                            Cruising towards destination
                           </span>
                         </div>
                         <span className="text-xs text-on-surface font-medium">
-                          Speed:{" "}
-                          <span className="font-bold text-primary">
-                            {speed} km/h
-                          </span>{" "}
-                          • Cruising towards Destination
+                          Speed: <strong className="text-primary">{speed} km/h</strong> • 1-min telematic ping cadence
                         </span>
                       </div>
                     </div>
 
-                    {/* Step 3: Estimated Arrival */}
-                    <div
-                      onClick={() => setSelectedWaypoint("wheatbaker")}
-                      className="relative flex items-start gap-3 opacity-80 cursor-pointer group"
-                    >
+                    {/* Step 3: Destination */}
+                    <div className="relative flex items-start gap-3 opacity-90">
                       <span className="absolute -left-6 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-stone-200 text-stone-600 ring-4 ring-white">
-                        <span className="material-symbols-outlined text-xs">
-                          flag
-                        </span>
+                        <span className="material-symbols-outlined text-xs">flag</span>
                       </span>
                       <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-on-surface">
-                            {estimatedArrivalTime} (Est.)
-                          </span>
-                          <span className="text-on-surface-variant text-xs group-hover:text-secondary transition-colors">
-                            • The Wheatbaker Ikoyi
-                          </span>
-                        </div>
-                        <span className="text-xs text-on-surface-variant">
-                          4 Onitolo Rd, Ikoyi. Designated valet forecourt
-                          staging.
+                        <span className="text-xs font-bold text-on-surface">
+                          Destination Delivery
+                        </span>
+                        <span className="text-xs text-on-surface-variant font-medium">
+                          {booking.deliveryAddress}
                         </span>
                       </div>
                     </div>
@@ -578,12 +743,12 @@ function LiveTrackingContent() {
                       <p className="text-xs text-on-surface-variant">
                         Present your Digital QR Pass{" "}
                         <Link
-                          href="/reservation-pass"
+                          href={`/reservation-pass?code=${encodeURIComponent(booking.bookingCode)}`}
                           className="text-secondary font-bold hover:underline"
                         >
-                          #LP-8842
+                          #{booking.bookingCode}
                         </Link>{" "}
-                        to Driver Emmanuel for contactless luggage intake.
+                        at your destination for instant contactless intake.
                       </p>
                     </div>
                   </div>
@@ -593,41 +758,55 @@ function LiveTrackingContent() {
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-border flex flex-col gap-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs uppercase tracking-wider text-secondary font-bold">
-                      Assigned Executive Chauffeur
+                      Assigned Chauffeur
                     </span>
                     <span className="inline-flex items-center gap-1 text-xs text-on-surface font-medium bg-surface-container px-2.5 py-0.5 rounded-full border border-border">
                       <span className="material-symbols-outlined text-xs text-secondary">
                         verified
                       </span>
-                      Vetted VIP Chauffeur
+                      {booking.driver ? "Vetted VIP Driver" : "Allocation In Progress"}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    <div className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 shadow-sm border border-border">
-                      <img
-                        className="w-full h-full object-cover"
-                        alt="Emmanuel Okafor - Executive Chauffeur"
-                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKbjhRjrCmhkNlNkML6SVprykttgquwqWvriXkbf51jsmHySi6yGrZW7ZJSluSjBFkdDZ8NJ2TismICR836d98noMAJJdUUZZjpt0JxtEM9FxNzWymZH9c00BiE4llpKb4bXYsZuCuoikHPm85V8b8o3PtMiKGswUciXjbf9vpKSFsjNerRJ0f54oAOGAH-IAOK5c1Z6j0A2AlKQ8TETBHFXSM3YMTFoUIS7sSk1WZ4TEyd_pRdrRQ"
-                      />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <h3 className="text-base font-bold text-primary truncate">
-                        Emmanuel Okafor
-                      </h3>
-                      <span className="text-xs text-on-surface-variant">
-                        Senior Chauffeur &amp; Protocol Lead
-                      </span>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span className="text-xs text-amber-600 font-bold">
-                          5.0 ★
-                        </span>
+                  {booking.driver ? (
+                    <div className="flex items-center gap-4">
+                      <div className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 shadow-sm border border-border">
+                        <img
+                          className="w-full h-full object-cover"
+                          alt={booking.driver.name}
+                          src={booking.driver.avatar}
+                        />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <h3 className="text-base font-bold text-primary truncate">
+                          {booking.driver.name}
+                        </h3>
                         <span className="text-xs text-on-surface-variant">
-                          • 1,420+ VIP Completed Trips
+                          {booking.driver.badge}
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="text-xs text-amber-600 font-bold">
+                            {booking.driver.rating.toFixed(1)} ★
+                          </span>
+                          <span className="text-xs text-on-surface-variant">
+                            • {booking.driver.trips}+ Completed Charters
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 rounded-xl bg-surface-container-low border border-border text-xs flex items-center gap-3">
+                      <span className="material-symbols-outlined text-secondary text-lg">
+                        badge
+                      </span>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-primary">Chauffeur Allocation In Progress</span>
+                        <span className="text-on-surface-variant text-[11px]">
+                          Vetted protocol driver is being finalized for your delivery destination.
                         </span>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Vehicle Snapshot */}
                   <div className="bg-surface-container-low rounded-xl p-3 flex flex-col gap-2 border border-border">
@@ -637,13 +816,13 @@ function LiveTrackingContent() {
                           directions_car
                         </span>
                         <Link
-                          href="/vehicle-details"
-                          className="hover:underline text-xs font-bold text-primary"
+                          href={`/vehicle-details?id=${booking.vehicle.id}`}
+                          className="hover:underline text-xs font-bold text-primary truncate max-w-[200px]"
                         >
-                          Range Rover Autobiography • LAG-892-XZ
+                          {booking.vehicle.name} • {booking.vehicle.licensePlate}
                         </Link>
                       </div>
-                      <span className="text-[11px] text-secondary font-mono font-bold bg-white px-2 py-0.5 rounded border border-border">
+                      <span className="text-[11px] text-secondary font-mono font-bold bg-white px-2 py-0.5 rounded border border-border shrink-0">
                         {etaMinutes} mins
                       </span>
                     </div>
@@ -653,8 +832,8 @@ function LiveTrackingContent() {
                         <span className="text-on-surface-variant text-[10px] block">
                           Class
                         </span>
-                        <span className="text-primary font-bold">
-                          Executive SUV
+                        <span className="text-primary font-bold truncate block">
+                          {booking.vehicle.category}
                         </span>
                       </div>
                       <div className="bg-white py-1.5 px-2 rounded border border-border">
@@ -662,7 +841,7 @@ function LiveTrackingContent() {
                           Battery/Fuel
                         </span>
                         <span className="text-emerald-700 font-bold">
-                          88% (420 km)
+                          {booking.vehicle.batteryFuelLevel}%
                         </span>
                       </div>
                       <div className="bg-white py-1.5 px-2 rounded border border-border">
@@ -680,16 +859,15 @@ function LiveTrackingContent() {
                   <div className="grid grid-cols-2 gap-2.5 pt-1">
                     <button
                       onClick={() => setIsCallDriverModalOpen(true)}
-                      className="inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-primary text-white font-medium text-xs hover:bg-secondary transition-all shadow-sm active:scale-95"
+                      disabled={!booking.driver}
+                      className="inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-primary text-white font-medium text-xs hover:bg-secondary transition-all shadow-sm active:scale-95 disabled:opacity-50"
                     >
-                      <span className="material-symbols-outlined text-base">
-                        call
-                      </span>
+                      <span className="material-symbols-outlined text-base">call</span>
                       <span>Call Driver</span>
                     </button>
                     <a
                       className="inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-medium text-xs border border-border transition-all active:scale-95"
-                      href="https://wa.me/23418885275?text=Hello%20La%20Planta%20Prime,%20inquiry%20regarding%20en-route%20trip%20LP-8842"
+                      href={`https://wa.me/23418885275?text=Hello%20La%20Planta%20Prime,%20inquiry%20regarding%20en-route%20trip%20${encodeURIComponent(booking.bookingCode)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -700,23 +878,26 @@ function LiveTrackingContent() {
                     </a>
                   </div>
                 </div>
-
-                
               </div>
 
               {/* RIGHT GPS TELEMETRY MAP (lg:col-span-8) */}
               <div className="lg:col-span-8 flex flex-col gap-5">
-                {/* Real Google Tracking Map Engine with Turn-by-Turn Route & Traffic */}
+                {/* Real Google Tracking Map Engine with Turn-by-Turn Route, Minimizable Driver Card, and Vehicle Hover Info */}
                 <GoogleTrackingMap
-                  bookingCode="LP-8842"
-                  vehicleTitle="Range Rover Autobiography LWB"
-                  plateNumber="LAG-892-XZ"
-                  driverName="Emmanuel Okafor"
-                  driverPhone="+234 803 729 4810"
-                  originAddress="The Wings Towers, Ozumba Mbadiwe Ave, Victoria Island, Lagos"
-                  destinationAddress="The Wheatbaker Hotel, 4 Onitolo Rd, Ikoyi, Lagos"
+                  bookingCode={booking.bookingCode}
+                  vehicleTitle={booking.vehicle.name}
+                  vehicleImage={booking.vehicle.image}
+                  vehicleCategory={booking.vehicle.category}
+                  plateNumber={booking.vehicle.licensePlate}
+                  driverName={booking.driver?.name || "Chauffeur Allocation In Progress"}
+                  driverPhone={booking.driver?.phone || "+234 1 888 5275"}
+                  driverAvatar={booking.driver?.avatar}
+                  originAddress={booking.pickupLocation}
+                  destinationAddress={booking.deliveryAddress}
                   destinationCoords={{ lat: 6.4549, lng: 3.4326 }}
                   initialDriverCoords={driverCoords}
+                  onPingSim={handlePingSimTracker}
+                  isPingingSim={isPingingSim}
                   onEtaUpdate={handleEtaUpdate}
                 />
 
@@ -725,9 +906,7 @@ function LiveTrackingContent() {
                   {/* Card 1: Speed & Dynamics */}
                   <div className="bg-white rounded-2xl p-4 shadow-sm border border-border flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-secondary shrink-0 border border-border">
-                      <span className="material-symbols-outlined text-xl">
-                        speed
-                      </span>
+                      <span className="material-symbols-outlined text-xl">speed</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
@@ -737,7 +916,7 @@ function LiveTrackingContent() {
                         {speed} km/h
                       </span>
                       <span className="text-xs text-on-surface-variant">
-                        Smooth crossing across Falomo corridor
+                        Smooth delivery corridor navigation
                       </span>
                     </div>
                   </div>
@@ -745,115 +924,103 @@ function LiveTrackingContent() {
                   {/* Card 2: GSM SIM Tracker Status */}
                   <div className="bg-white rounded-2xl p-4 shadow-sm border border-border flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-amber-700 shrink-0 border border-border">
-                      <span className="material-symbols-outlined text-xl">
-                        sim_card
-                      </span>
+                      <span className="material-symbols-outlined text-xl">sim_card</span>
                     </div>
-                    <div className="flex flex-col">
+                    <div className="flex flex-col min-w-0">
                       <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
-                        SIM GPS Hardware
+                        SIM Cadence (Door Delivery)
                       </span>
-                      <span className="text-xl font-bold text-primary leading-tight font-serif">
-                        4G LTE Active
+                      <span className="text-xs font-bold text-primary truncate">
+                        1-Minute Active Ticker
                       </span>
-                      <span className="text-xs text-on-surface-variant">
-                        Ping ACK:{" "}
-                        {lastPingTime
-                          .replace("Auto-synced at ", "")
-                          .replace("Manual ping ACK at ", "")}
+                      <span className="text-[11px] text-on-surface-variant truncate">
+                        {lastPingTime}
                       </span>
                     </div>
                   </div>
 
-                  {/* Card 3: In-Cabin Comfort */}
+                  {/* Card 3: GPS Coordinates */}
                   <div className="bg-white rounded-2xl p-4 shadow-sm border border-border flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-secondary shrink-0 border border-border">
-                      <span className="material-symbols-outlined text-xl">
-                        room_service
-                      </span>
+                      <span className="material-symbols-outlined text-xl">explore</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
-                        In-Cabin Amenities
+                        Satellite Position
                       </span>
-                      <span className="text-xl font-bold text-primary leading-tight font-serif">
-                        Executive Suite
+                      <span className="text-xs font-mono font-bold text-primary">
+                        {gpsCoordinates.lat}, {gpsCoordinates.lng}
                       </span>
-                      <span className="text-xs text-on-surface-variant">
-                        Starlink Wi-Fi &amp; San Pellegrino on ice
+                      <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        High Precision Fix
                       </span>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Executive Handover & Hotel Liaison Context Section */}
-            <div className="mt-8 bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-border">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-                <div className="relative w-full md:w-5/12 h-64 rounded-2xl overflow-hidden shadow-md border border-border">
-                  <img
-                    className="w-full h-full object-cover"
-                    alt="La Planta Prime VIP Executive Handover"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzY-tMByM6PzbQikVLlkycW-YEmGwjqSpKIwLm_PZWaHVIWyC6w8Wtu93a_ebO5ghm4UBnrd5OGSDwhR0qVE-R28W10b-6v-qLp88LniEQWi-qhcxfsVtUxQK5juAgcJ_I0axI0fzrcZpN6IAWPIJ7OZtZIgFKugvqoL3bsR7ksO3bihMRdgm_0OFvHth6M2uc-8k6LlayYZR-TFgMxgk5x4QvYlJWqslgxWIRofTdn-_tzfnSNJ3F"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-transparent to-transparent"></div>
-                  <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white text-xs">
-                    <span className="font-semibold">
-                      MMA Executive Terminal • LOS Gate 4
-                    </span>
-                    <span className="px-2.5 py-1 rounded bg-black/60 backdrop-blur-sm text-amber-200 border border-amber-300/40 text-[10px] font-bold">
-                      Protocol Active
-                    </span>
-                  </div>
-                </div>
-
-                <div className="w-full md:w-7/12 flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 rounded-full bg-secondary-container text-secondary text-xs font-bold uppercase tracking-wider">
-                      Arrival Briefing
-                    </span>
-                    <span className="text-xs text-on-surface-variant font-medium">
-                      Lagos Diplomatic SOP
-                    </span>
-                  </div>
-
-                  <h3 className="text-xl sm:text-2xl font-serif font-bold text-primary">
-                    VIP Handover Protocol at The Wheatbaker
-                  </h3>
-
-                  <p className="text-sm text-on-surface-variant leading-relaxed">
-                    Upon vehicle arrival at 4 Onitolo Road, Chauffeur Emmanuel
-                    will present the authenticated digital reservation pass for
-                    swift contactless verification. Dedicated concierge staff
-                    will attend to baggage intake directly to your suite without
-                    delay.
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-6 pt-2">
-                    <div className="flex items-center gap-2 text-on-surface">
-                      <span className="material-symbols-outlined text-secondary text-base">
-                        luggage
+                {/* VIP Handover Protocol Briefing Card */}
+                <div className="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-border flex flex-col md:flex-row items-center gap-6">
+                  <div className="relative w-full md:w-5/12 h-44 rounded-xl overflow-hidden shrink-0 border border-border">
+                    <img
+                      className="w-full h-full object-cover"
+                      alt={booking.vehicle.name}
+                      src={booking.vehicle.image}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-transparent to-transparent"></div>
+                    <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white text-xs">
+                      <span className="font-semibold truncate">
+                        {booking.deliveryAddress.split(",")[0]}
                       </span>
-                      <span className="text-xs font-semibold">
-                        Priority Luggage Escort
+                      <span className="px-2.5 py-1 rounded bg-black/60 backdrop-blur-sm text-amber-200 border border-amber-300/40 text-[10px] font-bold">
+                        Door Delivery
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-on-surface">
-                      <span className="material-symbols-outlined text-secondary text-base">
-                        wifi
+                  </div>
+
+                  <div className="w-full md:w-7/12 flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 rounded-full bg-secondary-container text-secondary text-xs font-bold uppercase tracking-wider">
+                        Arrival Protocol
                       </span>
-                      <span className="text-xs font-semibold">
-                        Starlink Active Onboard
+                      <span className="text-xs text-on-surface-variant font-medium">
+                        White-Glove Delivery
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-on-surface">
-                      <span className="material-symbols-outlined text-secondary text-base">
-                        support_agent
-                      </span>
-                      <span className="text-xs font-semibold">
-                        24/7 Operations Desk
-                      </span>
+
+                    <h3 className="text-xl sm:text-2xl font-serif font-bold text-primary">
+                      Door Handover at {booking.deliveryAddress.split(",")[0]}
+                    </h3>
+
+                    <p className="text-sm text-on-surface-variant leading-relaxed">
+                      Upon vehicle arrival at your destination, {booking.driver?.name ? `Chauffeur ${booking.driver.name.split(" ")[0]}` : "your assigned concierge lead"} will present the authenticated digital reservation pass for swift contactless verification.
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-6 pt-2">
+                      <div className="flex items-center gap-2 text-on-surface">
+                        <span className="material-symbols-outlined text-secondary text-base">
+                          luggage
+                        </span>
+                        <span className="text-xs font-semibold">
+                          Luggage Intake Assistance
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-on-surface">
+                        <span className="material-symbols-outlined text-secondary text-base">
+                          wifi
+                        </span>
+                        <span className="text-xs font-semibold">
+                          Starlink Active Onboard
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-on-surface">
+                        <span className="material-symbols-outlined text-secondary text-base">
+                          support_agent
+                        </span>
+                        <span className="text-xs font-semibold">
+                          24/7 Operations Desk
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -885,9 +1052,7 @@ function LiveTrackingContent() {
             </div>
 
             <p className="text-xs text-on-surface-variant leading-relaxed">
-              Share this secure encrypted tracking link with family, personal
-              security details, or hotel concierge to follow your Range Rover in
-              real-time.
+              Share this secure tracking link with family or personal security to follow your {booking.vehicle.name} in real-time.
             </p>
 
             <div className="flex flex-col gap-1.5">
@@ -898,7 +1063,11 @@ function LiveTrackingContent() {
                 <input
                   type="text"
                   readOnly
-                  value="https://laplantaprime.com/live-tracking?pass=LP-8842&sec=auth_98c2f"
+                  value={
+                    typeof window !== "undefined"
+                      ? `${window.location.origin}/live-tracking?code=${encodeURIComponent(booking.bookingCode)}`
+                      : `https://laplanta.ng/live-tracking?code=${booking.bookingCode}`
+                  }
                   className="w-full text-xs bg-surface-container-low px-3 py-2.5 rounded-xl border border-border font-mono text-on-surface outline-none"
                 />
                 <button
@@ -920,261 +1089,51 @@ function LiveTrackingContent() {
 
             <div className="grid grid-cols-2 gap-3 pt-2">
               <a
-                href="https://wa.me/?text=Track%20my%20executive%20journey%20with%20La%20Planta%20Prime:%20https://laplantaprime.com/live-tracking?pass=LP-8842"
+                href={`https://wa.me/?text=Track%20my%20executive%20journey%20with%20La%20Planta%20Prime:%20${typeof window !== "undefined" ? encodeURIComponent(`${window.location.origin}/live-tracking?code=${booking.bookingCode}`) : ""}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold transition-all"
               >
-                <span className="material-symbols-outlined text-base">
-                  chat
-                </span>
+                <span className="material-symbols-outlined text-base">chat</span>
                 <span>Send WhatsApp</span>
               </a>
               <a
-                href="mailto:?subject=La%20Planta%20Prime%20Live%20Tracking&body=Track%20my%20executive%20journey:%20https://laplantaprime.com/live-tracking?pass=LP-8842"
+                href={`mailto:?subject=La%20Planta%20Prime%20Live%20Tracking&body=Track%20my%20executive%20journey:%20${typeof window !== "undefined" ? encodeURIComponent(`${window.location.origin}/live-tracking?code=${booking.bookingCode}`) : ""}`}
                 className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface border border-border text-xs font-semibold transition-all"
               >
-                <span className="material-symbols-outlined text-base">
-                  email
-                </span>
+                <span className="material-symbols-outlined text-base">email</span>
                 <span>Send Email</span>
               </a>
             </div>
-
-            <span className="text-[10px] text-stone-400 text-center pt-2 border-t border-border">
-              End-to-End Encrypted Telematics. Link automatically expires upon
-              completed handover.
-            </span>
           </div>
         </div>
       )}
 
-      {/* PROTOCOL MODAL */}
-      {isProtocolModalOpen && (
+      {/* CALL DRIVER MODAL */}
+      {isCallDriverModalOpen && booking.driver && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-border flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-2 border-b border-border">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-secondary text-xl">
-                  security
-                </span>
-                <h3 className="text-base font-bold text-primary">
-                  VIP Airport &amp; Hotel Protocols
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsProtocolModalOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-stone-100 flex items-center justify-center text-stone-500"
-              >
-                ✕
-              </button>
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-border flex flex-col gap-5 text-center">
+            <div className="w-16 h-16 rounded-full bg-surface-container-low mx-auto flex items-center justify-center text-primary">
+              <span className="material-symbols-outlined text-3xl">call</span>
             </div>
 
-            <div className="flex flex-col gap-4 text-xs">
-              <div className="bg-surface-container-low p-3.5 rounded-xl border border-border">
-                <h4 className="font-bold text-primary mb-1 flex items-center gap-1.5 text-xs">
-                  <span className="material-symbols-outlined text-secondary text-sm">
-                    flight_land
-                  </span>
-                  1. Executive Airport Tarmac &amp; Terminal Intake
-                </h4>
-                <p className="text-on-surface-variant leading-relaxed">
-                  For private air charters landing at LOS Gate 4 / Executive
-                  Terminal, your chauffeur holds ramp security clearance. Driver
-                  Emmanuel will meet you curbside or at the lounge exit with
-                  your digital name board.
-                </p>
-              </div>
-
-              <div className="bg-surface-container-low p-3.5 rounded-xl border border-border">
-                <h4 className="font-bold text-primary mb-1 flex items-center gap-1.5 text-xs">
-                  <span className="material-symbols-outlined text-secondary text-sm">
-                    luggage
-                  </span>
-                  2. Luggage &amp; Valuables White-Glove Handling
-                </h4>
-                <p className="text-on-surface-variant leading-relaxed">
-                  All luggage pieces are tagged and loaded into the sanitized
-                  Range Rover boot by the chauffeur wearing white protocol
-                  gloves. Maximum boot capacity: 4 full-sized executive
-                  suitcases.
-                </p>
-              </div>
-
-              <div className="bg-surface-container-low p-3.5 rounded-xl border border-border">
-                <h4 className="font-bold text-primary mb-1 flex items-center gap-1.5 text-xs">
-                  <span className="material-symbols-outlined text-secondary text-sm">
-                    hotel
-                  </span>
-                  3. Hotel Forecourt Staging at The Wheatbaker
-                </h4>
-                <p className="text-on-surface-variant leading-relaxed">
-                  Arrival at 4 Onitolo Rd Ikoyi is pre-coordinated with hotel
-                  security for priority portico entry. No street parking or
-                  valet queue delays.
-                </p>
-              </div>
-
-              <div className="bg-surface-container-low p-3.5 rounded-xl border border-border">
-                <h4 className="font-bold text-primary mb-1 flex items-center gap-1.5 text-xs">
-                  <span className="material-symbols-outlined text-secondary text-sm">
-                    support_agent
-                  </span>
-                  4. Diplomatic &amp; Fleet Operations Hotline
-                </h4>
-                <p className="text-on-surface-variant leading-relaxed">
-                  Fleet telemetry is continuously monitored by the central
-                  Operations Desk in Victoria Island. In the event of traffic
-                  diversions, alternative secure corridors are executed in real
-                  time.
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setIsProtocolModalOpen(false)}
-              className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-secondary transition-colors"
-            >
-              Understood &amp; Acknowledged
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* SIM HARDWARE TELEMATICS MODAL */}
-      {isSimDiagnosticOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-border flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-2 border-b border-border">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-700 text-xl">
-                  settings_input_antenna
-                </span>
-                <h3 className="text-base font-bold text-primary">
-                  SIM Tracker Telematics Hub
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsSimDiagnosticOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-stone-100 flex items-center justify-center text-stone-500"
-              >
-                ✕
-              </button>
-            </div>
-
-            <p className="text-xs text-on-surface-variant leading-relaxed">
-              La Planta Prime vehicles are equipped with dedicated GSM SIM
-              telematics units. When queried, the SIM replies with
-              high-precision NMEA GPS coordinates converted in real-time to
-              high-definition map coordinates.
-            </p>
-
-            <div className="bg-[#0f172a] text-emerald-400 p-4 rounded-xl font-mono text-[11px] leading-relaxed flex flex-col gap-1.5 shadow-inner">
-              <div className="flex items-center justify-between text-stone-400 border-b border-slate-700 pb-1">
-                <span>SIM MSISDN:</span>
-                <span className="text-white">+234 803 729 4810 (MTN IoT)</span>
-              </div>
-              <div className="flex items-center justify-between text-stone-400 border-b border-slate-700 pb-1">
-                <span>Dispatch Backend:</span>
-                <span
-                  className={
-                    backendHealth?.status === "ok"
-                      ? "text-emerald-300 font-semibold"
-                      : "text-amber-400 font-semibold"
-                  }
-                >
-                  {backendHealth?.status === "ok"
-                    ? "● Online (Port 4000)"
-                    : "○ Connecting :4000..."}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-stone-400 border-b border-slate-700 pb-1">
-                <span>Protocol:</span>
-                <span className="text-white">
-                  SMS Query &amp; Periodic GPRS (5 min)
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-stone-400 border-b border-slate-700 pb-1">
-                <span>Active Coordinates:</span>
-                <span className="text-amber-300">
-                  {gpsCoordinates.lat}, {gpsCoordinates.lng}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-stone-400 border-b border-slate-700 pb-1">
-                <span>Signal RSSI:</span>
-                <span className="text-emerald-300">
-                  -65 dBm (4G LTE Band 20)
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-stone-400">
-                <span>Raw Response Packet:</span>
-                <span className="text-stone-300">
-                  GPRMC:0626.85N,00325.47E,{speed}kmh,A
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 pt-2">
-              <button
-                onClick={() => {
-                  handlePingSimTracker();
-                  setIsSimDiagnosticOpen(false);
-                }}
-                disabled={isPingingSim}
-                className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-secondary text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5"
-              >
-                <span className="material-symbols-outlined text-sm">
-                  satellite_alt
-                </span>
-                <span>Send Manual SMS Ping</span>
-              </button>
-              <button
-                onClick={() => setIsSimDiagnosticOpen(false)}
-                className="px-4 py-2.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CALL DRIVER & DISPATCH MODAL */}
-      {isCallDriverModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-border flex flex-col gap-4 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-secondary-container text-secondary mx-auto flex items-center justify-center shadow-sm">
-              <span className="material-symbols-outlined text-3xl">
-                phone_in_talk
-              </span>
-            </div>
-
-            <div className="flex flex-col">
-              <h3 className="text-base font-bold text-primary">
-                Contact Chauffeur &amp; Dispatch
+            <div>
+              <h3 className="text-lg font-bold text-primary font-serif">
+                Connect with {booking.driver.name}
               </h3>
               <p className="text-xs text-on-surface-variant mt-1">
-                Direct phone link to Chauffeur Emmanuel Okafor and the 24/7
-                Fleet Command Center.
+                Direct encrypted voice line to your assigned chauffeur.
               </p>
             </div>
 
-            <div className="flex flex-col gap-2.5 pt-2">
+            <div className="flex flex-col gap-2">
               <a
-                href="tel:+23418885275"
-                className="flex items-center justify-between px-4 py-3 rounded-xl bg-primary hover:bg-secondary text-white text-xs font-semibold transition-all shadow-md"
+                href={`tel:${booking.driver.phone}`}
+                className="w-full py-3.5 px-4 rounded-xl bg-primary hover:bg-secondary text-white font-semibold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md"
               >
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-base">
-                    call
-                  </span>
-                  <span>Driver Emmanuel (Direct Dispatch)</span>
-                </div>
-                <span className="font-mono text-[11px] text-amber-200">
-                  +234 1 888 5275 (Ext. 02)
-                </span>
+                <span className="material-symbols-outlined text-base">call</span>
+                <span>Dial {booking.driver.phone}</span>
               </a>
-
               <a
                 href="tel:+23418885275"
                 className="flex items-center justify-between px-4 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold border border-border transition-all"

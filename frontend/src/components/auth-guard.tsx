@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 
 interface AuthGuardProps {
@@ -15,15 +16,25 @@ export function AuthGuard({
   fallbackTitle = "Executive Sign-In Required",
   fallbackDescription = "This VIP reservation portal is restricted to authenticated La Planta Prime clients. Please sign in or register to access your itinerary and digital voucher.",
 }: AuthGuardProps) {
-  const { user, loading, openAuthModal } = useAuth();
+  const router = useRouter();
+  const { user, loading, openAuthModal, isAuthModalOpen } = useAuth();
+  const [modalPrompted, setModalPrompted] = useState(false);
 
   useEffect(() => {
     if (!loading && !user && typeof window !== "undefined") {
       const destination = window.location.pathname + window.location.search;
       sessionStorage.setItem("laPlanta_intended_destination", destination);
       openAuthModal();
+      setModalPrompted(true);
     }
   }, [loading, user, openAuthModal]);
+
+  // If user closes the auth modal without signing in, redirect to homepage immediately
+  useEffect(() => {
+    if (modalPrompted && !isAuthModalOpen && !user && !loading) {
+      router.push("/");
+    }
+  }, [modalPrompted, isAuthModalOpen, user, loading, router]);
 
   // Loading state
   if (loading) {

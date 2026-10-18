@@ -17,8 +17,8 @@ export function parseSmsOrNmeaPayload(rawText: string): ParsedLocation | null {
 
   const text = rawText.trim();
 
-  // Pattern 1: Google Maps URL in SMS (e.g., "maps.google.com/?q=6.447492,3.424310" or "maps.google.com/maps?q=6.4475,3.4243")
-  const googleMapsRegex = /maps\.google\.com\/(?:maps)?\?q=(-?\d+\.\d+),(-?\d+\.\d+)/i;
+  // Pattern 1: Google Maps URL in SMS (e.g., "maps.google.com/?q=..." or "maps.google.com/maps?f=q&q=7.352264,3.882394&z=16")
+  const googleMapsRegex = /maps\.google\.com\/(?:maps)?\?(?:.*?[&?])?q=(-?\d+\.\d+),(-?\d+\.\d+)/i;
   const urlMatch = text.match(googleMapsRegex);
   if (urlMatch) {
     const lat = parseFloat(urlMatch[1]);
@@ -105,6 +105,36 @@ export function parseSmsOrNmeaPayload(rawText: string): ParsedLocation | null {
         };
       }
     }
+  }
+
+  // Pattern 3B: Coban GPS-303 GPRS TCP Packet (e.g., "imei:864920049182741,...A,0721.1358,N,00352.9436,E,0.00,..." or "##,imei:...,A,0721.1358,N,00352.9436,E,...")
+  const cobanGprsRegex = /(?:imei:\d+.*?,)?A,(\d{4}\.\d+),([NS]),(\d{5}\.\d+),([EW]),(\d+(?:\.\d+)?)/i;
+  const cobanMatch = text.match(cobanGprsRegex);
+  if (cobanMatch) {
+    const rawLat = cobanMatch[1];
+    const latDir = cobanMatch[2].toUpperCase();
+    const rawLng = cobanMatch[3];
+    const lngDir = cobanMatch[4].toUpperCase();
+    const speed = parseFloat(cobanMatch[5] || "0");
+
+    const latDeg = parseFloat(rawLat.slice(0, 2));
+    const latMin = parseFloat(rawLat.slice(2));
+    let lat = latDeg + latMin / 60;
+    if (latDir === "S") lat = -lat;
+
+    const lngDeg = parseFloat(rawLng.slice(0, 3));
+    const lngMin = parseFloat(rawLng.slice(3));
+    let lng = lngDeg + lngMin / 60;
+    if (lngDir === "W") lng = -lng;
+
+    return {
+      latitude: Number(lat.toFixed(6)),
+      longitude: Number(lng.toFixed(6)),
+      speedKmh: Math.round(speed * 1.852), // Convert knots to km/h if in knots or keep speed
+      headingDeg: 0,
+      ignitionStatus: true,
+      rawPayload: text,
+    };
   }
 
   // Pattern 4: Raw comma/space separated coordinates (e.g. "7.1948475733240675, 3.450026012569789")

@@ -16,15 +16,23 @@ export function startTcpTelematicsListener(port: number) {
         const rawString = data.toString("utf8").trim();
         console.log(`[TCP Telematics Data from ${clientAddress}]: ${rawString}`);
 
+        // If this is a Coban / GPS303 handshake packet (e.g. "##,imei:869706066487523,A;")
+        if (rawString.startsWith("##,imei:") || rawString.includes("imei:")) {
+          socket.write("LOAD\r\n");
+          console.log(`[TCP Telematics] Sent handshake ACK "LOAD" to Coban tracker (${clientAddress})`);
+        }
+
         // Parse coordinates from raw GPRS packet
         const parsed = parseSmsOrNmeaPayload(rawString);
 
         if (parsed) {
           // Attempt to extract device IMEI or identifier (typically formatted e.g. "##,imei:864920049182741,..." or "TRK-892")
           const imeiMatch = rawString.match(/imei:?(\d+)/i);
+          const imei = imeiMatch ? imeiMatch[1] : undefined;
           const deviceCode = imeiMatch ? `TRK-${imeiMatch[1].slice(-4)}` : "TRK-892-SIM";
 
           await recordTelematicsPing({
+            imei,
             deviceCode,
             parsedLocation: parsed,
             triggerType: "auto_periodic",

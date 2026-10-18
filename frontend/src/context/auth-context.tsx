@@ -157,7 +157,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const closeAuthModal = useCallback(() => {
     console.log("[AuthContext] closeAuthModal triggered");
     setIsAuthModalOpen(false);
-  }, []);
+    if (typeof window !== "undefined") {
+      const protectedPaths = [
+        "/account",
+        "/checkout",
+        "/reservation-pass",
+        "/live-tracking",
+        "/handover-inspection",
+      ];
+      const current = window.location.pathname;
+      if (
+        protectedPaths.some((p) => current === p || current.startsWith(p + "/")) &&
+        !user
+      ) {
+        window.location.href = "/";
+      }
+    }
+  }, [user]);
 
   // Manual / Demo login
   const login = (userData: GuestUser) => {

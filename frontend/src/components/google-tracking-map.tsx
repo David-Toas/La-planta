@@ -6,9 +6,12 @@ import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
 interface GoogleTrackingMapProps {
   bookingCode?: string;
   vehicleTitle?: string;
+  vehicleImage?: string;
+  vehicleCategory?: string;
   plateNumber?: string;
   driverName?: string;
   driverPhone?: string;
+  driverAvatar?: string;
   originAddress?: string;
   destinationAddress?: string;
   destinationCoords?: { lat: number; lng: number };
@@ -78,9 +81,12 @@ const LUXURY_DARK_MAP_STYLE: google.maps.MapTypeStyle[] = [
 export function GoogleTrackingMap({
   bookingCode = "LP-8842",
   vehicleTitle = "Range Rover Autobiography LWB",
+  vehicleImage,
+  vehicleCategory = "VIP Fleet Unit",
   plateNumber = "LAG-892-XZ",
   driverName = "Emmanuel Okafor",
   driverPhone = "+234 803 729 4810",
+  driverAvatar,
   originAddress = "The Wings Towers, Ozumba Mbadiwe Ave, Victoria Island, Lagos",
   destinationAddress = "The Wheatbaker Hotel, 4 Onitolo Rd, Ikoyi, Lagos",
   destinationCoords = { lat: 6.4549, lng: 3.4326 },
@@ -102,6 +108,7 @@ export function GoogleTrackingMap({
   const [apiKeyError, setApiKeyError] = useState(false);
   const [mapType, setMapType] = useState<"dark" | "satellite">("dark");
   const [isTrafficActive, setIsTrafficActive] = useState(false);
+  const [isDriverMinimized, setIsDriverMinimized] = useState(false);
 
   // Live telemetry state
   const [currentSpeed, setCurrentSpeed] = useState(42);
@@ -324,6 +331,50 @@ export function GoogleTrackingMap({
               fontSize: "8px",
               fontWeight: "bold",
             },
+          });
+
+          // Interactive Vehicle Hover Card on VIP Markers
+          const vehicleCardHtml = `
+            <div style="background:#0c1017; color:#fff; padding:12px; border-radius:12px; font-family:system-ui,-apple-system,sans-serif; width:220px; border:1px solid #725b38; box-shadow:0 12px 30px rgba(0,0,0,0.85);">
+              ${vehicleImage ? `<div style="width:100%; height:90px; border-radius:8px; overflow:hidden; margin-bottom:8px; background:#18202e;"><img src="${vehicleImage}" alt="${vehicleTitle}" style="width:100%; height:100%; object-fit:cover;" /></div>` : ""}
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span style="font-size:9px; color:#fedeb2; text-transform:uppercase; font-weight:bold; letter-spacing:1px;">
+                  ${vehicleCategory || "VIP Fleet Unit"}
+                </span>
+                <span style="font-size:8px; background:#10b981; color:#fff; padding:2px 6px; border-radius:10px; font-weight:bold; text-transform:uppercase;">
+                  Door Delivery
+                </span>
+              </div>
+              <div style="font-size:13px; font-weight:bold; color:#fff; line-height:1.2; margin-bottom:3px;">
+                ${vehicleTitle}
+              </div>
+              <div style="font-size:11px; color:#9ca3af; margin-bottom:8px;">
+                Plate: <strong style="color:#fef3c7;">${plateNumber}</strong>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; background:#18202e; padding:5px 8px; border-radius:6px; border:1px solid #283344;">
+                <span style="color:#9ca3af;">Driver: <strong style="color:#fff;">${driverName.split(" ")[0]}</strong></span>
+                <span style="color:#fedeb2; font-weight:bold;">${currentSpeed} km/h</span>
+              </div>
+            </div>
+          `;
+
+          const vehicleInfoWindow = new google.maps.InfoWindow({
+            content: vehicleCardHtml,
+            disableAutoPan: true,
+          });
+
+          carMarkerRef.current.addListener("mouseover", () => {
+            vehicleInfoWindow.open(map, carMarkerRef.current);
+          });
+          carMarkerRef.current.addListener("mouseout", () => {
+            vehicleInfoWindow.close();
+          });
+
+          destMarkerRef.current.addListener("mouseover", () => {
+            vehicleInfoWindow.open(map, destMarkerRef.current);
+          });
+          destMarkerRef.current.addListener("mouseout", () => {
+            vehicleInfoWindow.close();
           });
         })
         .catch((err) => {
@@ -561,33 +612,64 @@ export function GoogleTrackingMap({
           </div>
         )}
 
-        {/* Floating Trip Status Badge */}
-        <div className="absolute bottom-4 left-4 right-4 sm:right-auto sm:w-96 bg-[#0c1017]/95 border border-stone-700 p-4 rounded-xl shadow-2xl backdrop-blur-md z-30">
+        {/* Floating Trip Status Badge (Minimizable) */}
+        <div
+          className={`absolute bottom-4 left-4 right-4 sm:right-auto ${
+            isDriverMinimized ? "sm:w-72" : "sm:w-96"
+          } bg-[#0c1017]/95 border border-stone-700 p-3.5 sm:p-4 rounded-xl shadow-2xl backdrop-blur-md z-30 transition-all duration-300`}
+        >
           <div className="flex items-center justify-between pb-2 border-b border-stone-800">
-            <span className="text-[10px] uppercase font-bold text-secondary tracking-widest">
-              Live Chauffeur Telemetry
+            <span className="text-[10px] uppercase font-bold text-secondary tracking-widest flex items-center gap-1.5">
+              <span>Live Chauffeur Telemetry</span>
             </span>
-            <span className="text-emerald-400 font-mono font-bold text-xs flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              {currentSpeed} km/h
-            </span>
-          </div>
-          <div className="flex items-center gap-3 pt-3">
-            <div className="w-11 h-11 rounded-full overflow-hidden bg-stone-800 border border-secondary/40 shrink-0">
-              <img
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKbjhRjrCmhkNlNkML6SVprykttgquwqWvriXkbf51jsmHySi6yGrZW7ZJSluSjBFkdDZ8NJ2TismICR836d98noMAJJdUUZZjpt0JxtEM9FxNzWymZH9c00BiE4llpKb4bXYsZuCuoikHPm85V8b8o3PtMiKGswUciXjbf9vpKSFsjNerRJ0f54oAOGAH-IAOK5c1Z6j0A2AlKQ8TETBHFXSM3YMTFoUIS7sSk1WZ4TEyd_pRdrRQ"
-                alt={driverName}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-bold text-white truncate">{driverName}</span>
-              <span className="text-xs text-stone-400 truncate">{vehicleTitle} • {plateNumber}</span>
-              <span className="text-[11px] text-secondary font-medium mt-0.5">
-                Approaching: {destinationAddress.split(",")[0]}
+            <div className="flex items-center gap-2">
+              <span className="text-emerald-400 font-mono font-bold text-xs flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                {currentSpeed} km/h
               </span>
+              <button
+                type="button"
+                onClick={() => setIsDriverMinimized((prev) => !prev)}
+                className="w-6 h-6 rounded-md bg-stone-800 hover:bg-stone-700 text-stone-300 flex items-center justify-center transition-colors"
+                title={
+                  isDriverMinimized
+                    ? "Expand Driver Details"
+                    : "Minimize Driver Details"
+                }
+                aria-label="Toggle driver details"
+              >
+                <span className="material-symbols-outlined text-sm">
+                  {isDriverMinimized ? "expand_less" : "expand_more"}
+                </span>
+              </button>
             </div>
           </div>
+
+          {!isDriverMinimized && (
+            <div className="flex items-center gap-3 pt-3 animate-in fade-in duration-200">
+              <div className="w-11 h-11 rounded-full overflow-hidden bg-stone-800 border border-secondary/40 shrink-0">
+                <img
+                  src={
+                    driverAvatar ||
+                    "https://lh3.googleusercontent.com/aida-public/AB6AXuBKbjhRjrCmhkNlNkML6SVprykttgquwqWvriXkbf51jsmHySi6yGrZW7ZJSluSjBFkdDZ8NJ2TismICR836d98noMAJJdUUZZjpt0JxtEM9FxNzWymZH9c00BiE4llpKb4bXYsZuCuoikHPm85V8b8o3PtMiKGswUciXjbf9vpKSFsjNerRJ0f54oAOGAH-IAOK5c1Z6j0A2AlKQ8TETBHFXSM3YMTFoUIS7sSk1WZ4TEyd_pRdrRQ"
+                  }
+                  alt={driverName}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-bold text-white truncate">
+                  {driverName}
+                </span>
+                <span className="text-xs text-stone-400 truncate">
+                  {vehicleTitle} • {plateNumber}
+                </span>
+                <span className="text-[11px] text-secondary font-medium mt-0.5 truncate">
+                  Approaching: {destinationAddress.split(",")[0]}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
