@@ -104,9 +104,6 @@ export function VehicleCard({
               {vehicle.category || "Executive"}
             </span>
           )}
-          <span className="px-2 py-0.5 rounded-full bg-primary/90 backdrop-blur-md text-white font-label-sm text-[10px] uppercase tracking-wider font-semibold">
-            Chauffeur Included
-          </span>
         </div>
 
         {/* Photo Counter Pill */}

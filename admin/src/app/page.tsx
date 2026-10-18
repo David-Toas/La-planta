@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAdminAuth } from "@/context/admin-auth-context";
 import { adminApi } from "@/lib/api";
 import { GoogleFleetMap } from "@/components/google-fleet-map";
@@ -82,8 +83,16 @@ interface UserProfile {
 }
 
 export default function AdminDashboardPage() {
-  const { adminUser, logout } = useAdminAuth();
+  const { adminUser, loading, logout } = useAdminAuth();
+  const router = useRouter();
   const { toast } = useToast();
+
+  // Strict Authentication Guard: Redirect unauthenticated visitors to login
+  useEffect(() => {
+    if (!loading && !adminUser) {
+      router.push("/login");
+    }
+  }, [loading, adminUser, router]);
 
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [backendHealth, setBackendHealth] = useState<string>("connecting");
@@ -885,6 +894,21 @@ export default function AdminDashboardPage() {
     return true;
   });
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface flex flex-col items-center justify-center gap-3">
+        <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        <span className="text-xs text-on-surface-variant font-medium tracking-wider uppercase">
+          Verifying Admin Credentials...
+        </span>
+      </div>
+    );
+  }
+
+  if (!adminUser) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-surface flex flex-col font-sans">
       {/* Mobile Sidebar Backdrop */}
@@ -1203,7 +1227,7 @@ export default function AdminDashboardPage() {
               </div>
               <div className="flex flex-col min-w-0">
                 <span className="text-xs text-primary font-semibold truncate leading-tight">
-                  {adminUser?.name || "Dr. Adekunle B."}
+                  {adminUser?.name || "Administrator"}
                 </span>
                 <span className="text-[10px] text-secondary truncate">
                   Fleet Administrator
