@@ -119,6 +119,75 @@ const LUXURY_DARK_MAP_STYLE: google.maps.MapTypeStyle[] = [
   },
 ];
 
+// Status color & metadata helper for Admin Fleet Map
+function getVehicleStatusInfo(status: string) {
+  const s = (status || "").toLowerCase();
+  if (s === "in_transit" || s === "on_trip" || s === "delivery") {
+    return { label: "In-Transit", color: "#d4af37", cadence: "1-Minute Active" };
+  }
+  if (s === "rented" || s === "in_possession") {
+    return { label: "In Client Possession", color: "#f59e0b", cadence: "1-Minute Active" };
+  }
+  if (s === "booked" || s === "confirmed") {
+    return { label: "Booked", color: "#3b82f6", cadence: "10-Minute Standby" };
+  }
+  if (s === "reserved") {
+    return { label: "Reserved", color: "#a855f7", cadence: "10-Minute Standby" };
+  }
+  if (s === "maintenance" || s === "service") {
+    return { label: "Under Maintenance", color: "#ef4444", cadence: "10-Minute Standby" };
+  }
+  return { label: "Available (In Hub)", color: "#10b981", cadence: "10-Minute Standby" };
+}
+
+// Address resolver for vehicle
+function getVehicleAddress(vehicle: Vehicle) {
+  if (vehicle.location && vehicle.location.trim().length > 3) {
+    return vehicle.location;
+  }
+  if (vehicle.current_address && vehicle.current_address.trim().length > 3) {
+    return vehicle.current_address;
+  }
+  if (vehicle.delivery_address && vehicle.delivery_address.trim().length > 3) {
+    return vehicle.delivery_address;
+  }
+  if (vehicle.latitude && vehicle.longitude) {
+    const lat = Number(vehicle.latitude);
+    const lng = Number(vehicle.longitude);
+    if (Math.abs(lat - 7.352) < 0.05 && Math.abs(lng - 3.882) < 0.05) {
+      return "Lasode Cres / Ring Road Corridor, Ibadan, Oyo";
+    }
+    if (Math.abs(lat - 6.435) < 0.05 && Math.abs(lng - 3.421) < 0.05) {
+      return "The Wings Towers, Victoria Island, Lagos";
+    }
+    return `${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E (En Route)`;
+  }
+  return "Flagship Hub, The Wings Towers, Victoria Island, Lagos";
+}
+
+// Generate luxury SVG car icon for Google Maps marker (replacing generic VIP/dot)
+function createCarMarkerIcon(color: string) {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" width="44" height="44">
+      <defs>
+        <filter id="carGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.8"/>
+        </filter>
+      </defs>
+      <circle cx="22" cy="22" r="18" fill="${color}" stroke="#ffffff" stroke-width="2.5" filter="url(#carGlow)"/>
+      <path fill="#ffffff" transform="translate(10, 10)" d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.04 3H5.81l1.04-3zM19 17H5v-4.66l.12-.34h13.77l.11.34V17z"/>
+      <circle cx="16.5" cy="24.5" r="1.6" fill="#ffffff"/>
+      <circle cx="27.5" cy="24.5" r="1.6" fill="#ffffff"/>
+    </svg>
+  `.trim();
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: typeof google !== "undefined" ? new google.maps.Size(42, 42) : undefined,
+    anchor: typeof google !== "undefined" ? new google.maps.Point(21, 21) : undefined,
+  };
+}
+
 export function GoogleFleetMap({ vehicles, onPingTracker }: GoogleFleetMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapInstance = useRef<google.maps.Map | null>(null);
@@ -247,68 +316,96 @@ export function GoogleFleetMap({ vehicles, onPingTracker }: GoogleFleetMapProps)
 
     filteredVehicles.forEach((vehicle, idx) => {
       const pos = getVehicleCoordinates(vehicle, idx);
-      const isTrip =
-        vehicle.status === "in_transit" ||
-        vehicle.status === "rented" ||
-        (vehicle.status as any) === "on_trip";
-      const isMaint = vehicle.status === "maintenance";
-
-      // Color coding: Gold = active charter/in transit (1m), Emerald = in hub (10m), Red/Amber = maintenance (10m)
-      const pinFill = isTrip ? "#d4af37" : isMaint ? "#ef4444" : "#10b981";
-      const pinLabel = (vehicle.model || vehicle.brand || "CAR").slice(0, 3).toUpperCase();
+      const statusInfo = getVehicleStatusInfo(vehicle.status);
+      const address = getVehicleAddress(vehicle);
+      const carName = `${vehicle.brand || ""} ${vehicle.model || vehicle.name || "Fleet Vehicle"}`.trim();
 
       const marker = new google.maps.Marker({
         position: pos,
         map,
-        title: `${vehicle.brand} ${vehicle.model} (${vehicle.license_plate || "Active"}) • ${isTrip ? "In Transit (1-min ping)" : "In Hub (10-min ping)"}`,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: isTrip ? 10 : 8,
-          fillColor: pinFill,
-          fillOpacity: 1,
-          strokeColor: "#ffffff",
-          strokeWeight: 2,
-        },
-        label: {
-          text: pinLabel,
-          color: "#ffffff",
-          fontSize: "9px",
-          fontWeight: "bold",
-        },
+        title: `${carName} (${vehicle.license_plate || "Active"})\n📍 Address: ${address}\n🏷️ Status: ${statusInfo.label}`,
+        icon: createCarMarkerIcon(statusInfo.color),
+      });
+
+      // Hover card showing car name, license plate, status, and address
+      const hoverCardHtml = `
+        <div style="background:#0c1017; color:#fff; padding:10px 14px; border-radius:12px; font-family:system-ui,-apple-system,sans-serif; min-width:240px; max-width:320px; border:1px solid #725b38; box-shadow:0 12px 30px rgba(0,0,0,0.85); line-height:1.4;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; gap:8px;">
+            <div style="font-size:13px; font-weight:bold; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${carName}
+            </div>
+            <span style="background:${statusInfo.color}; color:#fff; font-size:9px; padding:2px 7px; border-radius:10px; font-weight:bold; text-transform:uppercase; white-space:nowrap;">
+              ${statusInfo.label}
+            </span>
+          </div>
+          <div style="font-size:11px; color:#9ca3af; margin-bottom:8px;">
+            Plate: <strong style="color:#fef3c7;">${vehicle.license_plate || "LAG-892-XZ"}</strong>
+          </div>
+          <div style="display:flex; align-items:flex-start; gap:6px; font-size:11px; color:#e5e7eb; background:#18202e; padding:6px 10px; border-radius:8px; border:1px solid #283344;">
+            <span style="color:#d4af37; font-size:13px; flex-shrink:0;">📍</span>
+            <div style="line-height:1.3;">
+              <span style="color:#9ca3af; font-size:9px; text-transform:uppercase; font-weight:bold; display:block;">Current Location Address</span>
+              <strong>${address}</strong>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const hoverInfoWindow = new google.maps.InfoWindow({
+        content: hoverCardHtml,
+        disableAutoPan: true,
+      });
+
+      marker.addListener("mouseover", () => {
+        hoverInfoWindow.open(map, marker);
+      });
+
+      marker.addListener("mouseout", () => {
+        hoverInfoWindow.close();
       });
 
       marker.addListener("click", () => {
+        hoverInfoWindow.close();
         setSelectedVehicle(vehicle);
 
         if (activeInfoWindowRef.current) {
           activeInfoWindowRef.current.close();
         }
 
+        const isTrip =
+          vehicle.status === "in_transit" ||
+          vehicle.status === "rented" ||
+          (vehicle.status as any) === "on_trip";
+
         const infoWindow = new google.maps.InfoWindow({
           content: `
-            <div style="background:#0c1017; color:#fff; padding:12px; border-radius:12px; font-family:system-ui,-apple-system,sans-serif; max-width:280px; border:1px solid #725b38; box-shadow:0 10px 25px rgba(0,0,0,0.8);">
+            <div style="background:#0c1017; color:#fff; padding:12px; border-radius:12px; font-family:system-ui,-apple-system,sans-serif; max-width:300px; border:1px solid #725b38; box-shadow:0 10px 25px rgba(0,0,0,0.8);">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                 <span style="font-size:10px; color:#d4af37; text-transform:uppercase; font-weight:bold; letter-spacing:1px;">
                   ${vehicle.category || "VIP Executive"}
                 </span>
-                <span style="background:${pinFill}; color:#fff; font-size:9px; padding:2px 6px; border-radius:10px; font-weight:bold; text-transform:uppercase;">
-                  ${isTrip ? "In Transit / Delivery" : isMaint ? "Maintenance" : "Stationed in Hub"}
+                <span style="background:${statusInfo.color}; color:#fff; font-size:9px; padding:2px 6px; border-radius:10px; font-weight:bold; text-transform:uppercase;">
+                  ${statusInfo.label}
                 </span>
               </div>
               <div style="font-size:14px; font-weight:bold; color:#fff; margin-bottom:4px;">
-                ${vehicle.brand} ${vehicle.model}
+                ${carName}
               </div>
               <div style="font-size:11px; color:#9ca3af; margin-bottom:8px;">
                 Plate: <strong style="color:#e5e7eb;">${vehicle.license_plate || "LAG-892-XZ"}</strong> • Rate: ₦${Number(vehicle.daily_rate_ngn || 0).toLocaleString()}/day
               </div>
+              <div style="font-size:11px; color:#e5e7eb; background:#18202e; padding:6px 8px; border-radius:8px; border:1px solid #283344; margin-bottom:8px;">
+                <span style="color:#9ca3af; font-size:9px; text-transform:uppercase; font-weight:bold; display:block;">Location Address</span>
+                📍 <strong>${address}</strong>
+              </div>
               <div style="display:flex; flex-direction:column; gap:4px; font-size:10px; background:#18202e; padding:6px 8px; border-radius:8px; border:1px solid #222c3d;">
                 <div style="display:flex; justify-content:space-between;">
                   <span style="color:#9ca3af;">Telematics Cadence:</span>
-                  <strong style="color:${isTrip ? "#f59e0b" : "#10b981"};">${isTrip ? "1-Minute Active" : "10-Minute Standby"}</strong>
+                  <strong style="color:${statusInfo.color};">${statusInfo.cadence}</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between;">
                   <span style="color:#9ca3af;">Asset Status:</span>
-                  <strong style="color:#fff;">${isTrip ? "Cruising (48 km/h)" : "In Hub Station (0 km/h)"}</strong>
+                  <strong style="color:#fff;">${statusInfo.label}</strong>
                 </div>
               </div>
             </div>

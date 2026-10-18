@@ -78,6 +78,29 @@ const LUXURY_DARK_MAP_STYLE: google.maps.MapTypeStyle[] = [
   },
 ];
 
+// Generate luxury SVG car icon for Google Maps marker (replacing generic VIP circle)
+function createCarMarkerIcon(color: string = "#10b981") {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" width="44" height="44">
+      <defs>
+        <filter id="guestCarGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.8"/>
+        </filter>
+      </defs>
+      <circle cx="22" cy="22" r="18" fill="${color}" stroke="#ffffff" stroke-width="2.5" filter="url(#guestCarGlow)"/>
+      <path fill="#ffffff" transform="translate(10, 10)" d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.04 3H5.81l1.04-3zM19 17H5v-4.66l.12-.34h13.77l.11.34V17z"/>
+      <circle cx="16.5" cy="24.5" r="1.6" fill="#ffffff"/>
+      <circle cx="27.5" cy="24.5" r="1.6" fill="#ffffff"/>
+    </svg>
+  `.trim();
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: typeof google !== "undefined" ? new google.maps.Size(42, 42) : undefined,
+    anchor: typeof google !== "undefined" ? new google.maps.Point(21, 21) : undefined,
+  };
+}
+
 export function GoogleTrackingMap({
   bookingCode = "LP-8842",
   vehicleTitle = "Range Rover Autobiography LWB",
@@ -305,32 +328,19 @@ export function GoogleTrackingMap({
               strokeWeight: 2,
             },
             label: {
-              text: "VIP",
+              text: "DEST",
               color: "#0c1017",
-              fontSize: "9px",
+              fontSize: "8px",
               fontWeight: "bold",
             },
           });
 
-          // Custom Chauffeur Vehicle Marker
+          // Custom Chauffeur Vehicle Marker (Using Car Icon)
           carMarkerRef.current = new google.maps.Marker({
             position: initialDriverCoords,
             map,
             title: `${vehicleTitle} • Chauffeur ${driverName}`,
-            icon: {
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 10,
-              fillColor: "#10b981",
-              fillOpacity: 1,
-              strokeColor: "#ffffff",
-              strokeWeight: 2.5,
-            },
-            label: {
-              text: "VIP",
-              color: "#ffffff",
-              fontSize: "8px",
-              fontWeight: "bold",
-            },
+            icon: createCarMarkerIcon("#10b981"),
           });
 
           // Interactive Vehicle Hover Card on VIP Markers
