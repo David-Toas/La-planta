@@ -140,29 +140,79 @@ function getVehicleStatusInfo(status: string) {
   return { label: "Available (In Hub)", color: "#10b981", cadence: "10-Minute Standby" };
 }
 
-// Address resolver for vehicle
-function getVehicleAddress(vehicle: Vehicle) {
-  if (vehicle.location && vehicle.location.trim().length > 3) {
-    return vehicle.location;
+// Resolves a descriptive Nigerian street/landmark address based on actual coordinates
+function resolveLocalAddress(pos: { lat: number; lng: number }): string {
+  const { lat, lng } = pos;
+
+  // Real Hardware Tracker Position in Ibadan (e.g. 7.3522, 3.8824)
+  if (Math.abs(lat - 7.3522) < 0.05 && Math.abs(lng - 3.8824) < 0.05) {
+    return "Lasode Cres, Palm Real Estate / Ring Road Corridor, Ibadan, Oyo";
   }
-  if (vehicle.current_address && vehicle.current_address.trim().length > 3) {
-    return vehicle.current_address;
+  if (lat >= 7.30 && lat <= 7.45 && lng >= 3.80 && lng <= 4.00) {
+    return "Ring Road / Bodija Luxury Corridor, Ibadan, Oyo State";
   }
-  if (vehicle.delivery_address && vehicle.delivery_address.trim().length > 3) {
-    return vehicle.delivery_address;
+
+  // Lagos - Murtala Muhammed International Airport (6.5774, 3.3212)
+  if (Math.abs(lat - 6.5774) < 0.03 && Math.abs(lng - 3.3212) < 0.03) {
+    return "Murtala Muhammed International Airport (MM2 / VIP Terminal), Ikeja, Lagos";
   }
-  if (vehicle.latitude && vehicle.longitude) {
-    const lat = Number(vehicle.latitude);
-    const lng = Number(vehicle.longitude);
-    if (Math.abs(lat - 7.352) < 0.05 && Math.abs(lng - 3.882) < 0.05) {
-      return "Lasode Cres / Ring Road Corridor, Ibadan, Oyo";
-    }
-    if (Math.abs(lat - 6.435) < 0.05 && Math.abs(lng - 3.421) < 0.05) {
-      return "The Wings Towers, Victoria Island, Lagos";
-    }
-    return `${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E (En Route)`;
+
+  // Lagos - Ikoyi (6.4549, 3.4246)
+  if (Math.abs(lat - 6.4549) < 0.02 && Math.abs(lng - 3.4246) < 0.02) {
+    return "Bourdillon Rd / Kingsway District, Ikoyi, Lagos";
   }
-  return "Flagship Hub, The Wings Towers, Victoria Island, Lagos";
+
+  // Lagos - Lekki Phase 1 (6.4474, 3.4723)
+  if (Math.abs(lat - 6.4474) < 0.02 && Math.abs(lng - 3.4723) < 0.02) {
+    return "Admiralty Way / Lekki Phase 1 Waterfront, Lagos";
+  }
+
+  // Lagos - Oniru / Palms (6.4352, 3.4411)
+  if (Math.abs(lat - 6.4352) < 0.02 && Math.abs(lng - 3.4411) < 0.02) {
+    return "Palace Road, Oniru Estate / The Palms Corridor, Victoria Island East, Lagos";
+  }
+
+  // Lagos - Victoria Island Flagship Hub (6.4281, 3.4219)
+  if (Math.abs(lat - 6.4281) < 0.02 && Math.abs(lng - 3.4219) < 0.02) {
+    return "La Planta Flagship Hub, The Wings Towers, Ozumba Mbadiwe Ave, Victoria Island, Lagos";
+  }
+
+  // Abuja - Maitama
+  if (Math.abs(lat - 9.0765) < 0.03 && Math.abs(lng - 7.3986) < 0.03) {
+    return "Maitama District / Shehu Shagari Way, Abuja FCT";
+  }
+  // Abuja - Asokoro
+  if (Math.abs(lat - 9.0882) < 0.03 && Math.abs(lng - 7.4933) < 0.03) {
+    return "Asokoro Luxury Enclave / Yakubu Gowon Cres, Abuja FCT";
+  }
+  // Abuja - Central Business District
+  if (Math.abs(lat - 9.0522) < 0.03 && Math.abs(lng - 7.4619) < 0.03) {
+    return "Central Business District / Constitution Ave, Abuja FCT";
+  }
+
+  // Port Harcourt
+  if (lat >= 4.75 && lat <= 4.90 && lng >= 6.95 && lng <= 7.15) {
+    return "GRA Phase 2 / Peter Odili Waterway Corridor, Port Harcourt, Rivers State";
+  }
+
+  // Kano
+  if (lat >= 11.95 && lat <= 12.10 && lng >= 8.50 && lng <= 8.65) {
+    return "Bompai Road / Nassarawa GRA, Kano State";
+  }
+
+  return `${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E (En Route Corridor)`;
+}
+
+// Address resolver for vehicle taking into account actual pin coordinates and Google Geocoder cache
+function getVehicleAddress(
+  vehicle: Vehicle,
+  pos: { lat: number; lng: number },
+  cachedAddr?: string
+): string {
+  if (cachedAddr && cachedAddr.trim().length > 3) {
+    return cachedAddr;
+  }
+  return resolveLocalAddress(pos);
 }
 
 // Generate luxury SVG car icon for Google Maps marker (replacing generic VIP/dot)
@@ -194,7 +244,9 @@ export function GoogleFleetMap({ vehicles, onPingTracker }: GoogleFleetMapProps)
   const markersRef = useRef<google.maps.Marker[]>([]);
   const trafficLayerRef = useRef<google.maps.TrafficLayer | null>(null);
   const activeInfoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+  const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
+  const [addressCache, setAddressCache] = useState<Record<string, string>>({});
   const [selectedCity, setSelectedCity] = useState("all");
   const [mapType, setMapType] = useState<"styled" | "satellite">("styled");
   const [isTrafficActive, setIsTrafficActive] = useState(false);
@@ -209,10 +261,12 @@ export function GoogleFleetMap({ vehicles, onPingTracker }: GoogleFleetMapProps)
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
     "";
 
-  // Assign realistic nationwide coordinates if a vehicle does not have explicit lat/lng
+  // Assign realistic nationwide coordinates prioritizing live tracker updates
   const getVehicleCoordinates = (v: Vehicle, index: number) => {
-    if (v.latitude && v.longitude) {
-      return { lat: Number(v.latitude), lng: Number(v.longitude) };
+    const lat = v.current_latitude ?? v.latitude;
+    const lng = v.current_longitude ?? v.longitude;
+    if (lat !== undefined && lng !== undefined && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
+      return { lat: Number(lat), lng: Number(lng) };
     }
 
     // Default distribution across key Nigerian hubs based on location or index
@@ -279,6 +333,9 @@ export function GoogleFleetMap({ vehicles, onPingTracker }: GoogleFleetMapProps)
 
           googleMapInstance.current = map;
           trafficLayerRef.current = new google.maps.TrafficLayer();
+          if (typeof google !== "undefined" && google.maps.Geocoder) {
+            geocoderRef.current = new google.maps.Geocoder();
+          }
         })
         .catch((err) => {
           console.warn("[GoogleFleetMap] Failed to load Google Maps SDK:", err);
@@ -316,9 +373,24 @@ export function GoogleFleetMap({ vehicles, onPingTracker }: GoogleFleetMapProps)
 
     filteredVehicles.forEach((vehicle, idx) => {
       const pos = getVehicleCoordinates(vehicle, idx);
+      const posKey = `${pos.lat.toFixed(4)},${pos.lng.toFixed(4)}`;
+      const cachedAddress = addressCache[posKey];
       const statusInfo = getVehicleStatusInfo(vehicle.status);
-      const address = getVehicleAddress(vehicle);
+      const address = getVehicleAddress(vehicle, pos, cachedAddress);
       const carName = `${vehicle.brand || ""} ${vehicle.model || vehicle.name || "Fleet Vehicle"}`.trim();
+
+      // Trigger asynchronous reverse geocoding if not yet cached
+      if (!cachedAddress && geocoderRef.current) {
+        geocoderRef.current.geocode({ location: pos }, (results, status) => {
+          if (status === "OK" && results && results[0]) {
+            const formatted = results[0].formatted_address;
+            setAddressCache((prev) => {
+              if (prev[posKey] === formatted) return prev;
+              return { ...prev, [posKey]: formatted };
+            });
+          }
+        });
+      }
 
       const marker = new google.maps.Marker({
         position: pos,
@@ -418,7 +490,7 @@ export function GoogleFleetMap({ vehicles, onPingTracker }: GoogleFleetMapProps)
 
       markersRef.current.push(marker);
     });
-  }, [isApiLoaded, vehicles, searchQuery]);
+  }, [isApiLoaded, vehicles, searchQuery, addressCache]);
 
   // Handle City Change
   const handleSelectCity = (cityId: string) => {
@@ -694,21 +766,32 @@ export function GoogleFleetMap({ vehicles, onPingTracker }: GoogleFleetMapProps)
                 </span>
               </div>
               <div className="bg-stone-900 p-2 rounded-lg">
-                <span className="text-stone-400 text-[10px] block">Status</span>
-                <span className="text-emerald-400 font-bold uppercase text-[11px]">
-                  {selectedVehicle.status || "Ready"}
+                <span className="text-stone-400 text-[10px] block">Operational Status</span>
+                <span
+                  style={{ color: getVehicleStatusInfo(selectedVehicle.status).color }}
+                  className="font-bold uppercase text-[11px]"
+                >
+                  {getVehicleStatusInfo(selectedVehicle.status).label}
                 </span>
               </div>
-              <div className="bg-stone-900 p-2 rounded-lg">
-                <span className="text-stone-400 text-[10px] block">Location</span>
-                <span className="text-stone-100 font-medium">
-                  {selectedVehicle.location || "Lagos (VI)"}
-                </span>
+              <div className="bg-stone-900 p-2 rounded-lg col-span-2">
+                <span className="text-stone-400 text-[10px] block mb-0.5">Current Live Address</span>
+                <div className="text-stone-100 font-medium text-[11px] leading-snug flex items-start gap-1.5">
+                  <span className="text-secondary text-xs shrink-0">📍</span>
+                  <span>
+                    {(() => {
+                      const idx = vehicles.findIndex((v) => v.id === selectedVehicle.id);
+                      const pos = getVehicleCoordinates(selectedVehicle, idx >= 0 ? idx : 0);
+                      const posKey = `${pos.lat.toFixed(4)},${pos.lng.toFixed(4)}`;
+                      return getVehicleAddress(selectedVehicle, pos, addressCache[posKey]);
+                    })()}
+                  </span>
+                </div>
               </div>
-              <div className="bg-stone-900 p-2 rounded-lg">
-                <span className="text-stone-400 text-[10px] block">Daily Charter</span>
-                <span className="text-secondary font-bold font-mono">
-                  ₦{Number(selectedVehicle.daily_rate_ngn).toLocaleString()}
+              <div className="bg-stone-900 p-2 rounded-lg col-span-2 flex items-center justify-between">
+                <span className="text-stone-400 text-[10px]">Daily Charter Rate</span>
+                <span className="text-secondary font-bold font-mono text-xs">
+                  ₦{Number(selectedVehicle.daily_rate_ngn).toLocaleString()} / day
                 </span>
               </div>
             </div>
