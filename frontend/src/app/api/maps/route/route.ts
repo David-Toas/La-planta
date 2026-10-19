@@ -54,10 +54,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const originLat = origin?.lat ?? 6.4352;
-    const originLng = origin?.lng ?? 3.4219;
-    const destLat = destination?.lat ?? 6.4549;
-    const destLng = destination?.lng ?? 3.4326;
+    // Anti-Abuse Protection: Block third-party hotlinking to internal Google Routes proxy
+    const secFetchSite = req.headers.get("sec-fetch-site");
+    if (secFetchSite === "cross-site") {
+      return NextResponse.json({ error: "Cross-site route proxy requests are forbidden" }, { status: 403 });
+    }
+
+    const parseCoord = (val: any, fallback: number, min: number, max: number): number => {
+      const num = typeof val === "number" ? val : parseFloat(val);
+      if (isNaN(num) || num < min || num > max) return fallback;
+      return num;
+    };
+
+    const originLat = parseCoord(origin?.lat, 6.4352, -90, 90);
+    const originLng = parseCoord(origin?.lng, 3.4219, -180, 180);
+    const destLat = parseCoord(destination?.lat, 6.4549, -90, 90);
+    const destLng = parseCoord(destination?.lng, 3.4326, -180, 180);
 
     // Call modern Google Routes API (computeRoutes)
     const googleRes = await fetch(

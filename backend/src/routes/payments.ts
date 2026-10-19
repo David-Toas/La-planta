@@ -128,30 +128,44 @@ paymentsRouter.post("/verify", async (req: Request, res: Response) => {
     let paidAmount = Number(amount) || 0;
     let gatewayRef = reference;
 
-    // Verify against Paystack if Secret Key configured
-    if (config.paystack.secretKey && config.paystack.secretKey.startsWith("sk_")) {
-      const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-        headers: {
-          Authorization: `Bearer ${config.paystack.secretKey}`,
-        },
+    // Verify against Paystack (Fail-closed: requires valid Paystack secret key)
+    if (!config.paystack.secretKey || !config.paystack.secretKey.startsWith("sk_")) {
+      console.error("[SECURITY] Paystack secret key is missing or invalid. Rejecting payment verification.");
+      return res.status(503).json({
+        success: false,
+        error: "Payment verification service is temporarily unavailable. Please contact concierge support.",
       });
+    }
 
-      const data = await response.json();
-      if (data.status && data.data.status === "success") {
-        isSuccess = true;
-        channel = data.data.channel || "card";
-        paidAmount = data.data.amount / 100;
-        gatewayRef = data.data.reference;
-      } else {
-        return res.status(400).json({
-          success: false,
-          error: data.message || "Payment verification failed on Paystack",
-        });
+    const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+      headers: {
+        Authorization: `Bearer ${config.paystack.secretKey}`,
+      },
+    });
+
+    const data = await response.json();
+    if (data.status && data.data.status === "success") {
+      isSuccess = true;
+      channel = data.data.channel || "card";
+      paidAmount = data.data.amount / 100;
+      gatewayRef = data.data.reference;
+
+      // Cryptographic & Integrity check: Verify paid amount matches expected booking fee
+      if (amount && Number(amount) > 0) {
+        const expectedNgn = Number(amount);
+        if (paidAmount < expectedNgn * 0.99) {
+          console.error(`[SECURITY] Payment underpayment tampering detected: Expected ₦${expectedNgn}, Received ₦${paidAmount} for ref: ${reference}`);
+          return res.status(400).json({
+            success: false,
+            error: "Payment settlement amount does not match required charter rate.",
+          });
+        }
       }
     } else {
-      // In development / demo testing: acknowledge successful verification
-      isSuccess = true;
-      channel = "card";
+      return res.status(400).json({
+        success: false,
+        error: data.message || "Payment verification failed on Paystack",
+      });
     }
 
     if (isSuccess) {
@@ -318,17 +332,25 @@ paymentsRouter.post("/webhook", async (req: Request, res: Response) => {
   try {
     const signature = req.headers["x-paystack-signature"] as string;
 
-    // Verify signature if secret key is present
-    if (config.paystack.secretKey && signature) {
-      const hash = crypto
-        .createHmac("sha512", config.paystack.secretKey)
-        .update(JSON.stringify(req.body))
-        .digest("hex");
+    if (!config.paystack.secretKey) {
+      console.error("[Paystack Webhook] Secret key is unconfigured on server.");
+      return res.status(500).send("Webhook secret unconfigured");
+    }
 
-      if (hash !== signature) {
-        console.warn("[Paystack Webhook] Invalid HMAC signature ignored.");
-        return res.status(400).send("Invalid signature");
-      }
+    if (!signature) {
+      console.warn("[Paystack Webhook] Access denied: Missing x-paystack-signature header.");
+      return res.status(401).send("Missing webhook signature");
+    }
+
+    const payload = (req as any).rawBody || JSON.stringify(req.body);
+    const hash = crypto
+      .createHmac("sha512", config.paystack.secretKey)
+      .update(payload)
+      .digest("hex");
+
+    if (hash !== signature) {
+      console.warn("[Paystack Webhook] Invalid HMAC signature rejected.");
+      return res.status(400).send("Invalid signature");
     }
 
     const event = req.body;

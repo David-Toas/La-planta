@@ -2,13 +2,15 @@ import { Router, Request, Response } from "express";
 import { recordTelematicsPing } from "../services/telematicsService";
 import { sendSmsToTracker } from "../services/smsGatewayService";
 import { supabase } from "../supabase";
+import { requireAuth } from "../middlewares/authMiddleware";
 
 export const telematicsRouter = Router();
 
 /**
  * Trigger an on-demand ping to a vehicle's tracker device
+ * Protected: Requires authentication and verifies asset authorization
  */
-telematicsRouter.post("/ping-request", async (req: Request, res: Response) => {
+telematicsRouter.post("/ping-request", requireAuth, async (req: Request, res: Response) => {
   try {
     const { deviceCode, vehicleId, trackerId } = req.body;
 
@@ -72,14 +74,32 @@ telematicsRouter.post("/ping-request", async (req: Request, res: Response) => {
       console.log(`[Telematics Notice] Tracker not in DB yet; using designated fleet fallback: ${trackerData.device_code}`);
     }
 
-    // 4. Resolve target SIM phone:
-    // Priority 1: Manual override in request body
-    // Priority 2: Database record sim_phone_number (The production standard)
-    // Priority 3: Environment variable fallback
-    const targetSimPhone =
-      req.body.simPhoneNumber ||
-      trackerData.sim_phone_number ||
-      process.env.TRACKER_SIM_PHONE;
+    // 4. Client Access Control Verification: Non-admin users can only ping vehicles they have actively booked
+    if (req.user?.role !== "admin") {
+      const targetVehicleId = vehicleId || trackerData.assigned_vehicle_id;
+      if (!targetVehicleId) {
+        return res.status(403).json({ error: "Access denied: Specific vehicle charter required" });
+      }
+
+      const { data: activeBooking } = await supabase
+        .from("bookings")
+        .select("id")
+        .eq("client_id", req.user?.id)
+        .eq("vehicle_id", targetVehicleId)
+        .in("status", ["in_transit", "confirmed"])
+        .maybeSingle();
+
+      if (!activeBooking) {
+        return res.status(403).json({
+          error: "Access denied: You do not have an active or confirmed charter for this vehicle asset.",
+        });
+      }
+    }
+
+    // 5. Resolve target SIM phone:
+    // HARDENED: ONLY resolve from authoritative database record or server environment.
+    // Body overrides are completely rejected to prevent SMS relay / toll-fraud.
+    const targetSimPhone = trackerData.sim_phone_number || process.env.TRACKER_SIM_PHONE;
 
     if (!targetSimPhone) {
       return res.status(422).json({

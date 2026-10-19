@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { supabase } from "../supabase";
+import { requireAdmin, requireAuth } from "../middlewares/authMiddleware";
 import {
   sendCancellationNoticeEmail,
   sendCancellationRequestReceivedEmail,
@@ -10,6 +11,16 @@ import {
 } from "../services/emailService";
 
 export const adminRouter = Router();
+
+// ==============================================================================
+// ADMINISTRATIVE SECURITY GATE: Enforce requireAdmin on all internal operations
+// ==============================================================================
+adminRouter.use("/overview", requireAdmin);
+adminRouter.use("/fleet", requireAdmin);
+adminRouter.use("/drivers", requireAdmin);
+adminRouter.use("/bookings", requireAdmin);
+adminRouter.use("/users", requireAdmin);
+adminRouter.use("/upload", requireAdmin);
 
 /**
  * GET /api/admin/overview
@@ -677,30 +688,39 @@ const memoryBookingRequests: BookingRequest[] = [];
 
 /**
  * GET /api/admin/requests
- * Returns all active and resolved concierge requests
+ * Returns concierge requests:
+ * - Admins receive all requests
+ * - Authenticated clients receive only their own requests matching their verified email
  */
-adminRouter.get("/requests", (req: Request, res: Response) => {
+adminRouter.get("/requests", requireAuth, (req: Request, res: Response) => {
+  const isAdmin = req.user?.role === "admin";
+  const userEmail = (req.user?.email || "").toLowerCase();
+
+  const filteredRequests = isAdmin
+    ? memoryBookingRequests
+    : memoryBookingRequests.filter(
+        (r) => (r.guestEmail || "").toLowerCase() === userEmail
+      );
+
   res.json({
     success: true,
-    count: memoryBookingRequests.length,
-    pendingCount: memoryBookingRequests.filter((r) => r.status === "pending").length,
-    requests: memoryBookingRequests,
+    count: filteredRequests.length,
+    pendingCount: filteredRequests.filter((r) => r.status === "pending").length,
+    requests: filteredRequests,
   });
 });
 
 /**
  * POST /api/admin/requests
  * Submit a cancellation or extension request from Guest Account page
+ * Enforces verified user identity from authentication token
  */
-adminRouter.post("/requests", async (req: Request, res: Response) => {
+adminRouter.post("/requests", requireAuth, async (req: Request, res: Response) => {
   try {
     const {
       bookingCode,
       vehicleName,
-      guestName,
-      guestEmail,
       guestPhone,
-      vipTier,
       type,
       reason,
       refundBank,
@@ -717,14 +737,19 @@ adminRouter.post("/requests", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Booking code and request type are required" });
     }
 
+    // Authoritative identity from verified authentication session
+    const guestEmail = req.user?.email || req.body.guestEmail || "guest@laplanta.ng";
+    const guestName = req.user?.fullName || req.body.guestName || "Executive Guest";
+    const vipTier = req.user?.vipTier || req.body.vipTier || "Member";
+
     const newReq: BookingRequest = {
       id: `req-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
       bookingCode: bookingCode.startsWith("#") ? bookingCode : `#${bookingCode}`,
       vehicleName: vehicleName || "Executive Fleet Vehicle",
-      guestName: guestName || "Executive Guest",
-      guestEmail: guestEmail || "guest@laplanta.ng",
+      guestName,
+      guestEmail,
       guestPhone: guestPhone || "+234 800 000 0000",
-      vipTier: vipTier || "Member",
+      vipTier,
       type,
       status: "pending",
       reason: reason || (type === "cancellation" ? "Client requested cancellation" : "Itinerary extension"),
@@ -785,7 +810,7 @@ adminRouter.post("/requests", async (req: Request, res: Response) => {
  * PATCH /api/admin/requests/:id
  * Process request (Approve, Confirm Refund & Cancel, or Reject)
  */
-adminRouter.patch("/requests/:id", async (req: Request, res: Response) => {
+adminRouter.patch("/requests/:id", requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { status, adminNotes } = req.body;

@@ -110,6 +110,7 @@ function CheckoutContent() {
     vehicleColor?: string;
     handoverMode?: "office" | "delivery";
     deliveryAddress?: string;
+    verificationPin?: string;
   } | null>(null);
 
   // Initialize unique booking code on client
@@ -461,6 +462,7 @@ function CheckoutContent() {
           }),
           vehicle: vehicleTitle,
           vehicleColor: vehicle?.color || "Obsidian Black",
+          verificationPin: data?.booking?.verification_pin || "7974-09",
         });
       } else {
         setPaymentError(data.error || "Server payment verification failed.");
@@ -537,6 +539,7 @@ function CheckoutContent() {
           handoverMode === "office"
             ? "Plot 14 Victoria Island Boulevard, Lagos"
             : deliveryAddress || "Victoria Island, Lagos",
+        verificationPin: "7974-09",
       });
     }
   };
@@ -600,7 +603,7 @@ function CheckoutContent() {
                     <div className="p-3 bg-white rounded-xl shadow-md border border-surface-container flex flex-col items-center gap-1">
                       <img
                         src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=8&data=${encodeURIComponent(
-                          `${typeof window !== "undefined" ? window.location.origin : "https://laplanta.ng"}/api/reservation-pass/${confirmedBooking.bookingCode}/pdf`
+                          `${typeof window !== "undefined" ? window.location.origin : "https://laplanta.ng"}/api/reservation-pass/${confirmedBooking.bookingCode}/pdf?pin=${encodeURIComponent(confirmedBooking.verificationPin || "")}`
                         )}`}
                         alt="Reservation QR Code Voucher"
                         className="w-32 h-32"

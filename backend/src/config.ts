@@ -21,6 +21,8 @@ export const config = {
     secretKey: process.env.PAYSTACK_SECRET_KEY || "",
     publicKey: process.env.PAYSTACK_PUBLIC_KEY || "",
   },
+  enableSmsScheduler: process.env.ENABLE_SMS_SCHEDULER !== "false",
+  gprsOfflineThresholdMinutes: parseInt(process.env.GPRS_OFFLINE_THRESHOLD_MINUTES || "5", 10),
   email: {
     provider: (process.env.EMAIL_PROVIDER || "resend") as "resend" | "smtp" | "simulated",
     resendApiKey: process.env.RESEND_API_KEY || "",

@@ -14,8 +14,19 @@ const DEFAULT_HEADERS: Record<string, string> = {
  * attempts the configured backend, and falls back to localhost:4000 if needed.
  */
 async function adminFetch(path: string, options: RequestInit = {}) {
+  let authHeaders: Record<string, string> = {};
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      authHeaders = { Authorization: `Bearer ${session.access_token}` };
+    }
+  } catch (err: any) {
+    console.warn("[adminApi] Failed to resolve auth session:", err?.message);
+  }
+
   const headers = {
     ...DEFAULT_HEADERS,
+    ...authHeaders,
     ...((options.headers as Record<string, string>) || {}),
   };
 

@@ -38,6 +38,50 @@ export async function GET(
     let bookingData: any;
 
     if (dbBooking) {
+      // Security Verification: Require valid booking PIN, QR capability token, or authenticated session
+      const pinParam = request.nextUrl.searchParams.get("pin");
+      const tokenParam = request.nextUrl.searchParams.get("token");
+
+      let isAuthorized = false;
+
+      // 1. Check capability parameter (from scanned QR code voucher)
+      if (
+        pinParam &&
+        dbBooking.verification_pin &&
+        pinParam.trim().toLowerCase() === dbBooking.verification_pin.trim().toLowerCase()
+      ) {
+        isAuthorized = true;
+      } else if (
+        tokenParam &&
+        dbBooking.qr_pass_token &&
+        tokenParam === dbBooking.qr_pass_token
+      ) {
+        isAuthorized = true;
+      }
+
+      // 2. Check active authenticated session header (from logged in client browser/mobile app)
+      if (!isAuthorized) {
+        const authHeader = request.headers.get("authorization");
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+          const sessionToken = authHeader.split(" ")[1];
+          const { data: authData } = await supabase.auth.getUser(sessionToken);
+          if (authData?.user && authData.user.id === dbBooking.client_id) {
+            isAuthorized = true;
+          }
+        }
+      }
+
+      // Block unauthorized scraping of customer itineraries and PII
+      if (!isAuthorized) {
+        return NextResponse.json(
+          {
+            error:
+              "Unauthorized: Valid verification PIN or owner authentication required to download voucher.",
+          },
+          { status: 403 }
+        );
+      }
+
       const v = dbBooking.vehicles;
       const d = dbBooking.drivers;
       const p = dbBooking.profiles;

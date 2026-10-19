@@ -26,6 +26,19 @@ export interface EmailLogEntry {
 // In-memory audit log of sent transactional emails
 export const sentEmailLogs: EmailLogEntry[] = [];
 
+/**
+ * HTML Sanitization Helper to prevent HTML Injection and XSS in transactional emails
+ */
+export function escapeHtml(unsafe: any): string {
+  if (unsafe === undefined || unsafe === null) return "";
+  return String(unsafe)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // Base HTML Wrapper for Luxury Brand Consistency
 function renderLuxuryEmailShell(
   contentHtml: string,

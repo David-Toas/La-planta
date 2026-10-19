@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { config } from "./config";
 import { healthRouter } from "./routes/health";
 import { telematicsRouter } from "./routes/telematics";
@@ -13,15 +15,89 @@ import { startTelematicsScheduler } from "./services/telematicsScheduler";
 
 const app = express();
 
-// Middlewares
+// ==============================================================================
+// 1. HTTP SECURITY HEADERS (Helmet)
+// ==============================================================================
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  })
+);
+
+// ==============================================================================
+// 2. CORS STRICT ORIGIN WHITELIST
+// ==============================================================================
+const allowedOrigins = [
+  "https://laplanta.ng",
+  "https://www.laplanta.ng",
+  "https://admin.laplanta.ng",
+  config.clientUrl,
+  "http://localhost:3000",
+  "http://localhost:3001",
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: true,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, healthcheck) or matching domains
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith(".ngrok-free.dev") ||
+        origin.endsWith(".vercel.app")
+      ) {
+        callback(null, true);
+      } else {
+        console.warn(`[CORS Blocked] Untrusted origin: ${origin}`);
+        callback(new Error(`CORS policy violation: Origin ${origin} is not allowed`));
+      }
+    },
     credentials: true,
   })
 );
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// ==============================================================================
+// 3. RATE LIMITING
+// ==============================================================================
+// General API Rate Limiter (500 requests per 15 minutes per IP)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: "Too many requests from this IP. Please try again after 15 minutes.",
+  },
+});
+app.use("/api", apiLimiter);
+
+// Sensitive Endpoints Rate Limiter (60 requests per 15 minutes per IP)
+const sensitiveLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: "Too many requests to this endpoint. Please try again later.",
+  },
+});
+app.use("/api/payments/verify-payment", sensitiveLimiter);
+app.use("/api/telematics/ping-request", sensitiveLimiter);
+app.use("/api/email", sensitiveLimiter);
+
+// ==============================================================================
+// 4. BODY PARSING & CRYPTOGRAPHIC PAYLOAD CAPTURE
+// ==============================================================================
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Clear & Prominent Request Logger Middleware for Terminal Visibility
 app.use((req, res, next) => {

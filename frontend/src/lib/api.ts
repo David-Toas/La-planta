@@ -1,3 +1,5 @@
+import { supabase } from "./supabase";
+
 /**
  * API Client for Standalone La Planta Prime Telematics & Dispatch Backend
  */
@@ -7,6 +9,16 @@ const BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:40
 const BASE_HEADERS: Record<string, string> = {
   "ngrok-skip-browser-warning": "true",
 };
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      return { Authorization: `Bearer ${session.access_token}` };
+    }
+  } catch (_) {}
+  return {};
+}
 
 export const backendApi = {
   /**
@@ -105,11 +117,13 @@ export const backendApi = {
    */
   async submitBookingRequest(data: any) {
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${BACKEND_URL}/api/admin/requests`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...BASE_HEADERS,
+          ...authHeaders,
         },
         body: JSON.stringify(data),
       });
@@ -124,9 +138,13 @@ export const backendApi = {
    */
   async getBookingRequests() {
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${BACKEND_URL}/api/admin/requests`, {
         cache: "no-store",
-        headers: BASE_HEADERS,
+        headers: {
+          ...BASE_HEADERS,
+          ...authHeaders,
+        },
       });
       return await res.json();
     } catch (err: any) {

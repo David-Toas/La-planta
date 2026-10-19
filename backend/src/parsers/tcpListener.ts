@@ -11,8 +11,22 @@ export function startTcpTelematicsListener(port: number) {
     const clientAddress = `${socket.remoteAddress}:${socket.remotePort}`;
     console.log(`[TCP Telematics] Tracker device connected from ${clientAddress}`);
 
+    // DoS Protection: 60-second inactivity timeout to terminate abandoned/stalled sockets
+    socket.setTimeout(60000);
+    socket.on("timeout", () => {
+      console.warn(`[TCP Telematics Timeout] Socket inactive for 60s, terminating: ${clientAddress}`);
+      socket.destroy();
+    });
+
     socket.on("data", async (data) => {
       try {
+        // Buffer Flooding Protection: Drop packets larger than 2KB
+        if (data.length > 2048) {
+          console.warn(`[TCP Telematics Warning] Oversized packet (${data.length} bytes) from ${clientAddress}. Disconnecting.`);
+          socket.destroy();
+          return;
+        }
+
         const rawString = data.toString("utf8").trim();
         console.log(`[TCP Telematics Data from ${clientAddress}]: ${rawString}`);
 
@@ -55,8 +69,11 @@ export function startTcpTelematicsListener(port: number) {
     });
   });
 
+  // Resource ceiling: Prevent file descriptor / socket exhaustion
+  server.maxConnections = 500;
+
   server.listen(port, () => {
-    console.log(`[TCP Telematics Server] Listening for GPRS tracker hardware on port ${port}`);
+    console.log(`[TCP Telematics Server] Listening for GPRS tracker hardware on port ${port} (Max Connections: 500)`);
   });
 
   return server;

@@ -477,7 +477,7 @@ function ReservationPassContent() {
   };
 
   const pdfPassUrl = booking
-    ? `${originUrl}/api/reservation-pass/${booking.bookingCode}/pdf`
+    ? `${originUrl}/api/reservation-pass/${booking.bookingCode}/pdf?pin=${encodeURIComponent(booking.verificationPin || "")}`
     : originUrl;
 
   const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data=${encodeURIComponent(
