@@ -185,7 +185,10 @@ function CheckoutContent() {
     setPaymentError(null);
     setAddressError(false);
 
-    if (handoverMode === "delivery" && (!deliveryAddress || !deliveryAddress.trim())) {
+    if (
+      handoverMode === "delivery" &&
+      (!deliveryAddress || !deliveryAddress.trim())
+    ) {
       setIsProcessing(false);
       setAddressError(true);
       setPaymentError(
@@ -420,8 +423,7 @@ function CheckoutContent() {
             : "La Planta Flagship Hub (Victoria Island)",
         handoverMode,
         isOfficePickup: handoverMode === "office",
-        includeChauffeur:
-          handoverMode === "delivery" ? includeChauffeur : true,
+        includeChauffeur: handoverMode === "delivery" ? includeChauffeur : true,
         serviceType:
           handoverMode === "delivery" && !includeChauffeur
             ? "self_drive"
@@ -495,8 +497,7 @@ function CheckoutContent() {
             : "La Planta Flagship Hub (Victoria Island)",
         handoverMode,
         isOfficePickup: handoverMode === "office",
-        includeChauffeur:
-          handoverMode === "delivery" ? includeChauffeur : true,
+        includeChauffeur: handoverMode === "delivery" ? includeChauffeur : true,
         serviceType:
           handoverMode === "delivery" && !includeChauffeur
             ? "self_drive"
@@ -845,7 +846,8 @@ function CheckoutContent() {
                                 schedule
                               </span>
                               <span>
-                                {handoverMode === "delivery" && !includeChauffeur
+                                {handoverMode === "delivery" &&
+                                !includeChauffeur
                                   ? "Rental Coverage:"
                                   : "Chauffeur Service Coverage:"}
                               </span>
@@ -961,7 +963,8 @@ function CheckoutContent() {
                                   </span>
                                 </div>
                                 <span className="text-[11px] text-on-surface-variant leading-relaxed">
-                                  A vetted executive driver will drive you around for the entire duration of your rental.
+                                  A vetted executive driver will drive you
+                                  around for the entire duration of your rental.
                                 </span>
                               </button>
 
@@ -983,7 +986,8 @@ function CheckoutContent() {
                                   </span>
                                 </div>
                                 <span className="text-[11px] text-on-surface-variant leading-relaxed">
-                                  The driver delivers the car to your destination only; you drive yourself.
+                                  The driver delivers the car to your
+                                  destination only; you drive yourself.
                                 </span>
                               </button>
                             </div>
@@ -996,7 +1000,9 @@ function CheckoutContent() {
                               <span>
                                 Delivery Address{" "}
                                 {handoverMode === "delivery" && (
-                                  <span className="text-red-500 font-bold">*</span>
+                                  <span className="text-red-500 font-bold">
+                                    *
+                                  </span>
                                 )}
                               </span>
                               {handoverMode === "delivery" && (
@@ -1033,7 +1039,8 @@ function CheckoutContent() {
                                 <span className="material-symbols-outlined text-xs">
                                   error
                                 </span>
-                                Destination delivery address is required before proceeding to checkout.
+                                Destination delivery address is required before
+                                proceeding to checkout.
                               </span>
                             )}
                           </div>
@@ -1292,13 +1299,6 @@ function CheckoutContent() {
                             </span>
                             <span className="hidden sm:inline text-outline-variant">
                               •
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="material-symbols-outlined text-secondary text-sm">
-                                security
-                              </span>
-                              Professional driver assigned &amp; vehicle
-                              prepared
                             </span>
                           </div>
                         </div>

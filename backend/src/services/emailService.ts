@@ -153,7 +153,7 @@ function renderLuxuryEmailShell(
           LA PLANTA PRIME
         </p>
         <p style="margin: 0 0 12px 0;">
-          24/7 Operations Desk: <a href="tel:+23418885275">+234 1 888 5275</a>
+          24/7 Operations Desk: <a href="tel:+23418885275">+234 814 031 3381</a>
         </p>
         <p style="margin: 0; font-size: 10px; color: #4a5568;">
           This is an official transactional message regarding your chartered itinerary. Keep confidential.
@@ -517,7 +517,7 @@ export function getCancellationDeclinedHtml(params: {
     </div>
 
     <p style="font-size: 12px; color: #718096; line-height: 1.5; margin: 16px 0 0 0; text-align: center;">
-      If you require assistance or schedule adjustments, please reach your VIP Concierge directly at <a href="tel:+23418885275" style="color: #d4af37; font-weight: 600;">+234 1 888 5275</a>.
+      If you require assistance or schedule adjustments, please reach your VIP Concierge directly at <a href="tel:+23418885275" style="color: #d4af37; font-weight: 600;">+234 814 031 3381</a>.
     </p>
 
     <div style="text-align: center; margin: 24px 0 12px 0;">

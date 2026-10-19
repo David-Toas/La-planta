@@ -19,7 +19,9 @@ export function Footer() {
               </span>
             </div>
             <p className="text-xs text-white/70 leading-relaxed">
-              Nigeria&apos;s premier chauffeur car-hire service for corporate leaders, diplomatic delegates, and discerning international travelers.
+              Nigeria&apos;s premier chauffeur car-hire service for corporate
+              leaders, diplomatic delegates, and discerning international
+              travelers.
             </p>
             <div className="text-xs text-[#fedeb2] font-semibold tracking-wider uppercase">
               Lagos • Abuja • Inter-State Charters
@@ -33,27 +35,42 @@ export function Footer() {
             </h4>
             <ul className="flex flex-col gap-2 text-xs">
               <li>
-                <Link href="/fleet" className="hover:text-[#fedeb2] transition-colors">
+                <Link
+                  href="/fleet"
+                  className="hover:text-[#fedeb2] transition-colors"
+                >
                   Mercedes-Benz S-Class (S580)
                 </Link>
               </li>
               <li>
-                <Link href="/fleet" className="hover:text-[#fedeb2] transition-colors">
+                <Link
+                  href="/fleet"
+                  className="hover:text-[#fedeb2] transition-colors"
+                >
                   Range Rover Autobiography LWB
                 </Link>
               </li>
               <li>
-                <Link href="/fleet" className="hover:text-[#fedeb2] transition-colors">
+                <Link
+                  href="/fleet"
+                  className="hover:text-[#fedeb2] transition-colors"
+                >
                   Toyota Land Cruiser 300 VXR
                 </Link>
               </li>
               <li>
-                <Link href="/fleet" className="hover:text-[#fedeb2] transition-colors">
+                <Link
+                  href="/fleet"
+                  className="hover:text-[#fedeb2] transition-colors"
+                >
                   Mercedes-Benz V-Class &amp; Sprinter
                 </Link>
               </li>
               <li>
-                <Link href="/fleet" className="hover:text-[#fedeb2] transition-colors">
+                <Link
+                  href="/fleet"
+                  className="hover:text-[#fedeb2] transition-colors"
+                >
                   Armored Escort Vehicles (B6/B7)
                 </Link>
               </li>
@@ -67,17 +84,26 @@ export function Footer() {
             </h4>
             <ul className="flex flex-col gap-2 text-xs">
               <li>
-                <Link href="/account" className="hover:text-[#fedeb2] transition-colors">
+                <Link
+                  href="/account"
+                  className="hover:text-[#fedeb2] transition-colors"
+                >
                   VIP Guest Account &amp; Invoices
                 </Link>
               </li>
               <li>
-                <Link href="/live-tracking" className="hover:text-[#fedeb2] transition-colors">
+                <Link
+                  href="/live-tracking"
+                  className="hover:text-[#fedeb2] transition-colors"
+                >
                   Live Chauffeur Tracking Map
                 </Link>
               </li>
               <li>
-                <Link href="/reservation-pass" className="hover:text-[#fedeb2] transition-colors">
+                <Link
+                  href="/reservation-pass"
+                  className="hover:text-[#fedeb2] transition-colors"
+                >
                   Digital QR Handover Voucher
                 </Link>
               </li>
@@ -90,10 +116,11 @@ export function Footer() {
               24/7 Support Desk
             </h4>
             <p className="text-xs text-white/70">
-              The Wings Office Complex, Ozumba Mbadiwe Ave, Victoria Island, Lagos
+              The Wings Office Complex, Ozumba Mbadiwe Ave, Victoria Island,
+              Lagos
             </p>
             <p className="text-xs text-[#fedeb2] font-semibold">
-              Hotline: +234 1 888 5275
+              Hotline: +234 814 031 3381
             </p>
             <p className="text-xs text-white/70">
               Email: reservations@laplanta.com
@@ -103,12 +130,19 @@ export function Footer() {
 
         <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-white/50">
           <div>
-            &copy; {new Date().getFullYear()} LA PLANTA PRIME Mobility Ltd. All rights reserved.
+            &copy; {new Date().getFullYear()} LA PLANTA PRIME Mobility Ltd. All
+            rights reserved.
           </div>
           <div className="flex items-center gap-6">
-            <span className="hover:text-white cursor-pointer">Rental Terms</span>
-            <span className="hover:text-white cursor-pointer">Privacy Policy</span>
-            <span className="hover:text-white cursor-pointer">Insurance Protocol</span>
+            <span className="hover:text-white cursor-pointer">
+              Rental Terms
+            </span>
+            <span className="hover:text-white cursor-pointer">
+              Privacy Policy
+            </span>
+            <span className="hover:text-white cursor-pointer">
+              Insurance Protocol
+            </span>
           </div>
         </div>
       </div>

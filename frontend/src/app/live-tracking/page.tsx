@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  Suspense,
+} from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/navbar";
@@ -49,7 +55,9 @@ function LiveTrackingContent() {
 
   // Booking & Delivery State
   const [loading, setLoading] = useState(true);
-  const [booking, setBooking] = useState<ActiveDoorDeliveryBooking | null>(null);
+  const [booking, setBooking] = useState<ActiveDoorDeliveryBooking | null>(
+    null,
+  );
   const [isOfficePickupOnly, setIsOfficePickupOnly] = useState(false);
   const [officePickupCode, setOfficePickupCode] = useState<string>("");
 
@@ -59,7 +67,8 @@ function LiveTrackingContent() {
   const [etaSeconds, setEtaSeconds] = useState(48);
   const [realEtaMinutes, setRealEtaMinutes] = useState<number | null>(null);
   const [realDistanceKm, setRealDistanceKm] = useState<number | null>(null);
-  const [estimatedArrivalTime, setEstimatedArrivalTime] = useState<string>("17:28 WAT");
+  const [estimatedArrivalTime, setEstimatedArrivalTime] =
+    useState<string>("17:28 WAT");
   const [simPingCountdown, setSimPingCountdown] = useState(60);
   const [isPingingSim, setIsPingingSim] = useState(false);
   const [lastPingTime, setLastPingTime] = useState("Just now");
@@ -67,7 +76,9 @@ function LiveTrackingContent() {
     lat: "6.4475° N",
     lng: "3.4243° E",
   });
-  const [pingSuccessNotice, setPingSuccessNotice] = useState<string | null>(null);
+  const [pingSuccessNotice, setPingSuccessNotice] = useState<string | null>(
+    null,
+  );
 
   // Modals state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -120,7 +131,8 @@ function LiveTrackingContent() {
           .in("status", ["confirmed", "in_transit", "pending"])
           .order("created_at", { ascending: false });
 
-        let matched = dbBookings && dbBookings.length > 0 ? dbBookings[0] : null;
+        let matched =
+          dbBookings && dbBookings.length > 0 ? dbBookings[0] : null;
 
         // Fallback: check localStorage if user just finalized checkout
         if (!matched && typeof window !== "undefined") {
@@ -147,7 +159,9 @@ function LiveTrackingContent() {
           matched.handoverMode === "delivery" ||
           matched.pickup_type === "delivery" ||
           (matched.special_instructions &&
-            matched.special_instructions.toLowerCase().includes("direct delivery")) ||
+            matched.special_instructions
+              .toLowerCase()
+              .includes("direct delivery")) ||
           (matched.pickup_location &&
             !matched.pickup_location.toLowerCase().includes("flagship hub"));
 
@@ -164,8 +178,12 @@ function LiveTrackingContent() {
 
         // Resolve vehicle
         const v = matched.vehicles || matched.vehicle || {};
-        const vehicleLat = v.current_latitude ? Number(v.current_latitude) : 6.4352;
-        const vehicleLng = v.current_longitude ? Number(v.current_longitude) : 3.4219;
+        const vehicleLat = v.current_latitude
+          ? Number(v.current_latitude)
+          : 6.4352;
+        const vehicleLng = v.current_longitude
+          ? Number(v.current_longitude)
+          : 3.4219;
 
         // Resolve driver
         const d = matched.drivers || matched.driver || null;
@@ -179,10 +197,13 @@ function LiveTrackingContent() {
             matched.deliveryAddress ||
             matched.pickup_location ||
             "Victoria Island Metro, Lagos",
-          pickupLocation: "La Planta Flagship Hub, The Wings Towers, Victoria Island",
+          pickupLocation:
+            "La Planta Flagship Hub, The Wings Towers, Victoria Island",
           vehicle: {
             id: v.id || matched.vehicle_id || "v-1",
-            name: v.name || `${v.brand || "Range Rover"} ${v.model || "Autobiography"}`,
+            name:
+              v.name ||
+              `${v.brand || "Range Rover"} ${v.model || "Autobiography"}`,
             category: v.category || "VIP Executive Fleet",
             year: v.year || 2024,
             color: v.color || "Obsidian Black",
@@ -240,7 +261,9 @@ function LiveTrackingContent() {
       // 1. Direct Supabase query to public.vehicles
       const { data: vehicleData } = await supabase
         .from("vehicles")
-        .select("id, name, current_latitude, current_longitude, updated_at, assigned_tracker_id")
+        .select(
+          "id, name, current_latitude, current_longitude, updated_at, assigned_tracker_id",
+        )
         .eq("id", booking.vehicle.id)
         .maybeSingle();
 
@@ -302,7 +325,9 @@ function LiveTrackingContent() {
   const triggerAutoPing = useCallback(async () => {
     if (!booking) return;
     try {
-      const response = await backendApi.pingTracker({ vehicleId: booking.vehicle.id });
+      const response = await backendApi.pingTracker({
+        vehicleId: booking.vehicle.id,
+      });
       const now = new Date();
       const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")} WAT`;
       if (response && response.success) {
@@ -389,10 +414,19 @@ function LiveTrackingContent() {
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "vehicles", filter: `id=eq.${booking.vehicle.id}` },
+        {
+          event: "*",
+          schema: "public",
+          table: "vehicles",
+          filter: `id=eq.${booking.vehicle.id}`,
+        },
         (payload) => {
           const vehicle = (payload.new as any) || (payload.old as any);
-          if (vehicle && vehicle.current_latitude && vehicle.current_longitude) {
+          if (
+            vehicle &&
+            vehicle.current_latitude &&
+            vehicle.current_longitude
+          ) {
             setDriverCoords({
               lat: Number(vehicle.current_latitude),
               lng: Number(vehicle.current_longitude),
@@ -417,7 +451,9 @@ function LiveTrackingContent() {
   const handlePingSimTracker = async () => {
     if (isPingingSim || !booking) return;
     setIsPingingSim(true);
-    setPingSuccessNotice("Dispatching encrypted GSM ping to Telematics Gateway...");
+    setPingSuccessNotice(
+      "Dispatching encrypted GSM ping to Telematics Gateway...",
+    );
 
     try {
       const response = await backendApi.pingTracker(
@@ -439,7 +475,9 @@ function LiveTrackingContent() {
         setPingSuccessNotice(`Notice: ${response?.error || "Ping dispatched"}`);
       }
     } catch (err: any) {
-      setPingSuccessNotice(`Gateway notice: ${err.message || "Ping in flight"}`);
+      setPingSuccessNotice(
+        `Gateway notice: ${err.message || "Ping in flight"}`,
+      );
     } finally {
       setIsPingingSim(false);
       setTimeout(() => setPingSuccessNotice(null), 6000);
@@ -480,7 +518,9 @@ function LiveTrackingContent() {
         <main className="w-full pt-16 lg:pt-20 flex-1 flex items-center justify-center px-4 py-20">
           <div className="max-w-md w-full bg-surface-container-lowest border border-black/[0.06] rounded-3xl p-8 sm:p-10 shadow-sm flex flex-col items-center text-center gap-6">
             <div className="w-16 h-16 rounded-2xl bg-secondary-fixed/50 text-secondary flex items-center justify-center shadow-inner">
-              <span className="material-symbols-outlined text-3xl">storefront</span>
+              <span className="material-symbols-outlined text-3xl">
+                storefront
+              </span>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -491,9 +531,11 @@ function LiveTrackingContent() {
                 Hub Office Pickup Reservation
               </h1>
               <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed">
-                Your reservation <strong>#{officePickupCode}</strong> is scheduled for <strong>Office Pickup</strong>.
-                Your luxury vehicle is prepared and stationed at the La Planta Flagship Hub (The Wings Towers, Victoria Island).
-                Live on-road radar tracking is exclusive to Direct Door Delivery bookings.
+                Your reservation <strong>#{officePickupCode}</strong> is
+                scheduled for <strong>Office Pickup</strong>. Your luxury
+                vehicle is prepared and stationed at the La Planta Flagship Hub
+                (The Wings Towers, Victoria Island). Live on-road radar tracking
+                is exclusive to Direct Door Delivery bookings.
               </p>
             </div>
 
@@ -537,7 +579,9 @@ function LiveTrackingContent() {
                 No Active Door Delivery Charter
               </h1>
               <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed">
-                You do not currently have an active door-delivery vehicle en route. Real-time GPS telematics and vehicle radar become active immediately upon dispatch of your door-delivery charter.
+                You do not currently have an active door-delivery vehicle en
+                route. Real-time GPS telematics and vehicle radar become active
+                immediately upon dispatch of your door-delivery charter.
               </p>
             </div>
 
@@ -578,7 +622,9 @@ function LiveTrackingContent() {
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors text-xs font-semibold text-on-surface border border-border"
                   href={`/reservation-pass?code=${encodeURIComponent(booking.bookingCode)}`}
                 >
-                  <span className="material-symbols-outlined text-base">arrow_back</span>
+                  <span className="material-symbols-outlined text-base">
+                    arrow_back
+                  </span>
                   <span>Pass #{booking.bookingCode}</span>
                 </Link>
 
@@ -600,7 +646,9 @@ function LiveTrackingContent() {
                 {/* ETA */}
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary">
-                    <span className="material-symbols-outlined text-lg">schedule</span>
+                    <span className="material-symbols-outlined text-lg">
+                      schedule
+                    </span>
                   </div>
                   <div className="flex flex-col text-left">
                     <span className="text-on-surface-variant text-[10px] uppercase font-semibold tracking-wider">
@@ -625,7 +673,10 @@ function LiveTrackingContent() {
                     sync
                   </span>
                   <span className="text-on-surface-variant text-[11px]">
-                    GSM Ping in <strong className="text-primary font-mono">{simPingCountdown}s</strong>
+                    GSM Ping in{" "}
+                    <strong className="text-primary font-mono">
+                      {simPingCountdown}s
+                    </strong>
                   </span>
                 </div>
 
@@ -634,7 +685,9 @@ function LiveTrackingContent() {
                   onClick={() => setIsShareModalOpen(true)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary border border-border transition-colors"
                 >
-                  <span className="material-symbols-outlined text-sm">share</span>
+                  <span className="material-symbols-outlined text-sm">
+                    share
+                  </span>
                   <span className="hidden sm:inline">Share</span>
                 </button>
               </div>
@@ -644,7 +697,9 @@ function LiveTrackingContent() {
           {/* SIM Ping Status Alert Banner */}
           {pingSuccessNotice && (
             <div className="bg-emerald-900 text-emerald-100 text-xs px-4 py-2 flex items-center justify-center gap-2 transition-all">
-              <span className="material-symbols-outlined text-sm text-emerald-300">verified</span>
+              <span className="material-symbols-outlined text-sm text-emerald-300">
+                verified
+              </span>
               <span className="font-medium">{pingSuccessNotice}</span>
               <button
                 onClick={() => setPingSuccessNotice(null)}
@@ -683,14 +738,17 @@ function LiveTrackingContent() {
                     {/* Step 1: Staged & Dispatched */}
                     <div className="relative flex items-start gap-3">
                       <span className="absolute -left-6 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-white shadow-sm ring-4 ring-white">
-                        <span className="material-symbols-outlined text-xs">check</span>
+                        <span className="material-symbols-outlined text-xs">
+                          check
+                        </span>
                       </span>
                       <div className="flex flex-col">
                         <span className="text-xs font-bold text-primary">
                           La Planta Flagship Hub
                         </span>
                         <span className="text-xs text-on-surface-variant">
-                          Vehicle sanitized, inspected &amp; dispatched for direct delivery.
+                          Vehicle sanitized, inspected &amp; dispatched for
+                          direct delivery.
                         </span>
                       </div>
                     </div>
@@ -698,7 +756,9 @@ function LiveTrackingContent() {
                     {/* Step 2: En Route */}
                     <div className="relative flex items-start gap-3">
                       <span className="absolute -left-6 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-secondary text-white ring-4 ring-amber-100 shadow-sm animate-pulse">
-                        <span className="material-symbols-outlined text-xs">navigation</span>
+                        <span className="material-symbols-outlined text-xs">
+                          navigation
+                        </span>
                       </span>
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
@@ -710,7 +770,9 @@ function LiveTrackingContent() {
                           </span>
                         </div>
                         <span className="text-xs text-on-surface font-medium">
-                          Speed: <strong className="text-primary">{speed} km/h</strong> • 1-min telematic ping cadence
+                          Speed:{" "}
+                          <strong className="text-primary">{speed} km/h</strong>{" "}
+                          • 1-min telematic ping cadence
                         </span>
                       </div>
                     </div>
@@ -718,7 +780,9 @@ function LiveTrackingContent() {
                     {/* Step 3: Destination */}
                     <div className="relative flex items-start gap-3 opacity-90">
                       <span className="absolute -left-6 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-stone-200 text-stone-600 ring-4 ring-white">
-                        <span className="material-symbols-outlined text-xs">flag</span>
+                        <span className="material-symbols-outlined text-xs">
+                          flag
+                        </span>
                       </span>
                       <div className="flex flex-col">
                         <span className="text-xs font-bold text-on-surface">
@@ -764,7 +828,9 @@ function LiveTrackingContent() {
                       <span className="material-symbols-outlined text-xs text-secondary">
                         verified
                       </span>
-                      {booking.driver ? "Vetted VIP Driver" : "Allocation In Progress"}
+                      {booking.driver
+                        ? "Vetted VIP Driver"
+                        : "Allocation In Progress"}
                     </span>
                   </div>
 
@@ -800,9 +866,12 @@ function LiveTrackingContent() {
                         badge
                       </span>
                       <div className="flex flex-col">
-                        <span className="font-bold text-primary">Chauffeur Allocation In Progress</span>
+                        <span className="font-bold text-primary">
+                          Chauffeur Allocation In Progress
+                        </span>
                         <span className="text-on-surface-variant text-[11px]">
-                          Vetted protocol driver is being finalized for your delivery destination.
+                          Vetted protocol driver is being finalized for your
+                          delivery destination.
                         </span>
                       </div>
                     </div>
@@ -819,7 +888,8 @@ function LiveTrackingContent() {
                           href={`/vehicle-details?id=${booking.vehicle.id}`}
                           className="hover:underline text-xs font-bold text-primary truncate max-w-[200px]"
                         >
-                          {booking.vehicle.name} • {booking.vehicle.licensePlate}
+                          {booking.vehicle.name} •{" "}
+                          {booking.vehicle.licensePlate}
                         </Link>
                       </div>
                       <span className="text-[11px] text-secondary font-mono font-bold bg-white px-2 py-0.5 rounded border border-border shrink-0">
@@ -862,7 +932,9 @@ function LiveTrackingContent() {
                       disabled={!booking.driver}
                       className="inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-primary text-white font-medium text-xs hover:bg-secondary transition-all shadow-sm active:scale-95 disabled:opacity-50"
                     >
-                      <span className="material-symbols-outlined text-base">call</span>
+                      <span className="material-symbols-outlined text-base">
+                        call
+                      </span>
                       <span>Call Driver</span>
                     </button>
                     <a
@@ -889,8 +961,10 @@ function LiveTrackingContent() {
                   vehicleImage={booking.vehicle.image}
                   vehicleCategory={booking.vehicle.category}
                   plateNumber={booking.vehicle.licensePlate}
-                  driverName={booking.driver?.name || "Chauffeur Allocation In Progress"}
-                  driverPhone={booking.driver?.phone || "+234 1 888 5275"}
+                  driverName={
+                    booking.driver?.name || "Chauffeur Allocation In Progress"
+                  }
+                  driverPhone={booking.driver?.phone || "+234 814 031 3381"}
                   driverAvatar={booking.driver?.avatar}
                   originAddress={booking.pickupLocation}
                   destinationAddress={booking.deliveryAddress}
@@ -906,7 +980,9 @@ function LiveTrackingContent() {
                   {/* Card 1: Speed & Dynamics */}
                   <div className="bg-white rounded-2xl p-4 shadow-sm border border-border flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-secondary shrink-0 border border-border">
-                      <span className="material-symbols-outlined text-xl">speed</span>
+                      <span className="material-symbols-outlined text-xl">
+                        speed
+                      </span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
@@ -924,7 +1000,9 @@ function LiveTrackingContent() {
                   {/* Card 2: GSM SIM Tracker Status */}
                   <div className="bg-white rounded-2xl p-4 shadow-sm border border-border flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-amber-700 shrink-0 border border-border">
-                      <span className="material-symbols-outlined text-xl">sim_card</span>
+                      <span className="material-symbols-outlined text-xl">
+                        sim_card
+                      </span>
                     </div>
                     <div className="flex flex-col min-w-0">
                       <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
@@ -942,7 +1020,9 @@ function LiveTrackingContent() {
                   {/* Card 3: GPS Coordinates */}
                   <div className="bg-white rounded-2xl p-4 shadow-sm border border-border flex items-start gap-3">
                     <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center text-secondary shrink-0 border border-border">
-                      <span className="material-symbols-outlined text-xl">explore</span>
+                      <span className="material-symbols-outlined text-xl">
+                        explore
+                      </span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">
@@ -993,7 +1073,12 @@ function LiveTrackingContent() {
                     </h3>
 
                     <p className="text-sm text-on-surface-variant leading-relaxed">
-                      Upon vehicle arrival at your destination, {booking.driver?.name ? `Chauffeur ${booking.driver.name.split(" ")[0]}` : "your assigned concierge lead"} will present the authenticated digital reservation pass for swift contactless verification.
+                      Upon vehicle arrival at your destination,{" "}
+                      {booking.driver?.name
+                        ? `Chauffeur ${booking.driver.name.split(" ")[0]}`
+                        : "your assigned concierge lead"}{" "}
+                      will present the authenticated digital reservation pass
+                      for swift contactless verification.
                     </p>
 
                     <div className="flex flex-wrap items-center gap-6 pt-2">
@@ -1052,7 +1137,8 @@ function LiveTrackingContent() {
             </div>
 
             <p className="text-xs text-on-surface-variant leading-relaxed">
-              Share this secure tracking link with family or personal security to follow your {booking.vehicle.name} in real-time.
+              Share this secure tracking link with family or personal security
+              to follow your {booking.vehicle.name} in real-time.
             </p>
 
             <div className="flex flex-col gap-1.5">
@@ -1094,14 +1180,18 @@ function LiveTrackingContent() {
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold transition-all"
               >
-                <span className="material-symbols-outlined text-base">chat</span>
+                <span className="material-symbols-outlined text-base">
+                  chat
+                </span>
                 <span>Send WhatsApp</span>
               </a>
               <a
                 href={`mailto:?subject=La%20Planta%20Prime%20Live%20Tracking&body=Track%20my%20executive%20journey:%20${typeof window !== "undefined" ? encodeURIComponent(`${window.location.origin}/live-tracking?code=${booking.bookingCode}`) : ""}`}
                 className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface border border-border text-xs font-semibold transition-all"
               >
-                <span className="material-symbols-outlined text-base">email</span>
+                <span className="material-symbols-outlined text-base">
+                  email
+                </span>
                 <span>Send Email</span>
               </a>
             </div>
@@ -1131,7 +1221,9 @@ function LiveTrackingContent() {
                 href={`tel:${booking.driver.phone}`}
                 className="w-full py-3.5 px-4 rounded-xl bg-primary hover:bg-secondary text-white font-semibold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md"
               >
-                <span className="material-symbols-outlined text-base">call</span>
+                <span className="material-symbols-outlined text-base">
+                  call
+                </span>
                 <span>Dial {booking.driver.phone}</span>
               </a>
               <a
@@ -1145,7 +1237,7 @@ function LiveTrackingContent() {
                   <span>Fleet Operations Desk</span>
                 </div>
                 <span className="font-mono text-[11px] text-on-surface-variant">
-                  +234 1 888 5275
+                  +234 814 031 3381
                 </span>
               </a>
             </div>

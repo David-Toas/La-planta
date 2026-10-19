@@ -219,7 +219,7 @@ function ReservationPassContent() {
                   badge: d.badge_number || `CHAUFFEUR #${d.id.slice(0, 4)}`,
                   rating: d.rating || 5.0,
                   trips: d.total_trips || 120,
-                  phone: d.phone || "+234 1 888 5275",
+                  phone: d.phone || "+234 814 031 3381",
                   avatar:
                     d.avatar_url ||
                     "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
@@ -234,7 +234,7 @@ function ReservationPassContent() {
                   badge: "ALLOCATION PENDING",
                   rating: 5.0,
                   trips: 0,
-                  phone: "+234 1 888 5275",
+                  phone: "+234 814 031 3381",
                   avatar: "",
                   bio: "A vetted executive chauffeur is currently being assigned to your itinerary. Details and contact channels will activate prior to scheduled departure.",
                   tags: [
@@ -319,7 +319,7 @@ function ReservationPassContent() {
               badge: "ALLOCATION PENDING",
               rating: 5.0,
               trips: 0,
-              phone: "+234 1 888 5275",
+              phone: "+234 814 031 3381",
               avatar: "",
               bio: "A vetted executive chauffeur is currently being assigned to your itinerary. Details and contact channels will activate prior to scheduled departure.",
               tags: [
@@ -472,8 +472,8 @@ function ReservationPassContent() {
               </h1>
               <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed">
                 You do not currently have a confirmed vehicle charter or digital
-                pass under this profile. Reserve a vehicle from our curated fleet
-                or look up an existing itinerary reference code.
+                pass under this profile. Reserve a vehicle from our curated
+                fleet or look up an existing itinerary reference code.
               </p>
             </div>
 
@@ -1200,7 +1200,7 @@ function ReservationPassContent() {
                       rel="noreferrer"
                       className="text-secondary hover:text-primary font-semibold text-xs whitespace-nowrap"
                     >
-                      +234 1 888 5275
+                      +234 814 031 3381
                     </a>
                   </div>
                 </div>

@@ -288,7 +288,10 @@ export interface VIPPassPDFProps {
 
 export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
   return (
-    <Document title={`LaPlanta_VIP_Pass_${booking.bookingCode}`} author="La Planta Prime">
+    <Document
+      title={`LaPlanta_VIP_Pass_${booking.bookingCode}`}
+      author="La Planta Prime"
+    >
       <Page size="A4" style={styles.page}>
         {/* Brand Header */}
         <View style={styles.header}>
@@ -298,7 +301,9 @@ export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
             </View>
             <View>
               <Text style={styles.brandTitle}>LA PLANTA PRIME</Text>
-              <Text style={styles.brandSubtitle}>EXECUTIVE CHAUFFEUR &amp; VIP HANDOVER PASS</Text>
+              <Text style={styles.brandSubtitle}>
+                EXECUTIVE CHAUFFEUR &amp; VIP HANDOVER PASS
+              </Text>
             </View>
           </View>
           <View style={styles.passBadge}>
@@ -325,9 +330,10 @@ export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
               </View>
 
               <Text style={styles.instructionText}>
-                Present this scannable QR voucher or reference PIN #{booking.bookingCode} upon arrival at
-                the hotel valet forecourt or airport private terminal. Your assigned executive chauffeur will
-                authenticate this token to initiate your itinerary.
+                Present this scannable QR voucher or reference PIN #
+                {booking.bookingCode} upon arrival at the hotel valet forecourt
+                or airport private terminal. Your assigned executive chauffeur
+                will authenticate this token to initiate your itinerary.
               </Text>
 
               <View style={styles.statusRow}>
@@ -356,7 +362,9 @@ export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
               </Text>
             </View>
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Exterior Specification &amp; Plate</Text>
+              <Text style={styles.fieldLabel}>
+                Exterior Specification &amp; Plate
+              </Text>
               <Text style={styles.fieldValue}>
                 {booking.vehicle.color} • {booking.vehicle.licensePlate}
               </Text>
@@ -364,7 +372,8 @@ export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>In-Cabin Amenities</Text>
               <Text style={styles.instructionText}>
-                Starlink Wi-Fi • Chilled Refreshment Bar • Acoustic Privacy Glazing • Massaging Executive Recliners
+                Starlink Wi-Fi • Chilled Refreshment Bar • Acoustic Privacy
+                Glazing • Massaging Executive Recliners
               </Text>
             </View>
           </View>
@@ -379,7 +388,8 @@ export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
               <Text style={styles.fieldLabel}>Professional Driver</Text>
               <Text style={styles.fieldValue}>{booking.driver.name}</Text>
               <Text style={styles.fieldValueSub}>
-                Rating: {booking.driver.rating} ★ ({booking.driver.trips}+ verified VIP charters)
+                Rating: {booking.driver.rating} ★ ({booking.driver.trips}+
+                verified VIP charters)
               </Text>
             </View>
             <View style={styles.fieldGroup}>
@@ -402,33 +412,48 @@ export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
         {/* Trip Logistics & Handover Itinerary Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Itinerary &amp; Handover Schedule</Text>
-            <Text style={styles.cardSubtitle}>Charter Duration: {booking.itinerary.duration}</Text>
+            <Text style={styles.cardTitle}>
+              Itinerary &amp; Handover Schedule
+            </Text>
+            <Text style={styles.cardSubtitle}>
+              Charter Duration: {booking.itinerary.duration}
+            </Text>
           </View>
 
           <View style={styles.twoCol}>
             <View style={{ flex: 1 }}>
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Commencement Schedule</Text>
-                <Text style={styles.fieldValue}>{booking.itinerary.pickupDate}</Text>
+                <Text style={styles.fieldValue}>
+                  {booking.itinerary.pickupDate}
+                </Text>
               </View>
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Handover Destination</Text>
-                <Text style={styles.fieldValue}>{booking.itinerary.pickupLocation}</Text>
-                <Text style={styles.instructionText}>{booking.itinerary.pickupAddress}</Text>
+                <Text style={styles.fieldValue}>
+                  {booking.itinerary.pickupLocation}
+                </Text>
+                <Text style={styles.instructionText}>
+                  {booking.itinerary.pickupAddress}
+                </Text>
               </View>
             </View>
 
             <View style={{ flex: 1 }}>
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Return Schedule</Text>
-                <Text style={styles.fieldValue}>{booking.itinerary.returnDate}</Text>
+                <Text style={styles.fieldValue}>
+                  {booking.itinerary.returnDate}
+                </Text>
               </View>
               {booking.itinerary.flightNumber ? (
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Flight Arrival Connection</Text>
+                  <Text style={styles.fieldLabel}>
+                    Flight Arrival Connection
+                  </Text>
                   <Text style={styles.fieldValue}>
-                    {booking.itinerary.flightNumber} ({booking.itinerary.flightRoute || "Scheduled"})
+                    {booking.itinerary.flightNumber} (
+                    {booking.itinerary.flightRoute || "Scheduled"})
                   </Text>
                   <Text style={{ ...styles.instructionText, color: "#10b981" }}>
                     {booking.itinerary.flightStatus || "On Schedule"}
@@ -444,7 +469,9 @@ export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
           <Text style={styles.footerText}>
             La Planta Prime Luxury Fleet Limited • 24/7 VIP Concierge Services
           </Text>
-          <Text style={styles.footerHotline}>Direct Concierge: +234 1 888 5275</Text>
+          <Text style={styles.footerHotline}>
+            Direct Concierge: +234 814 031 3381
+          </Text>
         </View>
       </Page>
     </Document>
@@ -463,7 +490,7 @@ export async function downloadVIPPassPDF(booking: VIPPassPDFProps["booking"]) {
   const origin = window.location.origin || "https://laplantaprime.com";
   const handoverInspectionUrl = `${origin}/handover-inspection?code=${booking.bookingCode}&pin=${booking.verificationPin}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=8&data=${encodeURIComponent(
-    handoverInspectionUrl
+    handoverInspectionUrl,
   )}`;
 
   const doc = <VIPPassPDFDocument booking={booking} qrCodeUrl={qrCodeUrl} />;
@@ -478,4 +505,3 @@ export async function downloadVIPPassPDF(booking: VIPPassPDFProps["booking"]) {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
-
