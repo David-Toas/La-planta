@@ -869,6 +869,41 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // Admin Role Update handler (Promote/Revoke Admin Access)
+  const handleUpdateRole = async (userId: string, newRole: "admin" | "client") => {
+    setUpdatingUserId(userId);
+    setVipFeedback(null);
+    const res = await adminApi.updateUserRole(userId, newRole);
+    setUpdatingUserId(null);
+    if (res?.success) {
+      setUserList((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)),
+      );
+      setVipFeedback({
+        id: userId,
+        text: `✓ Role updated to ${newRole === "admin" ? "ADMIN" : "CLIENT"}`,
+      });
+      toast({
+        title: newRole === "admin" ? "Admin Access Granted" : "Admin Access Revoked",
+        description:
+          newRole === "admin"
+            ? "Member can now sign in to the Admin Dashboard (including with Google Sign-In)."
+            : "Admin privileges revoked. Account reverted to regular client.",
+      });
+      setTimeout(() => setVipFeedback(null), 4000);
+    } else {
+      setVipFeedback({
+        id: userId,
+        text: `Error: ${res?.error || "Failed to update role"}`,
+      });
+      toast({
+        title: "Role Update Failed",
+        description: res?.error || "Unable to update user role",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Filtered fleet
   const displayedFleet = fleetList.filter((v) => {
     if (fleetFilter === "active") {
@@ -2368,14 +2403,16 @@ export default function AdminDashboardPage() {
                       <th className="py-3 px-4">Contact Phone</th>
                       <th className="py-3 px-4">Email Address</th>
                       <th className="py-3 px-4">Current Tier</th>
+                      <th className="py-3 px-4">Access Role</th>
                       <th className="py-3 px-4 rounded-r-lg text-right">
-                        Change / Promote VIP Tier
+                        Admin Access / VIP Tier Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-surface-container/50">
                     {userList.map((u) => {
                       const currentTier = u.vip_tier || "standard";
+                      const isAdmin = u.role === "admin";
                       return (
                         <tr
                           key={u.id}
@@ -2427,8 +2464,49 @@ export default function AdminDashboardPage() {
                               </span>
                             )}
                           </td>
+                          <td className="py-3.5 px-4">
+                            {isAdmin ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary text-secondary text-[10px] font-bold uppercase tracking-wider shadow-sm border border-secondary/30">
+                                <span className="material-symbols-outlined text-xs text-secondary">
+                                  shield_person
+                                </span>
+                                Administrator
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[10px] font-medium uppercase tracking-wider">
+                                Client
+                              </span>
+                            )}
+                          </td>
                           <td className="py-3.5 px-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-2 flex-wrap">
+                              {/* Make Admin / Revoke Admin Button */}
+                              {isAdmin ? (
+                                <button
+                                  type="button"
+                                  disabled={updatingUserId === u.id || u.id === adminUser?.id}
+                                  onClick={() => handleUpdateRole(u.id, "client")}
+                                  className="h-8 px-2.5 rounded-lg bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-semibold border border-destructive/20 transition-colors disabled:opacity-40"
+                                  title={u.id === adminUser?.id ? "You cannot revoke your own admin account" : "Revoke Admin Dashboard Privileges"}
+                                >
+                                  Revoke Admin
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={updatingUserId === u.id}
+                                  onClick={() => handleUpdateRole(u.id, "admin")}
+                                  className="h-8 px-2.5 rounded-lg bg-secondary/15 hover:bg-secondary/25 text-primary border border-secondary/40 text-xs font-bold transition-all shadow-sm disabled:opacity-40 flex items-center gap-1"
+                                  title="Grant Admin Access (Enables Sign In with Google/Email to Admin Cockpit)"
+                                >
+                                  <span className="material-symbols-outlined text-sm text-secondary">
+                                    add_moderator
+                                  </span>
+                                  <span>Make Admin</span>
+                                </button>
+                              )}
+
+                              {/* VIP Tier Selector */}
                               <select
                                 disabled={updatingUserId === u.id}
                                 value={
@@ -2441,18 +2519,19 @@ export default function AdminDashboardPage() {
                                 onChange={(e) =>
                                   handleUpdateTier(u.id, e.target.value)
                                 }
-                                className="h-8 px-2.5 rounded-lg bg-surface-container-low border border-surface-container text-xs font-semibold text-primary focus:outline-none focus:border-secondary cursor-pointer disabled:opacity-50"
+                                className="h-8 px-2 rounded-lg bg-surface-container-low border border-surface-container text-xs font-semibold text-primary focus:outline-none focus:border-secondary cursor-pointer disabled:opacity-50"
                               >
                                 <option value="standard">
-                                  Member (No Badge)
+                                  Standard
                                 </option>
                                 <option value="executive">
-                                  Executive (Black Badge)
+                                  Executive
                                 </option>
                                 <option value="first_class">
-                                  VIP (Gold Badge)
+                                  VIP Gold
                                 </option>
                               </select>
+
                               {vipFeedback && vipFeedback.id === u.id && (
                                 <span className="text-[11px] font-medium text-emerald-700 animate-in fade-in">
                                   {vipFeedback.text}

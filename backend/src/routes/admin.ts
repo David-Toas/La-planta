@@ -223,6 +223,47 @@ adminRouter.patch("/users/:id/tier", async (req: Request, res: Response) => {
 });
 
 /**
+ * PATCH /api/admin/users/:id/role
+ * Admin grants or revokes admin role for a member
+ */
+adminRouter.patch("/users/:id/role", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+
+    const validRoles = ["client", "admin", "driver"];
+    if (!role || !validRoles.includes(role.toLowerCase())) {
+      return res.status(400).json({
+        error: `Invalid role. Allowed roles: ${validRoles.join(", ")}`,
+      });
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({
+        role: role.toLowerCase(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log(`\x1b[32m[Admin Role Updated]\x1b[0m User ${id} updated to role: ${role}`);
+
+    return res.json({
+      success: true,
+      message: `User role updated to ${role}`,
+      profile: data,
+    });
+  } catch (err: any) {
+    console.error("[Admin Error] Update role failed:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /api/admin/fleet
  * Add a new vehicle to the fleet
  */

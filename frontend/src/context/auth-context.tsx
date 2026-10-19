@@ -32,6 +32,7 @@ interface AuthContextType {
   signInWithEmail: (email: string, password: string) => Promise<AuthResponse>;
   signUpWithEmail: (email: string, password: string, name: string, phone?: string) => Promise<AuthResponse>;
   signInWithGoogle: () => Promise<AuthResponse>;
+  signInWithGoogleIdToken: (idToken: string) => Promise<AuthResponse>;
   updateProfile: (updates: { full_name?: string; phone?: string; avatar_url?: string }) => Promise<AuthResponse>;
 }
 
@@ -420,6 +421,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Google Native ID Token Sign In (Google Identity Services popup / One Tap - zero supabase.co redirect)
+  const signInWithGoogleIdToken = async (idToken: string): Promise<AuthResponse> => {
+    try {
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: idToken,
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (data.user) {
+        await syncUserProfile(data.user, data.session || undefined);
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Failed to sign in with Google" };
+    }
+  };
+
   // Update Profile (e.g. adding phone number, updating name)
   const updateProfile = async (updates: {
     full_name?: string;
@@ -476,6 +499,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithEmail,
         signUpWithEmail,
         signInWithGoogle,
+        signInWithGoogleIdToken,
         updateProfile,
       }}
     >

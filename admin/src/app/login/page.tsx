@@ -1,18 +1,47 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAdminAuth } from "@/context/admin-auth-context";
 import { useRouter } from "next/navigation";
+import { GoogleSignInButton } from "@/components/google-sign-in-button";
 
 export default function AdminLoginPage() {
-  const { login } = useAdminAuth();
+  const { login, signInWithGoogle, signInWithGoogleIdToken } = useAdminAuth();
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [passcode, setPasscode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const err = params.get("error");
+      if (err) {
+        setErrorMsg(decodeURIComponent(err));
+      }
+    }
+  }, []);
+
+  const handleGoogleCredential = async (credential: string) => {
+    try {
+      setIsGoogleLoading(true);
+      setErrorMsg(null);
+      const res = await signInWithGoogleIdToken(credential);
+      if (res.success) {
+        router.push("/");
+      } else if (res.error) {
+        setErrorMsg(res.error);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to authenticate with Google");
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,35 +76,18 @@ export default function AdminLoginPage() {
               </span>
             </div>
           </div>
-          <a
-            href={
-              process.env.NEXT_PUBLIC_CLIENT_URL ||
-              (typeof window !== "undefined"
-                ? window.location.origin.replace(":3001", ":3000")
-                : "http://localhost:3000")
-            }
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary transition-colors"
-          >
-            <span>Public Site</span>
-            <span className="material-symbols-outlined text-sm">open_in_new</span>
-          </a>
         </div>
 
         {/* Hero Card */}
         <div className="relative w-full rounded-2xl overflow-hidden bg-primary shadow-xl p-6 sm:p-7 text-white">
           <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-secondary/20 blur-2xl pointer-events-none" />
           <div className="relative z-10 flex flex-col gap-2">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-secondary/20 text-secondary-fixed text-[11px] uppercase tracking-wider self-start font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-secondary-fixed animate-pulse" />
-              Lagos &amp; Abuja Dispatch Cockpit
-            </div>
             <h1 className="font-serif text-2xl sm:text-3xl text-white font-normal leading-snug">
               Operations Login
             </h1>
             <p className="text-xs text-white/70 leading-relaxed">
-              Authorized fleet controllers only. Coordinate GPS telematics, chauffeur rosters, valet handovers, and VIP client memberships.
+              Authorized fleet controllers only. Coordinate GPS telematics,
+              chauffeur rosters, valet handovers, and VIP client memberships.
             </p>
           </div>
         </div>
@@ -88,6 +100,25 @@ export default function AdminLoginPage() {
               <span>{errorMsg}</span>
             </div>
           )}
+
+          {/* Google Identity Services: Native Popup Login (Zero Supabase branding) */}
+          <div className="flex flex-col gap-2">
+            <GoogleSignInButton
+              theme="filled_black"
+              text="continue_with"
+              onSuccess={handleGoogleCredential}
+              onError={(err) => setErrorMsg(err)}
+            />
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="h-px bg-surface-container flex-1" />
+            <span className="text-[10px] uppercase font-bold text-on-surface-variant/70 tracking-wider">
+              Or Dispatcher Credentials
+            </span>
+            <div className="h-px bg-surface-container flex-1" />
+          </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -154,4 +185,3 @@ export default function AdminLoginPage() {
     </div>
   );
 }
-

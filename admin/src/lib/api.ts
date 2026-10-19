@@ -483,6 +483,32 @@ export const adminApi = {
   },
 
   /**
+   * Update a user's role (e.g. promote client to admin or revoke admin)
+   */
+  async updateUserRole(userId: string, role: "admin" | "client") {
+    const res = await adminFetch(`/api/admin/users/${userId}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    });
+    if (res?.success) return res;
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({ role: role.toLowerCase(), updated_at: new Date().toISOString() })
+        .eq("id", userId)
+        .select()
+        .single();
+      if (!error && data) return { success: true, profile: data };
+      if (error) return { success: false, error: error.message };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+
+    return res || { success: false, error: "Failed to update user role" };
+  },
+
+  /**
    * Dispatch encrypted ping to vehicle tracker SIM (Resolves target SIM dynamically from database)
    */
   async pingTracker(

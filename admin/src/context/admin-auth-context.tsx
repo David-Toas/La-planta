@@ -21,6 +21,8 @@ interface AdminAuthContextType {
     email: string,
     passcode: string,
   ) => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogleIdToken: (idToken: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -33,54 +35,146 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Verify initial session & Supabase admin profile
-  useEffect(() => {
-    async function initAuth() {
-      try {
-        // 1. Check live Supabase Auth session
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session?.user) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("id, full_name, email, role, vip_tier, avatar_url")
-            .eq("id", session.user.id)
-            .maybeSingle();
+  // Helper: Verify if user has role === 'admin' in profiles table
+  const verifyAndSetAdmin = async (sessionUser: any): Promise<boolean> => {
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, role, vip_tier, avatar_url")
+        .eq("id", sessionUser.id)
+        .maybeSingle();
 
-          if (profile?.role === "admin") {
-            const user: AdminUser = {
-              id: profile.id,
-              name:
-                profile.full_name ||
-                session.user.email?.split("@")[0].replace(".", " ") ||
-                "Administrator",
-              email: profile.email || session.user.email || "",
-              role: "admin",
-              badge: "EXEC-HQ-01",
-              accessLevel: "Fleet Administrator • All Hubs Access",
-              avatarUrl:
-                profile.avatar_url ||
-                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400",
-            };
-            setAdminUser(user);
-            localStorage.setItem("laPlanta_adminUser", JSON.stringify(user));
-            setLoading(false);
-            return;
-          }
-        }
-
-        // 2. If no valid Supabase admin session, clear any stale state
+      if (profile?.role === "admin") {
+        const user: AdminUser = {
+          id: profile.id,
+          name:
+            profile.full_name ||
+            sessionUser.user_metadata?.full_name ||
+            sessionUser.email?.split("@")[0].replace(".", " ") ||
+            "Administrator",
+          email: profile.email || sessionUser.email || "",
+          role: "admin",
+          badge: "EXEC-HQ-01",
+          accessLevel: "Fleet Administrator • All Hubs Access",
+          avatarUrl:
+            profile.avatar_url ||
+            sessionUser.user_metadata?.avatar_url ||
+            "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400",
+        };
+        setAdminUser(user);
+        localStorage.setItem("laPlanta_adminUser", JSON.stringify(user));
+        return true;
+      } else {
         localStorage.removeItem("laPlanta_adminUser");
         setAdminUser(null);
-      } catch (err) {
-        console.warn("[AdminAuth] Session init:", err);
+        return false;
+      }
+    } catch (err) {
+      console.warn("[AdminAuth] Verify admin notice:", err);
+      return false;
+    }
+  };
+
+  // Verify initial session & Supabase admin profile with live listener
+  useEffect(() => {
+    // 1. Check live initial session
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        await verifyAndSetAdmin(session.user);
+      } else {
+        setAdminUser(null);
+        localStorage.removeItem("laPlanta_adminUser");
       }
       setLoading(false);
-    }
+    });
 
-    initAuth();
+    // 2. Real-time auth listener for Google OAuth redirect & session changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const isAdmin = await verifyAndSetAdmin(session.user);
+        if (!isAdmin && event === "SIGNED_IN") {
+          // If a non-admin Google user logs in, sign them out from admin console
+          await supabase.auth.signOut();
+        }
+      } else if (event === "SIGNED_OUT") {
+        setAdminUser(null);
+        localStorage.removeItem("laPlanta_adminUser");
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  const signInWithGoogle = async () => {
+    try {
+      const origin =
+        typeof window !== "undefined" && window.location.origin
+          ? window.location.origin
+          : "http://localhost:3001";
+
+      const callbackUrl = `${origin.replace(/\/$/, "")}/auth/callback`;
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: callbackUrl,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
+        },
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err.message || "Failed to initiate Google sign-in",
+      };
+    }
+  };
+
+  const signInWithGoogleIdToken = async (idToken: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: idToken,
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (data.user) {
+        const isAdmin = await verifyAndSetAdmin(data.user);
+        if (!isAdmin) {
+          await supabase.auth.signOut();
+          return {
+            success: false,
+            error:
+              "Access Denied: This Google account does not have administrator privileges. Please contact an existing administrator to grant you access.",
+          };
+        }
+        return { success: true };
+      }
+
+      return { success: false, error: "Authentication failed" };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err.message || "Failed to sign in with Google",
+      };
+    }
+  };
 
   const login = async (email: string, passcode: string) => {
     if (!email || !passcode) {
@@ -105,38 +199,10 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // Check profile role in Supabase
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, role, vip_tier, avatar_url")
-        .eq("id", authData.user.id)
-        .maybeSingle();
-
-      if (profileError || !profile) {
-        await supabase.auth.signOut();
-        return {
-          success: false,
-          error: "Unable to load operator credentials. Please contact IT.",
-        };
-      }
-
-      if (profile.role === "admin") {
-        const user: AdminUser = {
-          id: profile.id,
-          name: profile.full_name || email.split("@")[0].replace(".", " "),
-          email: profile.email || email,
-          role: "admin",
-          badge: "EXEC-HQ-01",
-          accessLevel: "Fleet Administrator • All Hubs Access",
-          avatarUrl:
-            profile.avatar_url ||
-            "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400",
-        };
-        setAdminUser(user);
-        localStorage.setItem("laPlanta_adminUser", JSON.stringify(user));
+      const isAdmin = await verifyAndSetAdmin(authData.user);
+      if (isAdmin) {
         return { success: true };
       } else {
-        // Authenticated user does not have admin role in profiles table
         await supabase.auth.signOut();
         return {
           success: false,
@@ -224,6 +290,8 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         adminUser,
         loading,
         login,
+        signInWithGoogle,
+        signInWithGoogleIdToken,
         logout,
       }}
     >
