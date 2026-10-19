@@ -315,7 +315,12 @@ export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
         {/* Main Digital QR Handover Voucher Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Digital Handover Voucher</Text>
+            <View>
+              <Text style={styles.cardTitle}>Digital Handover Voucher</Text>
+              <Text style={{ ...styles.cardSubtitle, color: "#d4af37", marginTop: 2 }}>
+                AUTHORIZED VIP CLIENT: {booking.customerName || "VIP Executive Member"}
+              </Text>
+            </View>
             <Text style={styles.cardSubtitle}>{booking.handoverProtocol}</Text>
           </View>
 
@@ -329,11 +334,23 @@ export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
                 <Text style={styles.pinValue}>{booking.verificationPin}</Text>
               </View>
 
+              {/* Client Name & ID Verification Highlight */}
+              <View style={{ marginBottom: 6, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: "#1d2636" }}>
+                <Text style={styles.fieldLabel}>PASSENGER / CLIENT NAME</Text>
+                <Text style={{ ...styles.fieldValue, fontSize: 12, color: "#ffffff" }}>
+                  {booking.customerName || "Executive VIP Client"}
+                </Text>
+                {booking.customerPhone ? (
+                  <Text style={{ ...styles.fieldValueSub, color: "#fedeb2", marginTop: 2 }}>
+                    Contact Phone: {booking.customerPhone}
+                  </Text>
+                ) : null}
+              </View>
+
               <Text style={styles.instructionText}>
                 Present this scannable QR voucher or reference PIN #
-                {booking.bookingCode} upon arrival at the hotel valet forecourt
-                or airport private terminal. Your assigned executive chauffeur
-                will authenticate this token to initiate your itinerary.
+                {booking.bookingCode} upon arrival. The operations officer or assigned
+                chauffeur will verify your matching photo ID before vehicle handover.
               </Text>
 
               <View style={styles.statusRow}>
@@ -346,7 +363,7 @@ export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
           </View>
         </View>
 
-        {/* Two-Column Grid: Vehicle Asset & Chauffeur Profile */}
+        {/* Two-Column Grid: Vehicle Asset & Chauffeur / Hub Handover Profile */}
         <View style={styles.twoCol}>
           {/* Designated Fleet Vehicle */}
           <View style={styles.colHalf}>
@@ -378,35 +395,69 @@ export function VIPPassPDFDocument({ booking, qrCodeUrl }: VIPPassPDFProps) {
             </View>
           </View>
 
-          {/* Assigned Executive Chauffeur */}
-          <View style={styles.colHalf}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Assigned Chauffeur</Text>
-              <Text style={styles.cardSubtitle}>{booking.driver.badge}</Text>
-            </View>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Professional Driver</Text>
-              <Text style={styles.fieldValue}>{booking.driver.name}</Text>
-              <Text style={styles.fieldValueSub}>
-                Rating: {booking.driver.rating} ★ ({booking.driver.trips}+
-                verified VIP charters)
-              </Text>
-            </View>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Chauffeur Direct Contact</Text>
-              <Text style={styles.fieldValue}>{booking.driver.phone}</Text>
-            </View>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Vetted Certifications</Text>
-              <View style={styles.tagRow}>
-                {booking.driver.tags.slice(0, 3).map((tag, idx) => (
-                  <View key={idx} style={styles.tagPill}>
-                    <Text style={styles.tagText}>{tag}</Text>
-                  </View>
-                ))}
+          {/* Assigned Executive Chauffeur OR Flagship Hub Collection */}
+          {booking.handoverProtocol?.toLowerCase().includes("hub") ||
+          booking.handoverProtocol?.toLowerCase().includes("office") ||
+          booking.itinerary?.pickupLocation?.toLowerCase().includes("hub") ||
+          booking.itinerary?.pickupLocation?.toLowerCase().includes("office") ||
+          booking.serviceTier?.toLowerCase().includes("self-drive") ||
+          booking.serviceTier?.toLowerCase().includes("office") ? (
+            <View style={styles.colHalf}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>Handover Protocol</Text>
+                <Text style={{ ...styles.cardSubtitle, color: "#10b981" }}>
+                  VIP Hub Collection
+                </Text>
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Collection Station</Text>
+                <Text style={styles.fieldValue}>La Planta Flagship Hub</Text>
+                <Text style={styles.fieldValueSub}>
+                  Plot 14 Victoria Island Boulevard, Lagos
+                </Text>
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Staging Position</Text>
+                <Text style={styles.fieldValue}>VIP Collection Bay 01</Text>
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Verification Protocol</Text>
+                <Text style={styles.instructionText}>
+                  Vehicle prepped and staged for client collection. Present this
+                  digital pass and matching driver's license at Reception Desk 01.
+                </Text>
               </View>
             </View>
-          </View>
+          ) : (
+            <View style={styles.colHalf}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>Assigned Chauffeur</Text>
+                <Text style={styles.cardSubtitle}>{booking.driver.badge}</Text>
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Professional Driver</Text>
+                <Text style={styles.fieldValue}>{booking.driver.name}</Text>
+                <Text style={styles.fieldValueSub}>
+                  Rating: {booking.driver.rating} ★ ({booking.driver.trips}+
+                  verified VIP charters)
+                </Text>
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Chauffeur Direct Contact</Text>
+                <Text style={styles.fieldValue}>{booking.driver.phone}</Text>
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Vetted Certifications</Text>
+                <View style={styles.tagRow}>
+                  {booking.driver.tags.slice(0, 3).map((tag, idx) => (
+                    <View key={idx} style={styles.tagPill}>
+                      <Text style={styles.tagText}>{tag}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Trip Logistics & Handover Itinerary Card */}

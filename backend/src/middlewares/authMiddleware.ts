@@ -48,9 +48,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     req.user = {
       id: user.id,
       email: user.email || "",
-      role: profile?.role || (user.user_metadata?.role as any) || "client",
+      // HARDENED: Authoritative role from database; NEVER trust client-writable user_metadata
+      role: profile?.role || "client",
       vipTier: profile?.vip_tier || "standard",
-      fullName: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name,
+      fullName: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || "Client",
       provider: user.app_metadata?.provider || "email",
     };
 

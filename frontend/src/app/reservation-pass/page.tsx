@@ -154,7 +154,14 @@ function ReservationPassContent() {
           const v = dbRecord.vehicles;
           const d = dbRecord.drivers;
 
-          const hasAssignedDriver = !!(d && d.full_name);
+          const isHubRecord =
+            (dbRecord.pickup_location &&
+              (dbRecord.pickup_location.toLowerCase().includes("hub") ||
+                dbRecord.pickup_location.toLowerCase().includes("office"))) ||
+            dbRecord.handover_mode === "office" ||
+            dbRecord.special_instructions?.includes("Office Pickup");
+
+          const hasAssignedDriver = !isHubRecord && !!(d && d.full_name);
 
           const passData: BookingPassData = {
             bookingCode: dbRecord.booking_reference || targetCode || "LP-PRIME",
@@ -187,8 +194,9 @@ function ReservationPassContent() {
               user?.name || dbRecord.customer_name || "Executive Client",
             customerPhone: user?.phone || dbRecord.customer_phone || "",
             customerEmail: user?.email || dbRecord.customer_email || "",
-            handoverProtocol:
-              dbRecord.service_type === "self_drive"
+            handoverProtocol: isHubRecord
+              ? "Flagship Hub Collection"
+              : dbRecord.service_type === "self_drive"
                 ? "Direct Delivery (Self-Drive)"
                 : "VIP Handover & Escort Cleared",
             vehicle: {
@@ -212,38 +220,54 @@ function ReservationPassContent() {
                 },
               ],
             },
-            driver: hasAssignedDriver
+            driver: isHubRecord
               ? {
-                  id: d.id,
-                  name: d.full_name,
-                  badge: d.badge_number || `CHAUFFEUR #${d.id.slice(0, 4)}`,
-                  rating: d.rating || 5.0,
-                  trips: d.total_trips || 120,
-                  phone: d.phone || "+234 814 031 3381",
-                  avatar:
-                    d.avatar_url ||
-                    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-                  bio: "Vetted Executive Chauffeur assigned to your reservation itinerary with flawless defensive driving and hospitality protocol.",
-                  tags: d.certifications?.length
-                    ? d.certifications
-                    : ["Vetted & Certified", "Discreet & Professional"],
-                  isAssigned: true,
-                }
-              : {
-                  name: "Chauffeur Allocation In Progress",
-                  badge: "ALLOCATION PENDING",
+                  name: "Flagship Hub Concierge (Bay 01)",
+                  badge: "VI-HUB-BAY01",
                   rating: 5.0,
                   trips: 0,
                   phone: "+234 814 031 3381",
                   avatar: "",
-                  bio: "A vetted executive chauffeur is currently being assigned to your itinerary. Details and contact channels will activate prior to scheduled departure.",
+                  bio: "Your vehicle is pre-conditioned to 21°C, inspected, and staged at VIP Bay 01. Keys and vehicle will be handed over immediately upon scanning this digital pass.",
                   tags: [
-                    "Allocation In Progress",
-                    "72-Point Inspection",
-                    "Vetted Chauffeur Network",
+                    "VIP Bay 01 Staging",
+                    "72-Point Inspected",
+                    "Express Handover",
                   ],
-                  isAssigned: false,
-                },
+                  isAssigned: true,
+                }
+              : hasAssignedDriver
+                ? {
+                    id: d.id,
+                    name: d.full_name,
+                    badge: d.badge_number || `CHAUFFEUR #${d.id.slice(0, 4)}`,
+                    rating: d.rating || 5.0,
+                    trips: d.total_trips || 120,
+                    phone: d.phone || "+234 814 031 3381",
+                    avatar:
+                      d.avatar_url ||
+                      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
+                    bio: "Vetted Executive Chauffeur assigned to your reservation itinerary with flawless defensive driving and hospitality protocol.",
+                    tags: d.certifications?.length
+                      ? d.certifications
+                      : ["Vetted & Certified", "Discreet & Professional"],
+                    isAssigned: true,
+                  }
+                : {
+                    name: "Chauffeur Allocation In Progress",
+                    badge: "ALLOCATION PENDING",
+                    rating: 5.0,
+                    trips: 0,
+                    phone: "+234 814 031 3381",
+                    avatar: "",
+                    bio: "A vetted executive chauffeur is currently being assigned to your itinerary. Details and contact channels will activate prior to scheduled departure.",
+                    tags: [
+                      "Allocation In Progress",
+                      "72-Point Inspection",
+                      "Vetted Chauffeur Network",
+                    ],
+                    isAssigned: false,
+                  },
             itinerary: {
               pickupDate: dbRecord.pickup_datetime
                 ? new Date(dbRecord.pickup_datetime).toLocaleString("en-NG", {
@@ -273,62 +297,88 @@ function ReservationPassContent() {
           setBooking(passData);
         } else if (localData) {
           // Fallback to active localStorage booking
-          const passData: BookingPassData = {
-            bookingCode: localData.bookingCode || targetCode || "LP-PRIME",
-            reference: localData.reference || "LP_REF",
-            verificationPin: localData.verificationPin || "8842-09",
-            status: "confirmed",
-            serviceTier:
-              localData.serviceType === "self_drive"
-                ? "Executive Self-Drive"
-                : "Executive First Class",
-            amountFormatted: localData.amountFormatted || "₦0",
-            paidAt: localData.paidAt || "Confirmed",
-            paidDate: localData.paidDate || "Recent",
-            customerName:
-              user?.name || localData.customerName || "Executive Client",
-            customerPhone: user?.phone || localData.customerPhone || "",
-            customerEmail: user?.email || localData.customerEmail || "",
-            handoverProtocol:
-              localData.handoverMode === "delivery"
-                ? localData.includeChauffeur
-                  ? "Direct Delivery with Chauffeur"
-                  : "Direct Delivery (Self-Drive)"
-                : "Office Pickup",
-            vehicle: {
-              name: localData.vehicle || "Executive Fleet Vehicle",
-              category: "First-Class Fleet",
-              year: 2024,
-              color: localData.vehicleColor || "Obsidian Black",
-              licensePlate: "LP-PRIME",
-              image:
-                localData.vehicleImage ||
-                "https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=1200&q=80",
-              amenities: [
-                { icon: "wifi", label: "High-Speed Starlink Wi-Fi" },
-                { icon: "wine_bar", label: "Chilled Refreshments" },
-                { icon: "volume_off", label: "Acoustic Privacy Glazing" },
-                {
-                  icon: "airline_seat_recline_extra",
-                  label: "First-Class Executive Seating",
-                },
-              ],
-            },
-            driver: {
-              name: "Chauffeur Allocation In Progress",
-              badge: "ALLOCATION PENDING",
-              rating: 5.0,
-              trips: 0,
-              phone: "+234 814 031 3381",
-              avatar: "",
-              bio: "A vetted executive chauffeur is currently being assigned to your itinerary. Details and contact channels will activate prior to scheduled departure.",
-              tags: [
-                "Allocation In Progress",
-                "72-Point Inspection",
-                "Vetted Chauffeur Network",
-              ],
-              isAssigned: false,
-            },
+            const isHubLocal =
+              localData.handoverMode === "office" ||
+              (localData.deliveryAddress &&
+                (localData.deliveryAddress.toLowerCase().includes("hub") ||
+                  localData.deliveryAddress.toLowerCase().includes("office"))) ||
+              (localData.pickupLocation &&
+                (localData.pickupLocation.toLowerCase().includes("hub") ||
+                  localData.pickupLocation.toLowerCase().includes("office")));
+
+            const passData: BookingPassData = {
+              bookingCode: localData.bookingCode || targetCode || "LP-PRIME",
+              reference: localData.reference || "LP_REF",
+              verificationPin: localData.verificationPin || "8842-09",
+              status: "confirmed",
+              serviceTier:
+                localData.serviceType === "self_drive"
+                  ? "Executive Self-Drive"
+                  : "Executive First Class",
+              amountFormatted: localData.amountFormatted || "₦0",
+              paidAt: localData.paidAt || "Confirmed",
+              paidDate: localData.paidDate || "Recent",
+              customerName:
+                user?.name || localData.customerName || "Executive Client",
+              customerPhone: user?.phone || localData.customerPhone || "",
+              customerEmail: user?.email || localData.customerEmail || "",
+              handoverProtocol: isHubLocal
+                ? "Flagship Hub Collection"
+                : localData.handoverMode === "delivery"
+                  ? localData.includeChauffeur
+                    ? "Direct Delivery with Chauffeur"
+                    : "Direct Delivery (Self-Drive)"
+                  : "Flagship Hub Collection",
+              vehicle: {
+                name: localData.vehicle || "Executive Fleet Vehicle",
+                category: "First-Class Fleet",
+                year: 2024,
+                color: localData.vehicleColor || "Obsidian Black",
+                licensePlate: "LP-PRIME",
+                image:
+                  localData.vehicleImage ||
+                  "https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=1200&q=80",
+                amenities: [
+                  { icon: "wifi", label: "High-Speed Starlink Wi-Fi" },
+                  { icon: "wine_bar", label: "Chilled Refreshments" },
+                  { icon: "volume_off", label: "Acoustic Privacy Glazing" },
+                  {
+                    icon: "airline_seat_recline_extra",
+                    label: "First-Class Executive Seating",
+                  },
+                ],
+              },
+              driver: isHubLocal
+                ? {
+                    name: "Flagship Hub Concierge (Bay 01)",
+                    badge: "VI-HUB-BAY01",
+                    rating: 5.0,
+                    trips: 0,
+                    phone: "+234 814 031 3381",
+                    avatar: "",
+                    bio: "Your vehicle is pre-conditioned to 21°C, inspected, and staged at VIP Bay 01. Keys and vehicle will be handed over immediately upon scanning this digital pass.",
+                    tags: [
+                      "VIP Bay 01 Staging",
+                      "72-Point Inspected",
+                      "Express Handover",
+                    ],
+                    isAssigned: true,
+                  }
+                : {
+                    name: "Chauffeur Allocation In Progress",
+                    badge: "ALLOCATION PENDING",
+                    rating: 5.0,
+                    trips: 0,
+                    phone: "+234 814 031 3381",
+                    avatar: "",
+                    bio: "A vetted executive chauffeur is currently being assigned to your itinerary. Details and contact channels will activate prior to scheduled departure.",
+                    tags: [
+                      "Allocation In Progress",
+                      "72-Point Inspection",
+                      "Vetted Chauffeur Network",
+                    ],
+                    isAssigned: false,
+                  },
             itinerary: {
               pickupDate: localData.startDate
                 ? new Date(localData.startDate).toLocaleString("en-NG", {
@@ -426,12 +476,12 @@ function ReservationPassContent() {
     }
   };
 
-  const handoverInspectionUrl = booking
-    ? `${originUrl}/handover-inspection?code=${booking.bookingCode}&pin=${booking.verificationPin}`
+  const pdfPassUrl = booking
+    ? `${originUrl}/api/reservation-pass/${booking.bookingCode}/pdf`
     : originUrl;
 
   const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data=${encodeURIComponent(
-    handoverInspectionUrl,
+    pdfPassUrl,
   )}`;
 
   // Loading state
@@ -521,6 +571,16 @@ function ReservationPassContent() {
     );
   }
 
+  // Detect if this is an office / hub collection
+  const isHubPickup = booking
+    ? booking.handoverProtocol.toLowerCase().includes("hub") ||
+      booking.handoverProtocol.toLowerCase().includes("office") ||
+      booking.itinerary.pickupLocation.toLowerCase().includes("hub") ||
+      booking.itinerary.pickupLocation.toLowerCase().includes("office") ||
+      booking.serviceTier.toLowerCase().includes("self-drive") ||
+      booking.serviceTier.toLowerCase().includes("office")
+    : false;
+
   // Active Confirmed Booking Pass View (Warm Alabaster & White Luxury Light Theme)
   return (
     <div className="min-h-screen bg-surface text-on-surface flex flex-col font-sans selection:bg-secondary-fixed selection:text-primary">
@@ -559,11 +619,13 @@ function ReservationPassContent() {
               <span className="text-outline-variant hidden sm:inline">•</span>
               <span className="text-xs font-medium text-on-surface-variant flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-sm text-secondary">
-                  badge
+                  {isHubPickup ? "storefront" : "badge"}
                 </span>
-                {booking.driver.isAssigned
-                  ? "Chauffeur Assigned"
-                  : "Chauffeur Allocation In Progress"}
+                {isHubPickup
+                  ? "Flagship Hub Collection • Bay 01 Staged"
+                  : booking.driver.isAssigned
+                    ? "Chauffeur Assigned"
+                    : "Chauffeur Allocation In Progress"}
               </span>
               <span className="text-outline-variant hidden sm:inline">•</span>
               <span className="text-xs font-mono text-secondary bg-surface-container-low px-2.5 py-1 rounded-md border border-surface-container font-semibold">
@@ -690,7 +752,7 @@ function ReservationPassContent() {
               <span className="material-symbols-outlined text-sm">
                 directions_car
               </span>
-              <span>Asset &amp; Driver</span>
+              <span>{isHubPickup ? "Asset & Hub" : "Asset & Driver"}</span>
             </button>
             <button
               onClick={() => setActiveMobileTab("itinerary")}
@@ -834,10 +896,9 @@ function ReservationPassContent() {
                       )}
 
                       <p className="text-xs text-on-surface-variant leading-relaxed">
-                        Present this QR pass upon arrival at the hotel forecourt
-                        or private airport terminal. Your assigned chauffeur
-                        will scan the token at vehicle handover to authenticate
-                        your itinerary.
+                        {isHubPickup
+                          ? "Present this QR pass upon arrival at the La Planta Flagship Hub (VIP Bay 01). Our concierge team will scan your encrypted token to authenticate your itinerary and release your vehicle keys."
+                          : "Present this QR pass upon arrival at the hotel forecourt or private airport terminal. Your assigned chauffeur will scan the token at vehicle handover to authenticate your itinerary."}
                       </p>
 
                       <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 text-[11px] text-on-surface-variant">
@@ -845,7 +906,9 @@ function ReservationPassContent() {
                           verified_user
                         </span>
                         <span>
-                          VIP Handover Protocol Cleared • Zero Forecourt Wait
+                          {isHubPickup
+                            ? "VIP Hub Collection Cleared • Dedicated Bay 01 Staging"
+                            : "VIP Handover Protocol Cleared • Zero Forecourt Wait"}
                         </span>
                       </div>
                     </div>
@@ -853,20 +916,34 @@ function ReservationPassContent() {
 
                   {/* Primary Action Buttons */}
                   <div className="no-print grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                    <Link
-                      href={`/live-tracking?code=${booking.bookingCode}`}
-                      className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-primary hover:bg-secondary text-white font-semibold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95"
-                    >
-                      <span className="material-symbols-outlined text-base">
-                        near_me
-                      </span>
-                      <span>Track Live Telematics</span>
-                    </Link>
+                    {!isHubPickup ? (
+                      <Link
+                        href={`/live-tracking?code=${booking.bookingCode}`}
+                        className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-primary hover:bg-secondary text-white font-semibold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95"
+                      >
+                        <span className="material-symbols-outlined text-base">
+                          near_me
+                        </span>
+                        <span>Track Live Telematics</span>
+                      </Link>
+                    ) : (
+                      <a
+                        href="https://maps.google.com/?q=Plot+14+Victoria+Island+Boulevard+Lagos"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-primary hover:bg-secondary text-white font-semibold text-xs uppercase tracking-wider transition-all active:scale-95 shadow-md"
+                      >
+                        <span className="material-symbols-outlined text-base text-secondary-fixed">
+                          directions
+                        </span>
+                        <span>Directions to Flagship Hub</span>
+                      </a>
+                    )}
                     <button
                       type="button"
                       onClick={handleDownloadPdf}
                       disabled={isDownloadingPdf}
-                      className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-black/[0.08] text-primary font-semibold text-xs transition-all disabled:opacity-50 active:scale-95 shadow-sm"
+                      className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-black/[0.08] text-primary font-semibold text-xs uppercase tracking-wider transition-all disabled:opacity-50 active:scale-95 shadow-sm"
                     >
                       <span className="material-symbols-outlined text-base text-secondary">
                         {isDownloadingPdf ? "sync" : "picture_as_pdf"}
@@ -900,127 +977,83 @@ function ReservationPassContent() {
                 </div>
               )}
 
-              {/* Assigned Professional Chauffeur Profile Card */}
+              {/* Assigned Professional Chauffeur Profile Card or Flagship Hub Collection Protocol */}
               {(activeMobileTab === "all" || activeMobileTab === "vehicle") && (
-                <div className="rounded-3xl bg-surface-container-lowest border border-black/[0.08] p-6 sm:p-7 shadow-sm flex flex-col gap-5">
-                  <div className="flex items-center justify-between border-b border-black/[0.06] pb-3">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-secondary">
-                        Chauffeur Allocation Status
-                      </span>
-                      <h2 className="font-serif text-xl sm:text-2xl text-primary font-bold">
-                        {booking.driver.isAssigned
-                          ? "Executive Chauffeur Profile"
-                          : "Chauffeur Allocation In Progress"}
-                      </h2>
-                    </div>
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
-                        booking.driver.isAssigned
-                          ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
-                          : "bg-secondary-fixed/50 border border-secondary/30 text-secondary"
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-xs">
-                        {booking.driver.isAssigned ? "verified" : "schedule"}
-                      </span>
-                      {booking.driver.isAssigned
-                        ? "ON SCHEDULE"
-                        : "IN PROGRESS"}
-                    </span>
-                  </div>
-
-                  {booking.driver.isAssigned ? (
-                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 pt-1">
-                      <div className="relative shrink-0">
-                        <img
-                          src={booking.driver.avatar}
-                          alt={booking.driver.name}
-                          className="w-28 h-36 sm:w-32 sm:h-40 rounded-2xl object-cover shadow-md border border-black/[0.06]"
-                        />
-                        <span className="absolute -bottom-2 -right-2 bg-primary text-secondary-fixed text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full shadow-md">
-                          {booking.driver.badge}
+                isHubPickup ? (
+                  <div className="rounded-3xl bg-surface-container-lowest border border-black/[0.08] p-6 sm:p-7 shadow-sm flex flex-col gap-5">
+                    <div className="flex items-center justify-between border-b border-black/[0.06] pb-3">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase font-bold tracking-widest text-secondary">
+                          Handover &amp; Collection Protocol
                         </span>
+                        <h2 className="font-serif text-xl sm:text-2xl text-primary font-bold">
+                          Flagship Hub Collection
+                        </h2>
                       </div>
-
-                      <div className="flex flex-col gap-2 flex-1 text-center sm:text-left">
-                        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
-                          <h3 className="font-serif text-lg sm:text-xl text-primary font-bold">
-                            {booking.driver.name}
-                          </h3>
-                          <div className="flex items-center justify-center sm:justify-start gap-1 text-secondary">
-                            <span
-                              className="material-symbols-outlined text-sm"
-                              style={{ fontVariationSettings: "'FILL' 1" }}
-                            >
-                              star
-                            </span>
-                            <span className="font-bold text-primary text-xs">
-                              {booking.driver.rating}
-                            </span>
-                            <span className="text-on-surface-variant text-xs">
-                              ({booking.driver.trips}+ completed trips)
-                            </span>
-                          </div>
-                        </div>
-
-                        <p className="text-xs text-on-surface-variant leading-relaxed">
-                          {booking.driver.bio}
-                        </p>
-
-                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-2">
-                          {booking.driver.tags.map((tag, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2.5 py-1 rounded-full bg-surface-container-low border border-surface-container text-[11px] text-on-surface-variant font-medium"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800">
+                        <span className="material-symbols-outlined text-xs">
+                          verified
+                        </span>
+                        BAY 01 READY
+                      </span>
                     </div>
-                  ) : (
-                    /* Elegant Allocation In Progress Card */
-                    <div className="p-5 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+
+                    {/* Elegant Hub Staging Card */}
+                    <div className="p-5 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
                       <div className="w-14 h-14 rounded-2xl bg-secondary-fixed/50 text-secondary flex items-center justify-center shrink-0">
-                        <span className="material-symbols-outlined text-2xl animate-spin">
-                          progress_activity
+                        <span className="material-symbols-outlined text-2xl">
+                          storefront
                         </span>
                       </div>
-                      <div className="flex flex-col gap-1">
-                        <h4 className="font-serif text-base font-bold text-primary">
-                          Assigning Your Executive Chauffeur
-                        </h4>
+                      <div className="flex flex-col gap-1.5 flex-1">
+                        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                          <h4 className="font-serif text-base font-bold text-primary">
+                            La Planta Flagship Lounge • VIP Staging Bay 01
+                          </h4>
+                          <span className="text-[11px] font-mono font-semibold text-secondary">
+                            Plot 14 Victoria Island
+                          </span>
+                        </div>
                         <p className="text-xs text-on-surface-variant leading-relaxed">
-                          {booking.driver.bio}
+                          Your vehicle has been detailed, pre-conditioned to 21°C, and staged at dedicated VIP Bay 01. Please present this digital QR pass and valid identification to the concierge upon your arrival for immediate key handover.
                         </p>
-                        <div className="flex flex-wrap items-center gap-2 pt-1 justify-center sm:justify-start">
-                          <span className="text-[11px] text-secondary font-semibold flex items-center gap-1">
-                            <span className="material-symbols-outlined text-xs">
-                              verified
+                        <div className="flex flex-wrap items-center gap-2 pt-2 justify-center sm:justify-start">
+                          <span className="px-2.5 py-1 rounded-full bg-surface-container-lowest border border-black/[0.06] text-[11px] text-primary font-medium flex items-center gap-1">
+                            <span className="material-symbols-outlined text-xs text-emerald-600">
+                              check_circle
                             </span>
-                            Background-checked &amp; vetted driver protocol
+                            Vehicle Sanitized &amp; Pre-inspected
+                          </span>
+                          <span className="px-2.5 py-1 rounded-full bg-surface-container-lowest border border-black/[0.06] text-[11px] text-primary font-medium flex items-center gap-1">
+                            <span className="material-symbols-outlined text-xs text-secondary">
+                              key
+                            </span>
+                            Contactless Key Release
+                          </span>
+                          <span className="px-2.5 py-1 rounded-full bg-surface-container-lowest border border-black/[0.06] text-[11px] text-primary font-medium flex items-center gap-1">
+                            <span className="material-symbols-outlined text-xs text-secondary">
+                              schedule
+                            </span>
+                            24/7 Priority Express Handover
                           </span>
                         </div>
                       </div>
                     </div>
-                  )}
 
-                  <div className="no-print pt-2 flex flex-col sm:flex-row gap-3">
-                    {booking.driver.isAssigned ? (
+                    <div className="no-print pt-2 flex flex-col sm:flex-row gap-3">
                       <a
-                        href={`tel:${booking.driver.phone}`}
+                        href="https://maps.google.com/?q=Plot+14+Victoria+Island+Boulevard+Lagos"
+                        target="_blank"
+                        rel="noreferrer"
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-black/[0.06] text-primary font-semibold text-xs transition-colors"
                       >
                         <span className="material-symbols-outlined text-sm text-secondary">
-                          call
+                          directions
                         </span>
-                        <span>Call Chauffeur Directly</span>
+                        <span>Directions to Flagship Hub</span>
                       </a>
-                    ) : (
                       <a
-                        href="https://wa.me/23418885275"
+                        href="https://wa.me/23418885275?text=Hello%20La%20Planta%20Concierge,%20I%20am%20arriving%20at%20the%20Flagship%20Hub%20for%20pickup"
                         target="_blank"
                         rel="noreferrer"
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-black/[0.06] text-primary font-semibold text-xs transition-colors"
@@ -1028,11 +1061,143 @@ function ReservationPassContent() {
                         <span className="material-symbols-outlined text-sm text-secondary">
                           support_agent
                         </span>
-                        <span>Contact Executive Dispatch Desk</span>
+                        <span>Notify Hub Concierge</span>
                       </a>
-                    )}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="rounded-3xl bg-surface-container-lowest border border-black/[0.08] p-6 sm:p-7 shadow-sm flex flex-col gap-5">
+                    <div className="flex items-center justify-between border-b border-black/[0.06] pb-3">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase font-bold tracking-widest text-secondary">
+                          Chauffeur Allocation Status
+                        </span>
+                        <h2 className="font-serif text-xl sm:text-2xl text-primary font-bold">
+                          {booking.driver.isAssigned
+                            ? "Executive Chauffeur Profile"
+                            : "Chauffeur Allocation In Progress"}
+                        </h2>
+                      </div>
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                          booking.driver.isAssigned
+                            ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+                            : "bg-secondary-fixed/50 border border-secondary/30 text-secondary"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-xs">
+                          {booking.driver.isAssigned ? "verified" : "schedule"}
+                        </span>
+                        {booking.driver.isAssigned
+                          ? "ON SCHEDULE"
+                          : "IN PROGRESS"}
+                      </span>
+                    </div>
+
+                    {booking.driver.isAssigned ? (
+                      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 pt-1">
+                        <div className="relative shrink-0">
+                          <img
+                            src={booking.driver.avatar}
+                            alt={booking.driver.name}
+                            className="w-28 h-36 sm:w-32 sm:h-40 rounded-2xl object-cover shadow-md border border-black/[0.06]"
+                          />
+                          <span className="absolute -bottom-2 -right-2 bg-primary text-secondary-fixed text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full shadow-md">
+                            {booking.driver.badge}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col gap-2 flex-1 text-center sm:text-left">
+                          <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                            <h3 className="font-serif text-lg sm:text-xl text-primary font-bold">
+                              {booking.driver.name}
+                            </h3>
+                            <div className="flex items-center justify-center sm:justify-start gap-1 text-secondary">
+                              <span
+                                className="material-symbols-outlined text-sm"
+                                style={{ fontVariationSettings: "'FILL' 1" }}
+                              >
+                                star
+                              </span>
+                              <span className="font-bold text-primary text-xs">
+                                {booking.driver.rating}
+                              </span>
+                              <span className="text-on-surface-variant text-xs">
+                                ({booking.driver.trips}+ completed trips)
+                              </span>
+                            </div>
+                          </div>
+
+                          <p className="text-xs text-on-surface-variant leading-relaxed">
+                            {booking.driver.bio}
+                          </p>
+
+                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-2">
+                            {booking.driver.tags.map((tag, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2.5 py-1 rounded-full bg-surface-container-low border border-surface-container text-[11px] text-on-surface-variant font-medium"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Elegant Allocation In Progress Card */
+                      <div className="p-5 rounded-2xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+                        <div className="w-14 h-14 rounded-2xl bg-secondary-fixed/50 text-secondary flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-2xl animate-spin">
+                            progress_activity
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <h4 className="font-serif text-base font-bold text-primary">
+                            Assigning Your Executive Chauffeur
+                          </h4>
+                          <p className="text-xs text-on-surface-variant leading-relaxed">
+                            {booking.driver.bio}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 pt-1 justify-center sm:justify-start">
+                            <span className="text-[11px] text-secondary font-semibold flex items-center gap-1">
+                              <span className="material-symbols-outlined text-xs">
+                                verified
+                              </span>
+                              Background-checked &amp; vetted driver protocol
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="no-print pt-2 flex flex-col sm:flex-row gap-3">
+                      {booking.driver.isAssigned ? (
+                        <a
+                          href={`tel:${booking.driver.phone}`}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-black/[0.06] text-primary font-semibold text-xs transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-sm text-secondary">
+                            call
+                          </span>
+                          <span>Call Chauffeur Directly</span>
+                        </a>
+                      ) : (
+                        <a
+                          href="https://wa.me/23418885275"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-black/[0.06] text-primary font-semibold text-xs transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-sm text-secondary">
+                            support_agent
+                          </span>
+                          <span>Contact Executive Dispatch Desk</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )
               )}
             </div>
 
@@ -1231,13 +1396,26 @@ function ReservationPassContent() {
             </span>
             <span>QR Pass</span>
           </button>
-          <Link
-            href={`/live-tracking?code=${booking.bookingCode}`}
-            className="px-4 py-2 rounded-xl bg-primary hover:bg-secondary text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1 shadow-md active:scale-95"
-          >
-            <span className="material-symbols-outlined text-sm">near_me</span>
-            <span>Track</span>
-          </Link>
+          {!isHubPickup ? (
+            <Link
+              href={`/live-tracking?code=${booking.bookingCode}`}
+              className="px-4 py-2 rounded-xl bg-primary hover:bg-secondary text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1 shadow-md active:scale-95"
+            >
+              <span className="material-symbols-outlined text-sm">near_me</span>
+              <span>Track</span>
+            </Link>
+          ) : (
+            <button
+              onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
+              className="px-4 py-2 rounded-xl bg-primary hover:bg-secondary text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1 shadow-md active:scale-95"
+            >
+              <span className="material-symbols-outlined text-sm text-secondary-fixed">
+                picture_as_pdf
+              </span>
+              <span>PDF</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1284,8 +1462,9 @@ function ReservationPassContent() {
             </div>
 
             <p className="text-xs text-on-surface-variant leading-relaxed max-w-xs">
-              Present this high-contrast screen directly to your chauffeur or
-              security personnel at handover.
+              {isHubPickup
+                ? "Present this high-contrast screen directly to the Flagship Hub concierge at VIP Bay 01."
+                : "Present this high-contrast screen directly to your chauffeur or security personnel at handover."}
             </p>
 
             <button

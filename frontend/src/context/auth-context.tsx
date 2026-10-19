@@ -54,7 +54,15 @@ const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 Minutes
 const WARNING_WINDOW_MS = 60 * 1000; // 60 Seconds warning window
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<GuestUser | null>(null);
+  const [user, setUser] = useState<GuestUser | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("laPlanta_guest");
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return null;
+  });
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -112,10 +120,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Listen to Supabase Auth State changes & Initial Session
   useEffect(() => {
     // Check initial session
-    supabase.auth.getSession().then(({ data: { session: initSession } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: initSession } }) => {
       setSession(initSession);
       if (initSession?.user) {
-        syncUserProfile(initSession.user, initSession);
+        await syncUserProfile(initSession.user, initSession);
       } else {
         // Fallback to cached local guest session if offline
         try {
@@ -143,6 +151,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe();
     };
   }, [syncUserProfile]);
+
+  // Prevent unwanted auth modal popups when user is already logged in
+  useEffect(() => {
+    if (user && isAuthModalOpen) {
+      setIsAuthModalOpen(false);
+    }
+  }, [user, isAuthModalOpen]);
 
   const openAuthModal = useCallback(() => {
     console.log("[AuthContext] openAuthModal triggered");

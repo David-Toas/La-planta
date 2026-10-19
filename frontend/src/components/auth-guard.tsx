@@ -21,13 +21,21 @@ export function AuthGuard({
   const [modalPrompted, setModalPrompted] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user && typeof window !== "undefined") {
+    const hasLocalUser =
+      typeof window !== "undefined" && !!localStorage.getItem("laPlanta_guest");
+    if (
+      !loading &&
+      !user &&
+      !hasLocalUser &&
+      !modalPrompted &&
+      typeof window !== "undefined"
+    ) {
       const destination = window.location.pathname + window.location.search;
       sessionStorage.setItem("laPlanta_intended_destination", destination);
       openAuthModal();
       setModalPrompted(true);
     }
-  }, [loading, user, openAuthModal]);
+  }, [loading, user, modalPrompted, openAuthModal]);
 
   // If user closes the auth modal without signing in, redirect to homepage immediately
   useEffect(() => {

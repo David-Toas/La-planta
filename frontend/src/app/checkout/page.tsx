@@ -108,6 +108,8 @@ function CheckoutContent() {
     paidAt: string;
     vehicle: string;
     vehicleColor?: string;
+    handoverMode?: "office" | "delivery";
+    deliveryAddress?: string;
   } | null>(null);
 
   // Initialize unique booking code on client
@@ -530,6 +532,11 @@ function CheckoutContent() {
         }),
         vehicle: vehicleTitle,
         vehicleColor: vehicle?.color || "Obsidian Black",
+        handoverMode,
+        deliveryAddress:
+          handoverMode === "office"
+            ? "Plot 14 Victoria Island Boulevard, Lagos"
+            : deliveryAddress || "Victoria Island, Lagos",
       });
     }
   };
@@ -592,12 +599,14 @@ function CheckoutContent() {
                     {/* Scannable QR Code */}
                     <div className="p-3 bg-white rounded-xl shadow-md border border-surface-container flex flex-col items-center gap-1">
                       <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=LAPLANTA:${confirmedBooking.bookingCode}:${confirmedBooking.reference}`}
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=8&data=${encodeURIComponent(
+                          `${typeof window !== "undefined" ? window.location.origin : "https://laplanta.ng"}/api/reservation-pass/${confirmedBooking.bookingCode}/pdf`
+                        )}`}
                         alt="Reservation QR Code Voucher"
                         className="w-32 h-32"
                       />
                       <span className="text-[9px] uppercase tracking-widest text-stone-500 font-semibold">
-                        Scan at Handover
+                        Scan to Open &amp; Download PDF Pass
                       </span>
                     </div>
                   </div>
@@ -613,9 +622,11 @@ function CheckoutContent() {
                       </span>
                       <span className="text-[11px] text-secondary">
                         {confirmedBooking.vehicleColor || "Obsidian Black"} •{" "}
-                        {handoverMode === "delivery" && !includeChauffeur
-                          ? "Self-Drive (Delivery Only)"
-                          : "Chauffeur Included"}{" "}
+                        {confirmedBooking.handoverMode === "office"
+                          ? "Flagship Hub Collection (Self-Drive)"
+                          : handoverMode === "delivery" && !includeChauffeur
+                            ? "Self-Drive (Delivery Only)"
+                            : "Chauffeur Included"}{" "}
                         ({rentalDays} Days)
                       </span>
                     </div>
@@ -624,18 +635,26 @@ function CheckoutContent() {
                         Handover Protocol
                       </span>
                       <span className="font-semibold text-primary text-sm">
-                        {handoverMode === "delivery"
+                        {confirmedBooking.handoverMode === "delivery"
                           ? "Direct Delivery to Door"
                           : "Flagship Hub Pickup"}
                       </span>
                       <span className="text-[11px] text-on-surface-variant truncate">
-                        {deliveryAddress}
+                        {confirmedBooking.handoverMode === "delivery"
+                          ? deliveryAddress || "Destination Delivery Address"
+                          : "Plot 14 Victoria Island Boulevard, Lagos"}
                       </span>
                     </div>
                   </div>
 
                   {/* Navigation CTAs */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  <div
+                    className={`grid grid-cols-1 ${
+                      confirmedBooking.handoverMode === "delivery"
+                        ? "sm:grid-cols-3"
+                        : "sm:grid-cols-2"
+                    } gap-3 pt-2`}
+                  >
                     <Link
                       href={`/reservation-pass?code=${confirmedBooking.bookingCode}`}
                       className="w-full h-12 rounded-xl bg-secondary hover:bg-secondary/90 text-primary font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
@@ -645,15 +664,17 @@ function CheckoutContent() {
                       </span>
                       <span>View VIP Pass &amp; QR</span>
                     </Link>
-                    <Link
-                      href={`/live-tracking?code=${confirmedBooking.bookingCode}`}
-                      className="w-full h-12 rounded-xl bg-primary hover:bg-secondary text-on-primary font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-md"
-                    >
-                      <span className="material-symbols-outlined text-base">
-                        near_me
-                      </span>
-                      <span>Track Live En Route</span>
-                    </Link>
+                    {confirmedBooking.handoverMode === "delivery" && (
+                      <Link
+                        href={`/live-tracking?code=${confirmedBooking.bookingCode}`}
+                        className="w-full h-12 rounded-xl bg-primary hover:bg-secondary text-on-primary font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-md"
+                      >
+                        <span className="material-symbols-outlined text-base">
+                          near_me
+                        </span>
+                        <span>Track Live En Route</span>
+                      </Link>
+                    )}
                     <Link
                       href="/account"
                       className="w-full h-12 rounded-xl bg-surface-container hover:bg-surface-container-high text-primary font-semibold text-sm flex items-center justify-center gap-2 transition-colors border border-surface-container"
@@ -994,102 +1015,122 @@ function CheckoutContent() {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                          <div className="flex flex-col gap-1.5 md:col-span-3">
-                            <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant flex items-center justify-between">
-                              <span>
-                                Delivery Address{" "}
-                                {handoverMode === "delivery" && (
-                                  <span className="text-red-500 font-bold">
-                                    *
-                                  </span>
-                                )}
-                              </span>
-                              {handoverMode === "delivery" && (
+                        {handoverMode === "delivery" ? (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                            <div className="flex flex-col gap-1.5 md:col-span-3">
+                              <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant flex items-center justify-between">
+                                <span>
+                                  Delivery Address{" "}
+                                  <span className="text-red-500 font-bold">*</span>
+                                </span>
                                 <span className="text-[10px] text-secondary font-semibold uppercase">
                                   Required for Direct Delivery
                                 </span>
-                              )}
-                            </label>
-                            <div className="relative flex items-center">
-                              <input
-                                id="delivery-address-input"
-                                className={`w-full h-12 px-4 pl-11 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:outline-none transition-all ${
-                                  addressError
-                                    ? "ring-2 ring-red-500 border border-red-500 bg-red-50/10"
-                                    : "focus:ring-1 focus:ring-secondary"
-                                }`}
-                                value={deliveryAddress}
-                                onChange={(e) => {
-                                  setDeliveryAddress(e.target.value);
-                                  if (addressError && e.target.value.trim()) {
-                                    setAddressError(false);
-                                  }
-                                }}
-                                placeholder="Enter destination hotel, private address, or airport terminal *"
-                                type="text"
-                                required={handoverMode === "delivery"}
-                              />
-                              <span className="material-symbols-outlined absolute left-3.5 text-secondary text-lg">
-                                location_on
-                              </span>
-                            </div>
-                            {addressError && (
-                              <span className="text-xs text-red-600 font-medium flex items-center gap-1 mt-0.5">
-                                <span className="material-symbols-outlined text-xs">
-                                  error
-                                </span>
-                                Destination delivery address is required before
-                                proceeding to checkout.
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex flex-col gap-1.5 md:col-span-2">
-                            <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
-                              Delivery Date &amp; Time Window
-                            </label>
-                            <div className="relative flex items-center">
-                              <input
-                                className="w-full h-12 px-4 pl-11 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:outline-none"
-                                value={deliveryWindow}
-                                onChange={(e) =>
-                                  setDeliveryWindow(e.target.value)
-                                }
-                                placeholder="e.g. Tomorrow • 10:00 AM WAT"
-                                type="text"
-                              />
-                              <span className="material-symbols-outlined absolute left-3.5 text-secondary text-lg">
-                                schedule
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col gap-1.5">
-                            <div className="flex items-center justify-between">
-                              <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
-                                Flight Number
                               </label>
-                              <span className="font-label-sm text-[10px] uppercase text-secondary font-semibold">
-                                Optional
-                              </span>
+                              <div className="relative flex items-center">
+                                <input
+                                  id="delivery-address-input"
+                                  className={`w-full h-12 px-4 pl-11 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:outline-none transition-all ${
+                                    addressError
+                                      ? "ring-2 ring-red-500 border border-red-500 bg-red-50/10"
+                                      : "focus:ring-1 focus:ring-secondary"
+                                  }`}
+                                  value={deliveryAddress}
+                                  onChange={(e) => {
+                                    setDeliveryAddress(e.target.value);
+                                    if (addressError && e.target.value.trim()) {
+                                      setAddressError(false);
+                                    }
+                                  }}
+                                  placeholder="Enter destination hotel, private address, or airport terminal *"
+                                  type="text"
+                                  required
+                                />
+                                <span className="material-symbols-outlined absolute left-3.5 text-secondary text-lg">
+                                  location_on
+                                </span>
+                              </div>
+                              {addressError && (
+                                <span className="text-xs text-red-600 font-medium flex items-center gap-1 mt-0.5">
+                                  <span className="material-symbols-outlined text-xs">
+                                    error
+                                  </span>
+                                  Destination delivery address is required before
+                                  proceeding to checkout.
+                                </span>
+                              )}
                             </div>
-                            <div className="relative flex items-center">
-                              <input
-                                className="w-full h-12 px-4 pl-11 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:outline-none"
-                                value={flightNumber}
-                                onChange={(e) =>
-                                  setFlightNumber(e.target.value)
-                                }
-                                placeholder="e.g. BA 075"
-                                type="text"
-                              />
-                              <span className="material-symbols-outlined absolute left-3.5 text-secondary text-lg">
-                                flight_land
-                              </span>
+
+                            <div className="flex flex-col gap-1.5 md:col-span-2">
+                              <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
+                                Delivery Date &amp; Time Window
+                              </label>
+                              <div className="relative flex items-center">
+                                <input
+                                  className="w-full h-12 px-4 pl-11 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:outline-none"
+                                  value={deliveryWindow}
+                                  onChange={(e) =>
+                                    setDeliveryWindow(e.target.value)
+                                  }
+                                  placeholder="e.g. Tomorrow • 10:00 AM WAT"
+                                  type="text"
+                                />
+                                <span className="material-symbols-outlined absolute left-3.5 text-secondary text-lg">
+                                  schedule
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-center justify-between">
+                                <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
+                                  Flight Number
+                                </label>
+                                <span className="font-label-sm text-[10px] uppercase text-secondary font-semibold">
+                                  Optional
+                                </span>
+                              </div>
+                              <div className="relative flex items-center">
+                                <input
+                                  className="w-full h-12 px-4 pl-11 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md focus:outline-none"
+                                  value={flightNumber}
+                                  onChange={(e) =>
+                                    setFlightNumber(e.target.value)
+                                  }
+                                  placeholder="e.g. BA 075"
+                                  type="text"
+                                />
+                                <span className="material-symbols-outlined absolute left-3.5 text-secondary text-lg">
+                                  flight_land
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="p-4 rounded-xl bg-surface-container-low border border-surface-container flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs mt-2">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-secondary/15 text-secondary flex items-center justify-center shrink-0">
+                                <span className="material-symbols-outlined text-xl">
+                                  domain
+                                </span>
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-bold text-primary text-sm">
+                                  La Planta Flagship Hub (Victoria Island)
+                                </span>
+                                <span className="text-on-surface-variant text-[11px]">
+                                  Plot 14 Victoria Island Boulevard, Lagos • VIP Bay 01
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-semibold">
+                              <span className="material-symbols-outlined text-sm text-emerald-700">
+                                verified
+                              </span>
+                              <span>Ready for Hub Collection</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1510,16 +1551,6 @@ function CheckoutContent() {
                           </span>
                         </a>
                       </div>
-                    </div>
-
-                    {/*  Trust Badges  */}
-                    <div className="px-2 flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
-                      <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-sm text-secondary">
-                          verified_user
-                        </span>
-                        Airport Pickup Available
-                      </span>
                     </div>
                   </div>
                 </div>
